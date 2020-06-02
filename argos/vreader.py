@@ -49,7 +49,7 @@ class VideoReader(qc.QObject):
     @qc.pyqtSlot()
     def read(self):
         """Read a single frame"""
-        logging.debug(f'Starting read')
+        logging.debug(f'Starting read, triggered by {self.sender()}')
         self.mutex.lock()
         pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
         ret, frame = self._vid.read()
@@ -59,7 +59,6 @@ class VideoReader(qc.QObject):
         if not ret:
             logging.debug('Video at end')
             self.sigVideoEnd.emit()
-            self.sigFinished.emit()
             return
 
         if frame is not None:
@@ -74,10 +73,7 @@ class VideoReader(qc.QObject):
             # event.wait()
             logging.debug('Finished waiting')
 
-    def quit(self):
-        self._vid.release()
-        super(VideoReader, self).quit()
-
     def __del__(self):
-        self._vid.release()
+        if self._vid.isOpened():
+            self._vid.release()
         # logging.debug('Destructor of video reader')

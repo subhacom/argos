@@ -42,6 +42,8 @@ settings = util.init()
 class ArgosMain(qw.QMainWindow):
     """"Main user interface"""
 
+    sigQuit = qc.pyqtSignal()
+
     def __init__(self, *args, **kwargs):
         super(ArgosMain, self).__init__(*args, **kwargs)
         self._video_widget = VideoWidget()
@@ -69,12 +71,16 @@ class ArgosMain(qw.QMainWindow):
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
         self._yolact_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
         self._tracker_widget.sigTracked.connect(self._video_widget.setBboxes)
+        self.sigQuit.connect(self._video_widget.sigQuit)
+        self.sigQuit.connect(self._yolact_widget.sigQuit)
+        self.sigQuit.connect(self._tracker_widget.sigQuit)
 
     def cleanup(self):
         # self.video_reader.terminate()
         # self.frame_processor.terminate()
         settings.sync()
         logging.debug('Saved settings')
+        self.sigQuit.emit()
 
 
 if __name__ == '__main__':

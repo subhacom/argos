@@ -48,7 +48,7 @@ def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
             # Convert four anticlockwise vertices from top left into x, y, w, h
             for ii in range(len(new_bboxes)):
                 for jj in range(len(bboxes)):
-                    dist = au.rect_iou(bboxes[jj], new_bboxes[ii])
+                    dist = 1.0 - au.rect_iou(bboxes[jj], new_bboxes[ii])
                     dist_list.append((ii, jj, dist))
         else:
             raise NotImplementedError('Only handling axis-aligned bounding boxes')
@@ -209,7 +209,7 @@ class SORTracker(qc.QObject):
 
     NOTE: accepts bounding boxes in (x, y, w, h) format.
     """
-    sigTracked = qc.pyqtSignal(dict)
+    sigTracked = qc.pyqtSignal(dict, int)
 
     def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.8, max_age=10,
                  n_init=3, boxtype=au.OutlineStyle.bbox):
@@ -261,6 +261,7 @@ class SORTracker(qc.QObject):
             predicted_bboxes,
             bboxes,
             boxtype=self.boxtype,
+            metric=self.metric,
             max_dist=self.min_dist)
         for track_id, bbox_id in matched.items():
             self.trackers[track_id].update(au.tlwh2xyrh(*bboxes[bbox_id]))
@@ -280,33 +281,32 @@ class SORTracker(qc.QObject):
                                                      self.max_age)
         self._next_id += 1
 
-    @qc.pyqtSlot(np.ndarray)
-    def track(self, bboxes: np.ndarray):
+    @qc.pyqtSlot(np.ndarray, int)
+    def track(self, bboxes: np.ndarray, pos: int):
         _ = qc.QMutexLocker(self._mutex)
         if len(bboxes) == 0:
             ret = {}
         else:
             ret = self.update(bboxes)
-        self.sigTracked.emit(ret)
+        self.sigTracked.emit(ret, pos)
         if self._wait_cond is not None:
             logging.debug(f'Waiting on condition')
             self._wait_cond.wait()
-        logging.debug(f'Finished')
+        logging.debug(f'Finished frame {pos}')
 
 
 class SORTWidget(qw.QWidget):
-    sigTrack = qc.pyqtSignal(np.ndarray)
-    sigTracked = qc.pyqtSignal(dict)
+    sigTrack = qc.pyqtSignal(np.ndarray, int)
+    sigTracked = qc.pyqtSignal(dict, int)
+    sigQuit = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(SORTWidget, self).__init__(*args, **kwargs)
-        self.tracker = SORTracker()
-        self.thread = qc.QThread()
-        self.tracker.moveToThread(self.thread)
         self._max_age_label = qw.QLabel('Maximum age')
         self._max_age_label.setToolTip('Maximum number of misses before a track is removed')
         self._max_age_spin = qw.QSpinBox()
         self._max_age_spin.setRange(1, 100)
+        self._max_age_spin.setValue(10)
         self._conf_age_label = qw.QLabel('Minimum hits')
         self._conf_age_label.setToolTip('Minimum number of hits before a track is confirmed')
         self._conf_age_spin = qw.QSpinBox()
@@ -318,11 +318,20 @@ class SORTWidget(qw.QWidget):
         layout.addRow(self._min_dist_label, self._min_dist_spin)
         layout.addRow(self._conf_age_label, self._conf_age_spin)
         layout.addRow(self._max_age_label, self._max_age_spin)
+        self.tracker = SORTracker(metric=au.DistanceMetric.iou,
+                                  min_dist=self._min_dist_spin.value(),
+                                  max_age=self._max_age_spin.value(),
+                                  n_init=self._conf_age_spin.value())
+        self.thread = qc.QThread()
+        self.tracker.moveToThread(self.thread)
         self._max_age_spin.valueChanged.connect(self.tracker.setMaxAge)
         self._min_dist_spin.valueChanged.connect(self.tracker.setMinDist)
         self._conf_age_spin.valueChanged.connect(self.tracker.setMinHits)
         self.sigTrack.connect(self.tracker.track)
         self.tracker.sigTracked.connect(self.sigTracked)
+        self.sigQuit.connect(self.thread.quit)
+        self.thread.finished.connect(self.thread.deleteLater)
         self.setLayout(layout)
         self.thread.start()
+
 

@@ -234,7 +234,7 @@ class Scene(qw.QGraphicsScene):
 
 class Display(qw.QGraphicsView):
 
-    sigSetRectangles = qc.pyqtSignal(dict)
+    sigSetRectangles = qc.pyqtSignal(dict, int)
 
     def __init__(self, *args, **kwargs):
         super(Display, self).__init__(*args, **kwargs)
@@ -259,10 +259,10 @@ class Display(qw.QGraphicsView):
     def zoomOut(self):
         self.scale(1/1.2, 1/1.2)
 
-    @qc.pyqtSlot(dict)
-    def setRectangles(self, rect: dict) -> None:
-        logging.debug(f'Received signal from {self.sender()}')
-        self.sigSetRectangles.emit(rect)
+    @qc.pyqtSlot(dict, int)
+    def setRectangles(self, rect: dict, pos: int) -> None:
+        logging.debug(f'Received signal from {self.sender()}, frame {pos}')
+        self.sigSetRectangles.emit(rect, pos)
 
 
 def test_display():

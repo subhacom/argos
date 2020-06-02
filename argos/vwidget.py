@@ -16,9 +16,10 @@ from argos.vreader import VideoReader
 class VideoWidget(qw.QWidget):
 
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
-    sigSetBboxes = qc.pyqtSignal(dict)
+    sigSetBboxes = qc.pyqtSignal(dict, int)
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
+    sigQuit = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
@@ -28,14 +29,22 @@ class VideoWidget(qw.QWidget):
         self.tracker = None
         self.slider = None
         self.video_filename = ''
+        # As the time to process the data is generally much longer than FPS
+        # using a regular interval timer puts too much backlog and the
+        # play/pause functionality does not work on timer.stop() call.
+        # Therefore make the timer singleshot and start it after the processing
+        # finished. Also eliminates the need for keeping a wait condition in
+        # reader thread
         self.timer = qc.QTimer(self)
+        self.timer.setSingleShot(True)
         self.openAction = qw.QAction('Open video')
         self.playAction = qw.QAction('Play/Pause')
         self.playAction.setCheckable(True)
         self.openAction.triggered.connect(self.openVideo)
         self.playAction.triggered.connect(self.playVideo)
         self.reader_thread = qc.QThread()
-        self.sync = threading.Event()
+        self.sigQuit.connect(self.reader_thread.quit)
+        self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
     @qc.pyqtSlot()
     def openVideo(self):
@@ -45,7 +54,7 @@ class VideoWidget(qw.QWidget):
         if len(fname[0]) == 0:
             return
         try:
-            self.video_reader = VideoReader(fname[0], self.sync)
+            self.video_reader = VideoReader(fname[0])
             logging.debug(f'Opened {fname[0]} with {self.video_reader.frame_count} frames')
         except IOError as err:
             qw.QMessageBox.critical('Video open failed', str(err))
@@ -86,31 +95,13 @@ class VideoWidget(qw.QWidget):
         self.sigGotoFrame.emit(0)
 
     # TODO - for testing yolact part - intermediate trial before adding tracker
-    def setSegmenter(self, segmenter):
-        self.segmenter = segmenter
-        self.sigSetFrame.connect(segmenter.process)
-        if self.tracker is not None:
-            if self.segmenter.receivers(self.segmenter.sigProcessed) > 0:
-                self.segmenter.sigProcessed.disconnect()
-            segmenter.sigProcessed.connect(self.tracker.setBboxes)
-        segmenter.setWaitCond(self.sync)
-
-    def setTracker(self, tracker):
-        self.tracker = tracker
-        if self.segmenter is not None:
-            if self.segmenter.receivers(self.segmenter.sigProcessed) > 0:
-                self.segmenter.sigProcessed.disconnect()
-            self.segmenter.sigProcessed.connect(tracker.setBboxes)
-        tracker.sigTracked.connect(self.sigSetBboxes)
-        # self.tracker.setWaitCond(self.sync)
-
-    # TODO - for testing yolact part - intermediate trial before adding tracker
-    @qc.pyqtSlot(dict)
-    def setBboxes(self, bboxes: dict):
+    @qc.pyqtSlot(dict, int)
+    def setBboxes(self, bboxes: dict, pos: int) -> None:
         logging.debug(f'Here')
-        self.sigSetBboxes.emit(bboxes)
-        self.sync.set()
-        logging.debug(f'Set wait condition')
+        self.sigSetBboxes.emit(bboxes, pos)
+        logging.debug(f'Set wait condition for frame {pos}')
+        if self.playAction.isChecked():
+            self.timer.start(1000.0 / self.video_reader.fps)
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int) -> None:
@@ -122,9 +113,6 @@ class VideoWidget(qw.QWidget):
         synchronize tracked bboxes to be overlayed with frame on Display
         """
         self.sigSetFrame.emit(frame, pos)
-        if self.segmenter is None:
-            self.sync.set()
-            logging.debug('Event set')
         self.slider.blockSignals(True)
         self.slider.setValue(pos)
         self.slider.blockSignals(False)
@@ -136,15 +124,10 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool) -> None:
         """This function is for playing raw video without any processing
-
-        TODO replace to incorporate tracking - sync track data from tracker
-        with frame from VideoReader
         """
         if play:
             time = 1000.0 / self.video_reader.fps
             self.timer.start(time)
-        else:
-            self.timer.stop()
 
     @qc.pyqtSlot()
     def pauseVideo(self):

@@ -40,7 +40,7 @@ class YolactWorker(qc.QObject):
     # bboxes are in (top-left, w, h) format
     # The even is passed for synchronizing display of image in videowidget
     # with the bounding boxes
-    sigProcessed = qc.pyqtSignal(np.ndarray)
+    sigProcessed = qc.pyqtSignal(np.ndarray, int)
 
     def __init__(self):
         super(YolactWorker, self).__init__()
@@ -114,12 +114,7 @@ class YolactWorker(qc.QObject):
         logging.debug('Time to load weights %f s', 1e-9 * (toc - tic))
 
     @qc.pyqtSlot(np.ndarray, int)
-    def setImage(self, image: np.ndarray, pos: int) -> None:
-        logging.debug(f'Processing frame {pos}')
-        self.process(image)
-
-    @qc.pyqtSlot(np.ndarray)
-    def process(self, image: np.ndarray):
+    def process(self, image: np.ndarray, pos: int):
         """:returns (classes, scores, boxes)
 
         where `boxes` is an array of bounding boxes of detected objects in
@@ -171,20 +166,21 @@ class YolactWorker(qc.QObject):
             toc = time.perf_counter_ns()
             logging.debug('Time to process single _image: %f s',
                           1e-9 * (toc - tic))
-            self.sigProcessed.emit(boxes)
+            self.sigProcessed.emit(boxes, pos)
 
 
 class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker
-    sigProcessed = qc.pyqtSignal(np.ndarray)
+    sigProcessed = qc.pyqtSignal(np.ndarray, int)
     # pass on the image to YolactWorker for processing
-    sigSetImage = qc.pyqtSignal(np.ndarray, int)
+    sigprocess= qc.pyqtSignal(np.ndarray, int)
 
     # Pass UI entries to worker YolactWorker
     sigTopK = qc.pyqtSignal(int)
     sigScoreThresh = qc.pyqtSignal(float)
     sigConfigFile = qc.pyqtSignal(str)
     sigWeightsFile = qc.pyqtSignal(str)
+    sigQuit = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(YolactWidget, self).__init__(*args, **kwargs)
@@ -228,12 +224,14 @@ class YolactWidget(qw.QWidget):
         ######################################################
         # Setup connections
         ######################################################
-        self.sigSetImage.connect(self.worker.setImage)
+        self.sigprocess.connect(self.worker.process)
         self.worker.sigProcessed.connect(self.sigProcessed)
         self.sigScoreThresh.connect(self.worker.setScoreThresh)
         self.sigConfigFile.connect(self.worker.setConfig)
         self.sigWeightsFile.connect(self.worker.setWeights)
         self.sigTopK.connect(self.worker.setTopK)
+        self.sigQuit.connect(self.thread.quit)
+        self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
     @qc.pyqtSlot()
@@ -272,4 +270,4 @@ class YolactWidget(qw.QWidget):
             except Exception as err:
                 qw.QMessageBox.critical('Could not open file', str(err))
                 return
-        self.sigSetImage.emit(image, pos)
+        self.sigprocess.emit(image, pos)
