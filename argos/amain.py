@@ -22,6 +22,7 @@ from PyQt5 import (
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
+from argos.tracker import SORTWidget
 
 # from argos.drawingtools import DrawingTools, ArenaFilter
 # from argos.conversions import cv2qimage
@@ -46,16 +47,28 @@ class ArgosMain(qw.QMainWindow):
         self._video_widget = VideoWidget()
         self.setCentralWidget(self._video_widget)
         self._yolact_widget = YolactWidget()
-        self._video_widget.setSegmenter(self._yolact_widget)
+        self._tracker_widget = SORTWidget()
+
         self._yolact_dock = qw.QDockWidget('Yolact settings')
         self._yolact_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                          qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._yolact_dock)
         self._yolact_dock.setWidget(self._yolact_widget)
 
+        self._tracker_dock = qw.QDockWidget('Tracker settings')
+        self._tracker_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                          qc.Qt.RightDockWidgetArea)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._tracker_dock)
+        self._tracker_dock.setWidget(self._tracker_widget)
+
         self._menubar = self.menuBar()
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
+        ##########################
+        # Connections
+        self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+        self._yolact_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
+        self._tracker_widget.sigTracked.connect(self._video_widget.setBboxes)
 
     def cleanup(self):
         # self.video_reader.terminate()

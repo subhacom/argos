@@ -140,6 +140,7 @@ class Scene(qw.QGraphicsScene):
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: dict):
         """rects: a dict of id: (x, y, w, h)"""
+        logging.debug(f'Received rectangles from {self.sender}')
         self.polygons = {}
         self._clear()
         for id_, rect in rects.items():
@@ -257,6 +258,11 @@ class Display(qw.QGraphicsView):
     @qc.pyqtSlot()
     def zoomOut(self):
         self.scale(1/1.2, 1/1.2)
+
+    @qc.pyqtSlot(dict)
+    def setRectangles(self, rect: dict) -> None:
+        logging.debug(f'Received signal from {self.sender()}')
+        self.sigSetRectangles.emit(rect)
 
 
 def test_display():

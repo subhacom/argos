@@ -35,20 +35,18 @@ from argos.utility import init
 settings = init()
 
 
-class YolactThread(qc.QThread):
+class YolactWorker(qc.QObject):
     # emits list of classes, scores, and bboxes of detected objects
     # bboxes are in (top-left, w, h) format
     # The even is passed for synchronizing display of image in videowidget
     # with the bounding boxes
-    sigProcessed = qc.pyqtSignal(np.ndarray, np.ndarray, np.ndarray)
+    sigProcessed = qc.pyqtSignal(np.ndarray)
 
-    def __init__(self, waitCond=None):
-        super(YolactThread, self).__init__()
+    def __init__(self):
+        super(YolactWorker, self).__init__()
         self.mutex = qc.QMutex()
-        self._waitCond = waitCond
         self._image = None
         self._pos = 0
-        self.stop = False
         self.top_k = 10
         self.cuda = True
         self.net = None
@@ -59,6 +57,7 @@ class YolactThread(qc.QThread):
         self.video_file = None
 
     def setWaitCond(self, waitCond: threading.Event) -> None:
+        _ = qc.QMutexLocker(self.mutex)
         self._waitCond = waitCond
 
     @qc.pyqtSlot(bool)
@@ -67,28 +66,24 @@ class YolactThread(qc.QThread):
 
     @qc.pyqtSlot(int)
     def setTopK(self, value):
+        _ = qc.QMutexLocker(self.mutex)
         self.top_k = value
 
     @qc.pyqtSlot(int)
     def setBatchSize(self, value):
+        _ = qc.QMutexLocker(self.mutex)
         self.batch_size = int(value)
 
     @qc.pyqtSlot(float)
     def setScoreThresh(self, value):
-        self.score_threshold = value
-
-    @qc.pyqtSlot()
-    def stopBatch(self):
         _ = qc.QMutexLocker(self.mutex)
-        self.stop = True
-        logging.debug('!!!!! Stopped thread')
+        self.score_threshold = value
 
     @qc.pyqtSlot(str)
     def setConfig(self, filename):
         if filename == '':
             return
         self.config_file = filename
-        _ = qc.QMutexLocker(self.mutex)
         with open(filename, 'r') as cfg_file:
             config = yaml.safe_load(cfg_file)
             for key, value in config.items():
@@ -104,7 +99,6 @@ class YolactThread(qc.QThread):
             raise Exception('Empty filename for network weights')
         self.weights_file = filename
         tic = time.perf_counter_ns()
-        _ = qc.QMutexLocker(self.mutex)
         with torch.no_grad():
             if self.cuda:
                 cudnn.fastest = True
@@ -119,14 +113,12 @@ class YolactThread(qc.QThread):
         toc = time.perf_counter_ns()
         logging.debug('Time to load weights %f s', 1e-9 * (toc - tic))
 
-    @qc.pyqtSlot(np.ndarray)
+    @qc.pyqtSlot(np.ndarray, int)
     def setImage(self, image: np.ndarray, pos: int) -> None:
-        self.mutex.lock()
-        self._pos = pos
-        self._image = image.copy()
-        self.mutex.unlock()
-        self.start()
+        logging.debug(f'Processing frame {pos}')
+        self.process(image)
 
+    @qc.pyqtSlot(np.ndarray)
     def process(self, image: np.ndarray):
         """:returns (classes, scores, boxes)
 
@@ -143,7 +135,7 @@ class YolactThread(qc.QThread):
             raise Exception('Network not initialized')
         # Partly follows yolact eval.py
         tic = time.perf_counter_ns()
-
+        _ = qc.QMutexLocker(self.mutex)
         with torch.no_grad():
             if self.cuda:
                 image = torch.from_numpy(image).cuda().float()
@@ -179,24 +171,16 @@ class YolactThread(qc.QThread):
             toc = time.perf_counter_ns()
             logging.debug('Time to process single _image: %f s',
                           1e-9 * (toc - tic))
-            return classes, scores, boxes
-
-    def run(self):
-        self.mutex.lock()
-        classes, scores, bboxes = self.process(self._image)
-        logging.debug(f'Processed frame {self._pos}')
-        self.mutex.unlock()
-        self.sigProcessed.emit(classes, scores, bboxes)
-        if self._waitCond is not None:
-            self._waitCond.wait()
+            self.sigProcessed.emit(boxes)
 
 
 class YolactWidget(qw.QWidget):
-    # pass on the signal from YolactThread
-    sigProcessed = qc.pyqtSignal(np.ndarray, np.ndarray, np.ndarray)
-    # pass on the signal from YolactThread
-    sigFinished = qc.pyqtSignal()
-    # Pass UI entries to worker YolactThread
+    # pass on the signal from YolactWorker
+    sigProcessed = qc.pyqtSignal(np.ndarray)
+    # pass on the image to YolactWorker for processing
+    sigSetImage = qc.pyqtSignal(np.ndarray, int)
+
+    # Pass UI entries to worker YolactWorker
     sigTopK = qc.pyqtSignal(int)
     sigScoreThresh = qc.pyqtSignal(float)
     sigConfigFile = qc.pyqtSignal(str)
@@ -204,7 +188,7 @@ class YolactWidget(qw.QWidget):
 
     def __init__(self, *args, **kwargs):
         super(YolactWidget, self).__init__(*args, **kwargs)
-        self.worker = YolactThread()
+        self.worker = YolactWorker()
         self.load_config_action = qw.QAction('Load configuration', self)
         self.load_weights_action = qw.QAction('Load YOLACT weights', self)
         self.load_config_action.triggered.connect(self.loadConfig)
@@ -238,18 +222,19 @@ class YolactWidget(qw.QWidget):
         layout.addRow(self.top_k_label, self.top_k_edit)
         layout.addRow(self.score_thresh_label, self.score_thresh_edit)
         ######################################################
+        # Threading
+        self.thread = qc.QThread()
+        self.worker.moveToThread(self.thread)
+        ######################################################
         # Setup connections
         ######################################################
+        self.sigSetImage.connect(self.worker.setImage)
         self.worker.sigProcessed.connect(self.sigProcessed)
-        self.worker.finished.connect(self.sigFinished)
         self.sigScoreThresh.connect(self.worker.setScoreThresh)
         self.sigConfigFile.connect(self.worker.setConfig)
         self.sigWeightsFile.connect(self.worker.setWeights)
         self.sigTopK.connect(self.worker.setTopK)
-
-
-    def setWaitCond(self, cond):
-        self.worker.setWaitCond(cond)
+        self.thread.start()
 
     @qc.pyqtSlot()
     def setTopK(self):
@@ -287,7 +272,4 @@ class YolactWidget(qw.QWidget):
             except Exception as err:
                 qw.QMessageBox.critical('Could not open file', str(err))
                 return
-        self.worker.setImage(image, pos)
-        self.worker.start()
-        # this causes single-threading and reduces ~0.02 second on my laptop
-        # self.worker.run()
+        self.sigSetImage.emit(image, pos)

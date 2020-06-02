@@ -10,7 +10,7 @@ import cv2
 from PyQt5 import QtCore as qc
 
 
-class VideoReader(qc.QThread):
+class VideoReader(qc.QObject):
     """Utility to read the video frames.
 
     Needs a separate thread to avoid blocking the main UI"""
@@ -24,20 +24,17 @@ class VideoReader(qc.QThread):
         self.mutex = qc.QMutex()
         locker = qc.QMutexLocker(self.mutex)   # this ensures unlock at exit
         self._vid = cv2.VideoCapture(path)
-        self._waitCond = waitCond
         if not self._vid.isOpened():
             raise IOError(f'Could not open video: {path}')
         self._path = path
         self.is_webcam = path.isdigit()
+        self._waitCond = waitCond
         if self.is_webcam:
             self.frame_count = -1
             self.fps = -1
         else:
             self.frame_count = int(self._vid.get(cv2.CAP_PROP_FRAME_COUNT))
             self.fps = self._vid.get(cv2.CAP_PROP_FPS)
-
-    def setWaitCond(self, waitCond: threading.Event) -> None:
-        self._waitCond = waitCond
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no: int) -> None:
@@ -47,8 +44,10 @@ class VideoReader(qc.QThread):
         self.mutex.lock()
         self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
         self.mutex.unlock()
+        self.read()
 
-    def run(self):
+    @qc.pyqtSlot()
+    def read(self):
         """Read a single frame"""
         logging.debug(f'Starting read')
         self.mutex.lock()
@@ -81,5 +80,4 @@ class VideoReader(qc.QThread):
 
     def __del__(self):
         self._vid.release()
-        self.wait()
         # logging.debug('Destructor of video reader')

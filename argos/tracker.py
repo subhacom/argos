@@ -2,10 +2,13 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-01 11:50 PM
 import logging
+import threading
 import numpy as np
 from scipy import optimize
 import cv2
-from PyQt5 import QtCore as qc
+from PyQt5 import (
+    QtCore as qc,
+    QtWidgets as qw)
 from argos import utility as au
 
 
@@ -18,7 +21,7 @@ def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
 
      new_bboxes: list of boxes as four anti-clockwise vertices, starting top-left
 
-     bboxes: list of boxes as four anti-clockwise vertices, starting top-left
+     bboxes: list of boxes as four x, y, w, h
 
      boxtype: OutlineStyle.bbox for axis aligned rectangle bounding box or
      OulineStyle.minrect for minimum area rotated rectangle
@@ -34,8 +37,8 @@ def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
      """
     dist_list = []
     if metric == au.DistanceMetric.euclidean:
-        centers = np.mean(bboxes, axis=1)
-        new_centers = np.mean(new_bboxes, axis=1)
+        centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
+        new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
         for ii in range(len(new_bboxes)):
             for jj in range(len(bboxes)):
                 dist = (new_centers[ii] - centers[jj]) ** 2
@@ -43,36 +46,27 @@ def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
     elif metric == au.DistanceMetric.iou:
         if boxtype == au.OutlineStyle.bbox:  # This can be handled efficiently
             # Convert four anticlockwise vertices from top left into x, y, w, h
-            bboxes = [(bbox[0][0], bbox[0][1], bbox[2][0] - bbox[0][0],
-                       bbox[2][1] - bbox[0][1]) for bbox in bboxes]
-            new_bboxes = [(bbox[0][0], bbox[0][1], bbox[2][0] - bbox[0][0],
-                           bbox[2][1] - bbox[0][1]) for bbox in new_bboxes]
             for ii in range(len(new_bboxes)):
                 for jj in range(len(bboxes)):
                     dist = au.rect_iou(bboxes[jj], new_bboxes[ii])
                     dist_list.append((ii, jj, dist))
-        else:  # Most generic, but slowest
-            for ii in range(len(new_bboxes)):
-                for jj in range(len(bboxes)):
-                    area_i, _ = cv2.intersectConvexConvex(new_bboxes[ii],
-                                                          bboxes[jj])
-                    area_u = cv2.contourArea(new_bboxes[ii]) + \
-                             cv2.contourArea(bboxes[jj]) - area_i
-                    logging.debug(f'**** {area_i}, {area_u}')
-                    dist_list.append((ii, jj, area_i / area_u))
-                    logging.debug(f'&&&& {dist_list[-1]}')
+        else:
+            raise NotImplementedError('Only handling axis-aligned bounding boxes')
     else:
         raise NotImplementedError(f'Unknown metric {metric}')
     return dist_list
 
 
-def match_bboxes(id_bboxes, new_bboxes, boxtype, max_dist=1e4,
-                 metric=au.DistanceMetric.euclidean):
+def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
+                 boxtype: au.OutlineStyle,
+                 metric: au.DistanceMetric = au.DistanceMetric.euclidean,
+                 max_dist: int = 1e4
+    ):
     """Match the bboxes in `new_bboxes` to the closest object.
 
     id_bboxes: dict mapping ids to bboxes
 
-    new_bboxes: list of new bboxes to be matched to those in id_bboxes
+    new_bboxes: array of new bboxes to be matched to those in id_bboxes
 
     boxtype: OutlineStyle.bbox or OutlineStyle.minrect
 
@@ -92,8 +86,10 @@ def match_bboxes(id_bboxes, new_bboxes, boxtype, max_dist=1e4,
     logging.debug('New bboxes: %r', new_bboxes)
     logging.debug('Box type: %r', boxtype)
     logging.debug('Max dist: %r', max_dist)
+    if len(id_bboxes) == 0:
+        return ({}, set(range(len(new_bboxes))), {})
     labels = list(id_bboxes.keys())
-    bboxes = list(id_bboxes.values())
+    bboxes = np.array(list(id_bboxes.values()), dtype=float)
     dist_list = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
                                   metric=metric)
     dist_matrix = np.zeros((len(new_bboxes), len(id_bboxes)), dtype=float)
@@ -181,7 +177,8 @@ class KalmanTracker(object):
 
     def predict(self):
         self.time_since_update += 1
-        return self.filter.predict()
+        ret = self.filter.predict()
+        return ret[:self.NDIM].squeeze()
 
     def update(self, detection):
         pos = self.filter.correct(detection)
@@ -214,31 +211,43 @@ class SORTracker(qc.QObject):
     """
     sigTracked = qc.pyqtSignal(dict)
 
-    def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.5, max_age=10, n_init=3):
+    def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.8, max_age=10,
+                 n_init=3, boxtype=au.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
         self.min_dist = min_dist
+        self.boxtype = boxtype
         self.metric = metric
         self.max_age = max_age
         self.trackers = {}
+        self._new_bboxes = []
         self._next_id = 0
+        self._mutex = qc.QMutex()
+        self._wait_cond = None
+
+    @qc.pyqtSlot(threading.Event)
+    def setWaitCond(self, cond: threading.Event) -> None:
+        _ = qc.QMutexLocker(self._mutex)
+        self._wait_cond = cond
 
     @qc.pyqtSlot(float)
     def setMinDist(self, dist: float) -> None:
+        _ = qc.QMutexLocker(self._mutex)
         self.min_dist = dist
 
     @qc.pyqtSlot(int)
     def setMaxAge(self, max_age: int) -> None:
         """Set the maximum misses before discarding a track"""
+        _ = qc.QMutexLocker(self._mutex)
         self.max_age = max_age
 
     @qc.pyqtSlot(int)
-    def setConfirmationCount(self, count: int) -> None:
+    def setMinHits(self, count: int) -> None:
         """Number of times a track should match prediction before it is
         confirmed"""
+        _ = qc.QMutexLocker(self._mutex)
         self.n_init = count
 
-    @qc.pyqtSlot(np.ndarray)
     def update(self, bboxes):
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
@@ -246,27 +255,74 @@ class SORTracker(qc.QObject):
             if np.any(np.isnan(prior)):
                 continue
             bbox = prior[:KalmanTracker.NDIM]
-            predicted_bboxes[id_] = au.xyrh2tlwh(bbox)
+            predicted_bboxes[id_] = au.xyrh2tlwh(*bbox)
         self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
         matched, new_unmatched, old_unmatched = match_bboxes(
             predicted_bboxes,
             bboxes,
             boxtype=self.boxtype,
             max_dist=self.min_dist)
-        for id_, bbox in matched.items():
-            self.trackers[id_].update(au.tlwh2xyrh(*bbox))
+        for track_id, bbox_id in matched.items():
+            self.trackers[track_id].update(au.tlwh2xyrh(*bboxes[bbox_id]))
         for id_ in old_unmatched:
             self.trackers[id_].mark_missed()
         for ii in new_unmatched:
-            self._add_tracker(au.tlwh2xyrh(bboxes[ii]))
+            self._add_tracker(au.tlwh2xyrh(*bboxes[ii]))
         self.trackers = {id_: tracker for id_, tracker in self.trackers.items()
                          if not tracker.is_deleted()}
-        ret = {id_: au.xyrh2tlwh(tracker.pos) for id_, tracker in
+        ret = {id_: au.xyrh2tlwh(*tracker.pos) for id_, tracker in
                self.trackers.items()}
-        self.sigTracked.emit(ret)
+        return ret
 
     def _add_tracker(self, bbox):
         self.trackers[self._next_id] = KalmanTracker(bbox, self._next_id,
                                                      self.n_init,
                                                      self.max_age)
         self._next_id += 1
+
+    @qc.pyqtSlot(np.ndarray)
+    def track(self, bboxes: np.ndarray):
+        _ = qc.QMutexLocker(self._mutex)
+        if len(bboxes) == 0:
+            ret = {}
+        else:
+            ret = self.update(bboxes)
+        self.sigTracked.emit(ret)
+        if self._wait_cond is not None:
+            logging.debug(f'Waiting on condition')
+            self._wait_cond.wait()
+        logging.debug(f'Finished')
+
+
+class SORTWidget(qw.QWidget):
+    sigTrack = qc.pyqtSignal(np.ndarray)
+    sigTracked = qc.pyqtSignal(dict)
+
+    def __init__(self, *args, **kwargs):
+        super(SORTWidget, self).__init__(*args, **kwargs)
+        self.tracker = SORTracker()
+        self.thread = qc.QThread()
+        self.tracker.moveToThread(self.thread)
+        self._max_age_label = qw.QLabel('Maximum age')
+        self._max_age_label.setToolTip('Maximum number of misses before a track is removed')
+        self._max_age_spin = qw.QSpinBox()
+        self._max_age_spin.setRange(1, 100)
+        self._conf_age_label = qw.QLabel('Minimum hits')
+        self._conf_age_label.setToolTip('Minimum number of hits before a track is confirmed')
+        self._conf_age_spin = qw.QSpinBox()
+        self._min_dist_label = qw.QLabel('Minimum overlap')
+        self._min_dist_spin = qw.QDoubleSpinBox()
+        self._min_dist_spin.setRange(0.1, 1.0)
+        self._min_dist_spin.setValue(0.8)
+        layout = qw.QFormLayout()
+        layout.addRow(self._min_dist_label, self._min_dist_spin)
+        layout.addRow(self._conf_age_label, self._conf_age_spin)
+        layout.addRow(self._max_age_label, self._max_age_spin)
+        self._max_age_spin.valueChanged.connect(self.tracker.setMaxAge)
+        self._min_dist_spin.valueChanged.connect(self.tracker.setMinDist)
+        self._conf_age_spin.valueChanged.connect(self.tracker.setMinHits)
+        self.sigTrack.connect(self.tracker.track)
+        self.tracker.sigTracked.connect(self.sigTracked)
+        self.setLayout(layout)
+        self.thread.start()
+

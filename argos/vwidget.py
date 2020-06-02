@@ -18,12 +18,14 @@ class VideoWidget(qw.QWidget):
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
     sigSetBboxes = qc.pyqtSignal(dict)
     sigFrameSet = qc.pyqtSignal()
+    sigGotoFrame = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
         self.display_widget = None
         self.video_reader = None
         self.segmenter = None
+        self.tracker = None
         self.slider = None
         self.video_filename = ''
         self.timer = qc.QTimer(self)
@@ -32,6 +34,7 @@ class VideoWidget(qw.QWidget):
         self.playAction.setCheckable(True)
         self.openAction.triggered.connect(self.openVideo)
         self.playAction.triggered.connect(self.playVideo)
+        self.reader_thread = qc.QThread()
         self.sync = threading.Event()
 
     @qc.pyqtSlot()
@@ -47,18 +50,23 @@ class VideoWidget(qw.QWidget):
         except IOError as err:
             qw.QMessageBox.critical('Video open failed', str(err))
         self.video_filename = fname[0]
+
+        self.video_reader.moveToThread(self.reader_thread)
+
+        self.timer.timeout.connect(self.video_reader.read)
+        self.sigGotoFrame.connect(self.video_reader.gotoFrame)
         self.video_reader.sigFrameRead.connect(self.setFrame)
-        # self.video_reader.sigFinished.connect(self.eloop.quit)
-        self.timer.timeout.connect(self.video_reader.start)
         self.video_reader.sigVideoEnd.connect(self.pauseVideo)
         if self.display_widget is None:
             self.display_widget = Display()
             self.sigSetFrame.connect(self.display_widget.setFrame)
-            self.sigSetBboxes.connect(self.display_widget.sigSetRectangles)
+            self.sigSetBboxes.connect(
+                self.display_widget.setRectangles)
+            # self.sigSetBboxes.connect(self.display_widget.sigSetRectangles)
             self.slider = qw.QSlider(qc.Qt.Horizontal)
-            self.slider.valueChanged.connect(self.gotoFrame)
+            self.slider.valueChanged.connect(self.sigGotoFrame)
             self.spinbox = qw.QSpinBox()
-            self.spinbox.valueChanged.connect(self.gotoFrame)
+            self.spinbox.valueChanged.connect(self.sigGotoFrame)
             ctrl_layout = qw.QHBoxLayout()
             open_button = qw.QToolButton()
             open_button.setDefaultAction(self.openAction)
@@ -74,21 +82,35 @@ class VideoWidget(qw.QWidget):
             self.setLayout(layout)
         self.slider.setRange(0, self.video_reader.frame_count-1)
         self.spinbox.setRange(0, self.video_reader.frame_count-1)
-        self.video_reader.start()
+        self.reader_thread.start()
+        self.sigGotoFrame.emit(0)
 
     # TODO - for testing yolact part - intermediate trial before adding tracker
     def setSegmenter(self, segmenter):
         self.segmenter = segmenter
         self.sigSetFrame.connect(segmenter.process)
+        if self.tracker is not None:
+            if self.segmenter.receivers(self.segmenter.sigProcessed) > 0:
+                self.segmenter.sigProcessed.disconnect()
+            segmenter.sigProcessed.connect(self.tracker.setBboxes)
         segmenter.setWaitCond(self.sync)
-        segmenter.sigProcessed.connect(self.setBboxes)
+
+    def setTracker(self, tracker):
+        self.tracker = tracker
+        if self.segmenter is not None:
+            if self.segmenter.receivers(self.segmenter.sigProcessed) > 0:
+                self.segmenter.sigProcessed.disconnect()
+            self.segmenter.sigProcessed.connect(tracker.setBboxes)
+        tracker.sigTracked.connect(self.sigSetBboxes)
+        # self.tracker.setWaitCond(self.sync)
 
     # TODO - for testing yolact part - intermediate trial before adding tracker
-    @qc.pyqtSlot(np.ndarray, np.ndarray, np.ndarray)
-    def setBboxes(self, classes, scores, bboxes):
-        bboxes = {ii: bbox for ii, bbox in enumerate(bboxes)}
+    @qc.pyqtSlot(dict)
+    def setBboxes(self, bboxes: dict):
+        logging.debug(f'Here')
         self.sigSetBboxes.emit(bboxes)
         self.sync.set()
+        logging.debug(f'Set wait condition')
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int) -> None:
@@ -102,7 +124,7 @@ class VideoWidget(qw.QWidget):
         self.sigSetFrame.emit(frame, pos)
         if self.segmenter is None:
             self.sync.set()
-        logging.debug('Event set')
+            logging.debug('Event set')
         self.slider.blockSignals(True)
         self.slider.setValue(pos)
         self.slider.blockSignals(False)
@@ -110,16 +132,6 @@ class VideoWidget(qw.QWidget):
         self.spinbox.setValue(pos)
         self.spinbox.blockSignals(False)
         self.sigFrameSet.emit()
-
-    @qc.pyqtSlot(int)
-    def gotoFrame(self, pos: int) -> None:
-        """Go to specified frame and update the display with frame read"""
-        self.timer.stop()
-        self.video_reader.gotoFrame(pos)
-        self.video_reader.start()
-        # self.eloop.exec_()
-        if self.playAction.isChecked():
-            self.timer.start(1000.0 / self.video_reader.fps)
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool) -> None:
