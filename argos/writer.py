@@ -44,25 +44,26 @@ class Writer(qc.QObject):
             self.track_file.close()
         self.track_file = open(self.track_filename, 'w', newline='')
         self.track_writer = csv.writer(self.track_file)
+        self.track_writer.writerow('frame,trackid,x,y,w,h'.split(','))
 
     @qc.pyqtSlot(np.ndarray, int)
-    def writeSegmented(self, bboxes, frame):
+    def writeSegmented(self, bboxes: np.ndarray, frame_no: int):
         for bbox in bboxes:
-            data = [frame] + list(bbox)
+            data = [frame_no] + list(bbox)
             self.seg_writer.writerow(data)
 
     @qc.pyqtSlot(dict, int)
-    def writeTracked(self, id_bbox, frame):
+    def writeTracked(self, id_bbox: dict, frame_no: int):
         for id_ in sorted(id_bbox):
-            data = [frame, id_] + list(id_bbox[id_])
+            data = [frame_no, id_] + list(id_bbox[id_])
             self.track_writer.writerow(data)
 
+    @qc.pyqtSlot()
     def close(self):
-        self.seg_file.close()
-        self.track_file.close()
-
-    def __del__(self):
         if self.seg_file is not None and not self.seg_file.closed:
             self.seg_file.close()
         if self.track_file is not None and not self.track_file.closed:
             self.track_file.close()
+
+    def __del__(self):
+        self.close()
