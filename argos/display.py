@@ -45,8 +45,8 @@ class Scene(qw.QGraphicsScene):
         self.polygons = {}
         self._frame = None
         self.geom = DrawingGeom.arena
-        self.color = qg.QColor(qc.Qt.yellow)
-        self.selected_color = qg.QColor(qc.Qt.green)
+        self.color = qg.QColor(qc.Qt.green)
+        self.selected_color = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
         self.linewidth = 2
         self.snap_dist = 5

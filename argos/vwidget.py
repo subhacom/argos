@@ -5,18 +5,21 @@ import sys
 import logging
 import threading
 import numpy as np
+import os
 
 from PyQt5 import QtWidgets as qw, QtCore as qc
 
 from argos import utility
 from argos.display import Display
 from argos.vreader import VideoReader
+from argos.writer import Writer
 
 
 class VideoWidget(qw.QWidget):
 
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
-    sigSetBboxes = qc.pyqtSignal(dict, int)
+    sigSetTracked = qc.pyqtSignal(dict, int)
+    sigSetSegmented = qc.pyqtSignal(np.ndarray, int)
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
@@ -29,6 +32,7 @@ class VideoWidget(qw.QWidget):
         self.tracker = None
         self.slider = None
         self.video_filename = ''
+        self.writer = Writer()
         # As the time to process the data is generally much longer than FPS
         # using a regular interval timer puts too much backlog and the
         # play/pause functionality does not work on timer.stop() call.
@@ -44,6 +48,9 @@ class VideoWidget(qw.QWidget):
         self.playAction.triggered.connect(self.playVideo)
         self.reader_thread = qc.QThread()
         self.sigQuit.connect(self.reader_thread.quit)
+        self.sigQuit.connect(self.writer.close)
+        self.sigSetSegmented.connect(self.writer.writeSegmented)
+        self.sigSetTracked.connect(self.writer.writeTracked)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
     @qc.pyqtSlot()
@@ -59,7 +66,19 @@ class VideoWidget(qw.QWidget):
         except IOError as err:
             qw.QMessageBox.critical('Video open failed', str(err))
         self.video_filename = fname[0]
-
+        ## Set-up for saving data
+        self.output_dir = qw.QFileDialog.getExistingDirectory(
+            self, 'Save data in directory')
+        self.writer.set_path(self.output_dir, self.video_filename)
+        qw.QMessageBox.information(self,
+                                   'Data will be saved in',
+                                   'Segmentation file: '
+                                   f'{self.writer.seg_filename}'
+                                   '\nTracked file: '
+                                   f'{self.writer.track_filename}')
+        # settings = qc.QSettings()
+        # settings.setValue('video_file', fname[0])
+        # settings.sync()
         self.video_reader.moveToThread(self.reader_thread)
 
         self.timer.timeout.connect(self.video_reader.read)
@@ -69,9 +88,9 @@ class VideoWidget(qw.QWidget):
         if self.display_widget is None:
             self.display_widget = Display()
             self.sigSetFrame.connect(self.display_widget.setFrame)
-            self.sigSetBboxes.connect(
+            self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
-            # self.sigSetBboxes.connect(self.display_widget.sigSetRectangles)
+            # self.sigSetTracked.connect(self.display_widget.sigSetRectangles)
             self.slider = qw.QSlider(qc.Qt.Horizontal)
             self.slider.valueChanged.connect(self.sigGotoFrame)
             self.spinbox = qw.QSpinBox()
@@ -94,11 +113,9 @@ class VideoWidget(qw.QWidget):
         self.reader_thread.start()
         self.sigGotoFrame.emit(0)
 
-    # TODO - for testing yolact part - intermediate trial before adding tracker
     @qc.pyqtSlot(dict, int)
-    def setBboxes(self, bboxes: dict, pos: int) -> None:
-        logging.debug(f'Here')
-        self.sigSetBboxes.emit(bboxes, pos)
+    def setTracked(self, bboxes: dict, pos: int) -> None:
+        self.sigSetTracked.emit(bboxes, pos)
         logging.debug(f'Set wait condition for frame {pos}')
         if self.playAction.isChecked():
             self.timer.start(1000.0 / self.video_reader.fps)

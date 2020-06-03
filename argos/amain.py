@@ -70,14 +70,13 @@ class ArgosMain(qw.QMainWindow):
         # Connections
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
         self._yolact_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
-        self._tracker_widget.sigTracked.connect(self._video_widget.setBboxes)
+        self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
+        self._tracker_widget.sigTracked.connect(self._video_widget.setTracked)
         self.sigQuit.connect(self._video_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._tracker_widget.sigQuit)
 
     def cleanup(self):
-        # self.video_reader.terminate()
-        # self.frame_processor.terminate()
         settings.sync()
         logging.debug('Saved settings')
         self.sigQuit.emit()

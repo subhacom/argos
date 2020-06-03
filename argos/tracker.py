@@ -310,6 +310,8 @@ class SORTWidget(qw.QWidget):
         self._conf_age_label = qw.QLabel('Minimum hits')
         self._conf_age_label.setToolTip('Minimum number of hits before a track is confirmed')
         self._conf_age_spin = qw.QSpinBox()
+        self._conf_age_spin.setRange(1, 100)
+        self._conf_age_spin.setValue(3)
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
         self._min_dist_spin.setRange(0.1, 1.0)

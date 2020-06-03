@@ -246,7 +246,7 @@ class YolactWidget(qw.QWidget):
     def loadConfig(self):
         filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open configuration')
         if len(filename) == 0:
-            raise Exception('Empty filename for YOLACT configuration')
+            return
         self.sigConfigFile.emit(filename)
 
     @qc.pyqtSlot()
