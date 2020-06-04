@@ -64,7 +64,8 @@ class VideoWidget(qw.QWidget):
             self.video_reader = VideoReader(fname[0])
             logging.debug(f'Opened {fname[0]} with {self.video_reader.frame_count} frames')
         except IOError as err:
-            qw.QMessageBox.critical('Video open failed', str(err))
+            qw.QMessageBox.critical(self, 'Video open failed', str(err))
+            return
         self.video_filename = fname[0]
         ## Set-up for saving data
         self.output_dir = qw.QFileDialog.getExistingDirectory(
@@ -73,9 +74,9 @@ class VideoWidget(qw.QWidget):
         qw.QMessageBox.information(self,
                                    'Data will be saved in',
                                    f'{self.output_dir}'
-                                   '\nSegmentation file: '
+                                   '\nSegmentation: '
                                    f'{os.path.basename(self.writer.seg_filename)}'
-                                   '\nTracked file: '
+                                   '\nTracked: '
                                    f'{os.path.basename(self.writer.track_filename)}')
         self.video_reader.moveToThread(self.reader_thread)
 

@@ -3,30 +3,23 @@
 # Created: 2020-06-01 5:05 PM
 """Interface to YOLACT for segmentation"""
 
-
-import sys
 import time
 import logging
-from queue import Queue
 import numpy as np
-import multiprocessing
 import threading
-import concurrent.futures as cf
 import yaml
-import cv2
 import torch
 import torch.backends.cudnn as cudnn
 
 from PyQt5 import (
     QtCore as qc,
-    QtGui as qg,
     QtWidgets as qw
 )
 
 from yolact.yolact import Yolact
 from yolact.data import config as yconfig
 # This is actually yolact.utils
-from yolact.utils.augmentations import FastBaseTransform, Resize
+from yolact import FastBaseTransform
 from yolact.layers import output_utils as oututils
 
 from argos.utility import init
@@ -53,7 +46,7 @@ class YolactWorker(qc.QObject):
         self._image = None
         self._pos = 0
         self.top_k = 10
-        self.cuda = True
+        self.cuda = torch.cuda.is_available()
         self.net = None
         self.score_threshold = 0.15
         self.config = yconfig.cfg
@@ -111,7 +104,7 @@ class YolactWorker(qc.QObject):
             else:
                 torch.set_default_tensor_type('torch.FloatTensor')
             self.net = Yolact()
-            self.net.load_weights(self.weights_file)
+            self.net.load_weights(self.weights_file, self.cuda)
             self.net.eval()
             if self.cuda:
                 self.net = self.net.cuda()
@@ -196,8 +189,12 @@ class YolactWidget(qw.QWidget):
         self.load_weights_action.triggered.connect(self.loadWeights)
         self.cuda_action = qw.QAction('Use CUDA')
         self.cuda_action.setCheckable(True)
-        self.cuda_action.setChecked(self.worker.cuda)
-        self.cuda_action.triggered.connect(self.worker.enableCuda)
+        if torch.cuda.is_available():
+            self.cuda_action.setChecked(self.worker.cuda)
+            self.cuda_action.triggered.connect(self.worker.enableCuda)
+        else:
+            self.cuda_action.setEnabled(False)
+            self.cuda_action.setToolTip('PyTorch on this system does not support CUDA')
         self.top_k_edit = qw.QLineEdit('10')
         self.top_k_edit.setText(str(self.worker.top_k))
         self.top_k_edit.editingFinished.connect(self.setTopK)
