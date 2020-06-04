@@ -1,0 +1,18 @@
+name: babylocust_resnet101  # this is important
+dataset:
+    name: Baby Locust Dataset
+    train_info: 'C:/Users/raysu/analysis/animal_tracking/yolact_custom/data/train_babylocust/annotations.json'
+    valid_info: 'C:/Users/raysu/analysis/animal_tracking/yolact_custom/data/valid_babylocust/annotations.json'
+    train_images: 'C:/Users/raysu/analysis/animal_tracking/yolact_custom/data/train_babylocust/'
+    valid_images: 'C:/Users/raysu/analysis/animal_tracking/yolact_custom/data/valid_babylocust/'
+    has_gt: True
+    class_names: [babylocust]  # this is important
+    label_map: {1:  1}   # this is unnecessary in this case but left as an example
+
+num_classes: 2  # 1 for babylocust, 1 for background
+# Image Size - for training - resnet 101 backbone allows 550x550 images
+max_size: 550
+    
+# Training params
+lr_steps: [28000, 60000, 70000, 80000, 100000, 160000, 200000]
+max_iter: 240000
