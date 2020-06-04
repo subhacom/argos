@@ -72,13 +72,11 @@ class VideoWidget(qw.QWidget):
         self.writer.set_path(self.output_dir, self.video_filename)
         qw.QMessageBox.information(self,
                                    'Data will be saved in',
-                                   'Segmentation file: '
-                                   f'{self.writer.seg_filename}'
+                                   f'{self.output_dir}'
+                                   '\nSegmentation file: '
+                                   f'{os.path.basename(self.writer.seg_filename)}'
                                    '\nTracked file: '
-                                   f'{self.writer.track_filename}')
-        # settings = qc.QSettings()
-        # settings.setValue('video_file', fname[0])
-        # settings.sync()
+                                   f'{os.path.basename(self.writer.track_filename)}')
         self.video_reader.moveToThread(self.reader_thread)
 
         self.timer.timeout.connect(self.video_reader.read)

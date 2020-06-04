@@ -35,6 +35,11 @@ from argos.utility import init
 settings = init()
 
 
+class YolactException(BaseException):
+    def __init__(self, *args, **kwargs):
+        super(YolactException, self).__init__(*args, **kwargs)
+
+
 class YolactWorker(qc.QObject):
     # emits list of classes, scores, and bboxes of detected objects
     # bboxes are in (top-left, w, h) format
@@ -96,7 +101,7 @@ class YolactWorker(qc.QObject):
     @qc.pyqtSlot(str)
     def setWeights(self, filename):
         if filename == '':
-            raise Exception('Empty filename for network weights')
+            raise YolactException('Empty filename for network weights')
         self.weights_file = filename
         tic = time.perf_counter_ns()
         with torch.no_grad():
@@ -127,7 +132,7 @@ class YolactWorker(qc.QObject):
         the identified class.
         """
         if self.net is None:
-            raise Exception('Network not initialized')
+            raise YolactException('Network not initialized')
         # Partly follows yolact eval.py
         tic = time.perf_counter_ns()
         _ = qc.QMutexLocker(self.mutex)
@@ -173,7 +178,7 @@ class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
     # pass on the image to YolactWorker for processing
-    sigprocess= qc.pyqtSignal(np.ndarray, int)
+    sigProcess= qc.pyqtSignal(np.ndarray, int)
 
     # Pass UI entries to worker YolactWorker
     sigTopK = qc.pyqtSignal(int)
@@ -201,6 +206,7 @@ class YolactWidget(qw.QWidget):
         self.score_thresh_edit.setText(str(self.worker.score_threshold))
         self.score_thresh_edit.editingFinished.connect(self.setScoreThresh)
         self.score_thresh_label = qw.QLabel('Detection score minimum')
+        self.ignore = False
         ######################################################
         # Organize the actions as buttons in a form layout
         ######################################################
@@ -224,7 +230,7 @@ class YolactWidget(qw.QWidget):
         ######################################################
         # Setup connections
         ######################################################
-        self.sigprocess.connect(self.worker.process)
+        self.sigProcess.connect(self.worker.process)
         self.worker.sigProcessed.connect(self.sigProcessed)
         self.sigScoreThresh.connect(self.worker.setScoreThresh)
         self.sigConfigFile.connect(self.worker.setConfig)
@@ -263,11 +269,15 @@ class YolactWidget(qw.QWidget):
 
         `pos` - for debugging - should be frame no.
         """
-        if self.worker.net is None:
+        if self.worker.net is not None:
+            self.sigProcess.emit(image, pos)
+        elif self.ignore:  # Failed to load config and weights, don't bother
+            self.sigProcessed.emit(np.array([]), pos)
+        else:
             try:
                 self.loadConfig()
                 self.loadWeights()
-            except Exception as err:
-                qw.QMessageBox.critical('Could not open file', str(err))
-                return
-        self.sigprocess.emit(image, pos)
+            except YolactException as err:
+                qw.QMessageBox.critical(self, 'Could not open file', str(err))
+            finally:
+                self.ignore = True

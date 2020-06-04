@@ -220,10 +220,14 @@ class SORTracker(qc.QObject):
         self.metric = metric
         self.max_age = max_age
         self.trackers = {}
-        self._new_bboxes = []
         self._next_id = 0
         self._mutex = qc.QMutex()
         self._wait_cond = None
+
+    @qc.pyqtSlot()
+    def reset(self):
+        self.trackers = {}
+        self._next_id = 0
 
     @qc.pyqtSlot(threading.Event)
     def setWaitCond(self, cond: threading.Event) -> None:
@@ -299,6 +303,7 @@ class SORTWidget(qw.QWidget):
     sigTrack = qc.pyqtSignal(np.ndarray, int)
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
+    sigReset = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(SORTWidget, self).__init__(*args, **kwargs)
@@ -331,9 +336,11 @@ class SORTWidget(qw.QWidget):
         self._conf_age_spin.valueChanged.connect(self.tracker.setMinHits)
         self.sigTrack.connect(self.tracker.track)
         self.tracker.sigTracked.connect(self.sigTracked)
+        self.sigReset.connect(self.tracker.reset)
         self.sigQuit.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self.setLayout(layout)
         self.thread.start()
+
 
 

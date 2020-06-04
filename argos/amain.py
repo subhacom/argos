@@ -72,6 +72,7 @@ class ArgosMain(qw.QMainWindow):
         self._yolact_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
         self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
         self._tracker_widget.sigTracked.connect(self._video_widget.setTracked)
+        self._video_widget.openAction.triggered.connect(self._tracker_widget.sigReset)
         self.sigQuit.connect(self._video_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._tracker_widget.sigQuit)
