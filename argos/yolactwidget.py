@@ -19,7 +19,7 @@ from PyQt5 import (
 from yolact.yolact import Yolact
 from yolact.data import config as yconfig
 # This is actually yolact.utils
-from yolact import FastBaseTransform
+from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
 
 from argos.utility import init

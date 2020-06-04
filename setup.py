@@ -1,0 +1,40 @@
+# -*- coding: utf-8 -*-
+# Author: Subhasis Ray <ray dot subhasis at gmail dot com>
+# Created: 2020-06-04 4:13 PM
+import setuptools
+from Cython.Build import cythonize
+import numpy
+
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+
+ext_modules = [
+    setuptools.Extension(
+        'yolact.utils.cython_nms',
+        sources=['./yolact/utils/cython_nms.c', './yolact/utils/cython_nms.pyx'],
+        include_dirs=[numpy.get_include()],
+        extra_compile_args=[]
+    )
+]
+setuptools.setup(
+    name="argos",
+    version="0.0.1",
+    author="Subhasis Ray",
+    author_email="ray dor subhasis at gmail.com",
+    description="Software utility for tracking multiple objects (animals) in a video.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/subhacom/argos",
+    packages=setuptools.find_packages(),
+    ext_modules = cythonize(ext_modules),
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: Public Domain",
+        "Operating System :: OS Independent",
+    ],
+    python_requires='>=3.6',
+    install_requires=['torch', 'torchvision', 'numpy', 'scipy', 'pyqt5',
+                      'opencv-python', 'pyyaml'],
+)
