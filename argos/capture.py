@@ -44,8 +44,8 @@ import time
 from datetime import datetime, timedelta
 import csv
 import cv2
-import logging
-from logging.handlers import MemoryHandler
+# import logging
+# from logging.handlers import MemoryHandler
 from matplotlib import colors
 
 
@@ -53,24 +53,24 @@ CV2_MAJOR, CV2_MINOR, _ = cv2.__version__.split(".")
 CV2_MAJOR = int(CV2_MAJOR)
 CV2_MINOR = int(CV2_MINOR)
 
-logger = logging.getLogger('frame_info')
+# logger = logging.getLogger('frame_info')
 
-
-def setup_logger(fname, buffered=False):
-    global logger
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s\t%(message)s')
-    file_handler = logging.FileHandler(fname, mode='w')
-    file_handler.setFormatter(formatter)
-    # file_handler.setLevel(logging.INFO)
-    if buffered:
-        mem_handler = MemoryHandler(capacity=1000,
-                                    flushLevel=logging.ERROR,
-                                    target=file_handler)
-        # mem_handler.setFormatter(formatter)
-        logger.addHandler(mem_handler)
-    else:
-        logger.addHandler(file_handler)
+#
+# def setup_logger(fname, buffered=False):
+#     global logger
+#     logger.setLevel(logging.INFO)
+#     formatter = logging.Formatter('%(asctime)s\t%(message)s')
+#     file_handler = logging.FileHandler(fname, mode='w')
+#     file_handler.setFormatter(formatter)
+#     # file_handler.setLevel(logging.INFO)
+#     if buffered:
+#         mem_handler = MemoryHandler(capacity=1000,
+#                                     flushLevel=logging.ERROR,
+#                                     target=file_handler)
+#         # mem_handler.setFormatter(formatter)
+#         logger.addHandler(mem_handler)
+#     else:
+#         logger.addHandler(file_handler)
 
 
 def make_parser():
@@ -130,7 +130,7 @@ def make_parser():
     timestamp_group.add_argument('--fs', type=float, default=1.0,
                                  help='Font scale for timestamp text '
                                  '(this is not font size).')
-    parser.add_argument('--interval', type=float, default=-1.0,
+    parser.add_argument('--interval', type=float, default=0.033,  # 30 FPS
                         help='Interval in seconds between acquiring frames.')
     parser.add_argument('--duration', type=str, default='',
                         help='Duration of recordings in HH:MM:SS format.'
@@ -158,8 +158,8 @@ def make_parser():
                               help='Frame width')
     camera_group.add_argument('--height', type=int, default=-1,
                               help='Frame height')
-    parser.add_argument('--logbuf', action='store_true',
-                        help='Buffer the log messages to improve speed')
+    # parser.add_argument('--logbuf', action='store_true',
+    #                     help='Buffer the log messages to improve speed')
     return parser
 
 
@@ -229,8 +229,12 @@ def capture(params):
         raise Exception('Could not get frame')
     if not isinstance(input_, int):
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    x, y, w, h = cv2.selectROI(win_name, frame)
-    print(x, y, w, h)
+    x, y, w, h = cv2.selectROI('Select ROI. Press ENTER when done,'
+                               ' C to continue with default.', frame)
+    cv2.destroyAllWindows()
+    print('ROI', x, y, w, h)
+    if w == 0 or h == 0:
+        x, y, w, h = 0, 0, frame.shape[1], frame.shape[0]
 
     save = True
     t_prev = None
@@ -238,98 +242,106 @@ def capture(params):
     file_count = 0
     read_frames = 0
     writ_frames = 0
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if frame is None:
-            print('Empty frame')
-            break
-        # For camera capture, use system timestamp.  For exisiting
-        # video file, add frame delay to file modification timestamp.
-        if isinstance(input_, int):
-            ts = datetime.now()
-        else:
-            ts = tstart + timedelta(days=0,
-                                    seconds=read_frames / params['fps'])
-        read_frames += 1
-
-        if writ_frames == 0:
-            fname, _, ext = params['output'].rpartition('.')
-            output_file = f'{fname}_{file_count}.{ext}' \
-                if params['max_frames'] > 0 else params['output']
-            file_count += 1
-            timestamp_file = f'{output_file}.csv'
-            print('Creating output file', output_file)
-            t_prev = ts
-            prev_frame = frame.copy()
+    try:
+        while True:
+            ret, frame = cap.read()
+            if frame is None:
+                print('Empty frame')
+                break
+            frame = frame[y: y + h, x: x + w].copy()
+            # For camera capture, use system timestamp.  For exisiting
+            # video file, add frame delay to file modification timestamp.
             if isinstance(input_, int):
-                tstart = ts
-            print(f'Frame shape: {frame.shape}\n'
-                  f'Width: {cap.get(3)} Height: {cap.get(4)}')
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fourcc = cv2.VideoWriter_fourcc(*params['format'])
-            out = cv2.VideoWriter(params['output'], fourcc, params['fps'],
-                                  (width, height))
-            logger.debug(f'input_frame\toutput_frame\ttimestamp')
-            logger.debug(f'{read_frames}\t{writ_frames}\t{ts.isoformat()}')
-            tsout = open(timestamp_file, 'w', newline='')
-            tswriter = csv.writer(tsout)
-            tswriter.writerow(['frame', 'timestamp'])
-            writ_frames = 1
-            continue
+                ts = datetime.now()
+            else:
+                ts = tstart + timedelta(days=0,
+                                        seconds=read_frames / params['fps'])
+            read_frames += 1
 
-        # Check if current time is more than specified duration since start.
-        # If so, stop recording.
-        time_from_start = ts - tstart
-        time_from_start = time_from_start.seconds + \
-            time_from_start.microseconds * 1e-6
-        time_delta = ts - t_prev
-        time_delta = time_delta.seconds + time_delta.microseconds * 1e-6
-        if (params['duration'] > 0) and (time_from_start > params['duration']):
-            break
-        if params['interval'] > 0:
-            save = time_delta >= params['interval']
-        if params['motion_based']:
-            save, contours = check_motion(frame, prev_frame,
-                                          params['threshold'],
-                                          params['min_area'],
-                                          kernel_width=params['kernel_width'],
-                                          show_diff=params['show_diff'])
+            if writ_frames == 0:
+                fname, _, ext = params['output'].rpartition('.')
+                output_file = f'{fname}_{file_count}.{ext}' \
+                    if params['max_frames'] > 0 else params['output']
+                file_count += 1
+                timestamp_file = f'{output_file}.csv'
+                print('Creating output file', output_file)
+                t_prev = ts
+                prev_frame = frame.copy()
+                if isinstance(input_, int):
+                    tstart = ts
+                print(f'Frame shape: {frame.shape}\n'
+                      f'Width: {cap.get(3)} Height: {cap.get(4)}')
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fourcc = cv2.VideoWriter_fourcc(*params['format'])
+                out = cv2.VideoWriter(params['output'], fourcc, params['fps'],
+                                      (width, height))
+                # logger.debug(f'input_frame\toutput_frame\ttimestamp')
+                # logger.debug(f'{read_frames}\t{writ_frames}\t{ts.isoformat()}')
+                tsout = open(timestamp_file, 'w', newline='')
+                tswriter = csv.writer(tsout)
+                tswriter.writerow(['frame', 'timestamp'])
+                writ_frames = 1
+                continue
 
-        if save:
-            prev_frame = frame.copy()
-            tstring = ts.isoformat()
-            if params['timestamp']:
-                if params['tb'] is not None:
-                    (w, h), baseline = cv2.getTextSize(
-                        tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5,  2)
-                    cv2.rectangle(frame, (params['tx'], params['ty']),
-                                  (params['tx'] + w, params['ty'] - h),
-                                  params['tb'], cv2.FILLED)
-                cv2.putText(frame, tstring, (params['tx'], params['ty']),
-                            cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
-                            params['tc'], 2)
-            if params['show_contours'] and (len(contours) > 0):
-                cv2.drawContours(frame, contours, -1, params['tc'], 2)
-            # TODO In production writing should happen before drawing contours
-            #      Displaying contours is good for debugging
-            out.write(frame[y: y + h, x: x + w])
-            tswriter.writerow([writ_frames, ts])
-            # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
-            writ_frames = ((writ_frames + 1) % params['max_frames']) \
-                if params['max_frames'] > 0 else (writ_frames + 1)
-            t_prev = ts
-        if params['interactive']:
-            cv2.imshow(win_name, frame)
-        key = cv2.waitKey(1) & 0xFF
-        # if the `q` key is pressed, break from the lop
-        if key == ord('q') or key == 27:
-            break
-    cap.release()
-    if out is not None:
-        out.release()
-    tsout.close()
-    cv2.destroyAllWindows()
+            # Check if current time is more than specified duration since start.
+            # If so, stop recording.
+            time_from_start = ts - tstart
+            time_from_start = time_from_start.seconds + \
+                time_from_start.microseconds * 1e-6
+            time_delta = ts - t_prev
+            time_delta = time_delta.seconds + time_delta.microseconds * 1e-6
+            if (params['duration'] > 0) and (time_from_start > params['duration']):
+                break
+
+            if params['motion_based']:
+                save, contours = check_motion(frame, prev_frame,
+                                              params['threshold'],
+                                              params['min_area'],
+                                              kernel_width=params['kernel_width'],
+                                              show_diff=params['show_diff'])
+            elif params['interval'] > 0:
+                save = time_delta >= params['interval']
+
+            if save:
+                prev_frame = frame.copy()
+                tstring = ts.isoformat()
+                if params['timestamp']:
+                    if params['tb'] is not None:
+                        (w, h), baseline = cv2.getTextSize(
+                            tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5,  2)
+                        cv2.rectangle(frame, (params['tx'], params['ty']),
+                                      (params['tx'] + w, params['ty'] - h),
+                                      params['tb'], cv2.FILLED)
+                    cv2.putText(frame, tstring, (params['tx'], params['ty']),
+                                cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
+                                params['tc'], 2)
+                if params['show_contours'] and (len(contours) > 0):
+                    print('Color:', params['tc'])
+                    cv2.drawContours(frame, contours, -1, params['tc'], 2)
+                # TODO In production writing should happen before drawing contours
+                #      Displaying contours is good for debugging
+                out.write(frame[y: y + h, x: x + w])
+                tswriter.writerow([writ_frames, ts])
+                # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
+                writ_frames = ((writ_frames + 1) % params['max_frames']) \
+                    if params['max_frames'] > 0 else (writ_frames + 1)
+                t_prev = ts
+            if params['interactive']:
+                cv2.imshow(win_name, frame)
+            key = cv2.waitKey(1) & 0xFF
+            # if the `q` key is pressed, break from the lop
+            if key == ord('q') or key == 27:
+                break
+    except KeyboardInterrupt:
+        print('Caught keyboard interrupt')
+    finally:
+        print('Closing')
+        cap.release()
+        if out is not None:
+            out.release()
+        tsout.close()
+        cv2.destroyAllWindows()
 
 
 def get_camera_fps(devid, nframes=120):
@@ -384,14 +396,13 @@ def check_params(args):
         params['duration'] = duration.seconds + duration.microseconds * 1e-6
     else:
         params['duration'] = -1
-    if params['timestamp']:
-        r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tc'])]
-        params['tc'] = (b, g, r)
-        if len(params['tb']) > 0:
-            r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tb'])]
-            params['tb'] = (b, g, r)
-        else:
-            params['tb'] = None
+    r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tc'])]
+    params['tc'] = (b, g, r)
+    if len(params['tb']) > 0:
+        r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tb'])]
+        params['tb'] = (b, g, r)
+    else:
+        params['tb'] = None
 
     return params
 
@@ -400,7 +411,7 @@ if __name__ == '__main__':
     parser = make_parser()
     args = parser.parse_args()
     params = check_params(vars(args))
-    setup_logger(f'{params["output"]}.log', params['logbuf'])
+    # setup_logger(f'{params["output"]}.log', params['logbuf'])
     capture(params)
 
 

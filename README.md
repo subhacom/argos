@@ -70,4 +70,8 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
  
      The bounding boxes of the segmented objects will be saved in `{videofile}.seg.csv` with each row containing `frame-no,x,y,w,h` where (x, y) is the coordinate of the top left corner of the bounding box and `w` and `h` are its width and height respectively. 
      
-     The tracks will be saved in `{videofile}.trk.csv`. Each row in this file contains `frame-no,track-id,x,y,w,h`. 
+     The tracks will be saved in `{videofile}.trk.csv`. Each row in this file contains `frame-no,track-id,x,y,w,h`.
+     
+
+## Additional utilities
+`capture.py` : a python script to record from a webcam or convert an existing video based on movement. For very long recordings it may be wasteful to record video when there is nothing happening. You can use this script to record or convert video so only parts where there is some minimum change of pixels (for example due to movement) are stored. Alongside the output video, it keeps a `.csv` file with the time of each frame. Check the source code or enetre `python argos/capture.py -h` to find the command line arguments.
