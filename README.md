@@ -7,7 +7,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
 1. Install [anaconda](https://www.anaconda.com/) python distribution. You can download the free Individual Edition [here](https://www.anaconda.com/products/individual#Downloads)
 2. Create an environment with required packages (enter this commands in Anaconda prompt):
    ```commandline
-   conda create -n track python cython scipy numpy pyqt opencv pyyaml matplotlib
+   conda create -n track python cython scipy numpy pyqt opencv pyyaml matplotlib pandas
    ```
     This will create a virtual Python environment called `track`
 3. Activate the environment (enter this commands in Anaconda prompt):
