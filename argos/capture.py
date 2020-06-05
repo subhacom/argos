@@ -93,7 +93,7 @@ def make_parser():
                               'frame. Small changes are better detected '
                               ' With a smaller value (21 works well for about'
                               ' 40x10 pixel insects)')
-    motion_group.add_argument('--threshold', type=int, default=100,
+    motion_group.add_argument('--threshold', type=int, default=10,
                               help='Grayscale threshold value for detecting'
                               ' change in pixel value between frames')
     motion_group.add_argument('-a', '--min_area', type=int, default=100,

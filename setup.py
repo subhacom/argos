@@ -20,7 +20,7 @@ ext_modules = [
 ]
 setuptools.setup(
     name="argos",
-    version="0.0.1",
+    version="0.1",
     author="Subhasis Ray",
     author_email="ray dor subhasis at gmail.com",
     description="Software utility for tracking multiple objects (animals) in a video.",
