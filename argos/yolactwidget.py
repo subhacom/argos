@@ -171,7 +171,7 @@ class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
     # pass on the image to YolactWorker for processing
-    sigProcess= qc.pyqtSignal(np.ndarray, int)
+    sigProcess = qc.pyqtSignal(np.ndarray, int)
 
     # Pass UI entries to worker YolactWorker
     sigTopK = qc.pyqtSignal(int)

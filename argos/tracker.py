@@ -97,18 +97,17 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         dist_matrix[ii, jj] = cost
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
     matched = {}
-    new_matched = set()
-    new_unmatched = set()
-    old_unmatched = set()
-    old_matched = set()
+    good_rows = set()
+    good_cols = set()
     if metric == au.DistanceMetric.euclidean:
         max_dist *= max_dist
-    for ii, jj, in zip(row_ind, col_ind):
-        if dist_matrix[ii, jj] > max_dist:
-            new_unmatched.add(ii)
-            old_unmatched.add(labels[jj])
-        else:
-            matched[labels[jj]] = ii
+    for row, col in zip(row_ind, col_ind):
+        if dist_matrix[row, col] < max_dist:
+            good_rows.add(row)
+            good_cols.add(col)
+            matched[labels[col]] = row
+    new_unmatched = set(range(len(new_bboxes))) - good_rows
+    old_unmatched = set(id_bboxes.keys()) - good_cols
     return matched, new_unmatched, old_unmatched
 
 

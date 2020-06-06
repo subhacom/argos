@@ -26,6 +26,12 @@ class OutlineStyle(enum.Enum):
     fill = enum.auto
 
 
+class SegmentationMethod(enum.Enum):
+    dbscan = enum.auto()
+    threshold = enum.auto()
+    watershed = enum.auto()
+
+
 # Enumeration for distance metrics
 class DistanceMetric(enum.Enum):
     iou = enum.auto()
