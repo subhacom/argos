@@ -7,14 +7,22 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
 1. Install [anaconda](https://www.anaconda.com/) python
    distribution. You can download the free Individual Edition
    [here](https://www.anaconda.com/products/individual#Downloads)
+   
 2. Create an environment with required packages (enter this commands
-   in Anaconda prompt): ```commandline conda create -n track python
-   cython scipy numpy pyqt opencv pyyaml matplotlib pandas ``` This
-   will create a virtual Python environment called `track`
+   in Anaconda prompt): 
+   
+   ```commandline 
+   conda create -n track -c conda-forge python cython scipy numpy pyqt pyyaml matplotlib pandas opencv ffmpeg
+   ``` 
+   
+   This will create a virtual Python environment called `track`
+   
 3. Activate the environment (enter this commands in Anaconda prompt):
+
    ```commandline
    conda activate track
    ```
+   
 4. Install PyTorch. If you want to use CPU-only version, in the
    Anaconda prompt ```commandline conda install pytorch torchvision
    cpuonly -c pytorch ``` If you want GPU support, see [pytorch
@@ -22,6 +30,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    right command. But note that you will need to install the
    appropriate [NVIDIA
    driver](https://www.nvidia.com/Download/index.aspx) for it to work.
+   
 5. Install `pycocotools`
 
    On Windows:
@@ -42,8 +51,11 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    
 6. In the Anaconda prompt, go to where `argos` is unpacked:
-   ```commandline cd {your_argos_directory} ``` it should have these
-   directories there: `argos`, `config`, and `yolact`.
+   ```commandline
+   cd {your_argos_directory} 
+   ```
+   it should have these directories there: `argos`, `config`, and `yolact`.
+   
 7. In the Anaconda prompt, update Python path to include this directory:
 
    on Windows command prompt:
@@ -65,6 +77,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```commandline
    python argos/amain.py
    ```
+   
  9. Open the video file using either the `File` menu. After selecting
     the video file, you will be prompted to:
     1. Select output data directory. 

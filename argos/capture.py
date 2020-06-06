@@ -6,6 +6,9 @@
 
 """Program to capture video using OpenCV.
 
+usage: python argos/capture.py -i myvideo.mpg -o myvideo_motion_cap.avi  \\
+--format=DIVX --m --threshold=20 -a 10
+
 We allow motion based recording: only when there is significant change
 in scene.
 
@@ -74,7 +77,14 @@ CV2_MINOR = int(CV2_MINOR)
 
 
 def make_parser():
-    parser = argparse.ArgumentParser('Record video based on motion detection')
+    parser = argparse.ArgumentParser('Record video based on motion detection.'
+                                     ' It can create an output video file with'
+                                     ' only the frames between which some'
+                                     ' motion was detected.'
+                                     ' It also dumps a csv file with the'
+                                     ' input frame no., output frame no., and'
+                                     ' the time stamp for the output frame in'
+                                     ' the input file.')
     parser.add_argument('-i', '--input', type=str, default='0',
                         help='Input source, '
                         'if unspecified or 0 use first available camera;'
@@ -136,8 +146,9 @@ def make_parser():
                         help='Duration of recordings in HH:MM:SS format.'
                         ' If unspecified or empty string, we will record'
                         'indefinitely.')
-    parser.add_argument('--interactive', action='store_true',
-                        help='Whether to display video as it gets captured')
+    parser.add_argument('--interactive', type=int, default=1,
+                        help='Whether to display video as it gets captured. '
+                             'Setting it to 0 may speed up things a bit.')
     parser.add_argument('--max_frames', type=int, default=-1,
                         help='After these many frames, save in a '
                         'new video file')
@@ -229,12 +240,15 @@ def capture(params):
         raise Exception('Could not get frame')
     if not isinstance(input_, int):
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    x, y, w, h = cv2.selectROI('Select ROI. Press ENTER when done,'
-                               ' C to continue with default.', frame)
+    roi = 'Select ROI. Press ENTER when done, C to continue with default.'
+    cv2.namedWindow(roi, cv2.WINDOW_NORMAL)
+    x, y, width, height = cv2.selectROI(roi, frame)
     cv2.destroyAllWindows()
-    print('ROI', x, y, w, h)
-    if w == 0 or h == 0:
-        x, y, w, h = 0, 0, frame.shape[1], frame.shape[0]
+    print('ROI', x, y, width, height)
+    if width == 0 or height == 0:
+        x, y, width, height = 0, 0, frame.shape[1], frame.shape[0]
+    width = int(width)
+    height = int(height)
 
     save = True
     t_prev = None
@@ -248,7 +262,7 @@ def capture(params):
             if frame is None:
                 print('Empty frame')
                 break
-            frame = frame[y: y + h, x: x + w].copy()
+            frame = frame[y: y + height, x: x + width].copy()
             # For camera capture, use system timestamp.  For exisiting
             # video file, add frame delay to file modification timestamp.
             if isinstance(input_, int):
@@ -269,18 +283,17 @@ def capture(params):
                 prev_frame = frame.copy()
                 if isinstance(input_, int):
                     tstart = ts
-                print(f'Frame shape: {frame.shape}\n'
-                      f'Width: {cap.get(3)} Height: {cap.get(4)}')
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                print(f'Original frame shape: '
+                      f'Width: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)} '
+                      f'Height: {cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}\n'
+                      f'ROI width: {width}, height: {height}')
+
                 fourcc = cv2.VideoWriter_fourcc(*params['format'])
                 out = cv2.VideoWriter(params['output'], fourcc, params['fps'],
                                       (width, height))
-                # logger.debug(f'input_frame\toutput_frame\ttimestamp')
-                # logger.debug(f'{read_frames}\t{writ_frames}\t{ts.isoformat()}')
                 tsout = open(timestamp_file, 'w', newline='')
                 tswriter = csv.writer(tsout)
-                tswriter.writerow(['frame', 'timestamp'])
+                tswriter.writerow(['inframe', 'outframe', 'timestamp'])
                 writ_frames = 1
                 continue
 
@@ -321,8 +334,8 @@ def capture(params):
                     cv2.drawContours(frame, contours, -1, params['tc'], 2)
                 # TODO In production writing should happen before drawing contours
                 #      Displaying contours is good for debugging
-                out.write(frame[y: y + h, x: x + w])
-                tswriter.writerow([writ_frames, ts])
+                out.write(frame)
+                tswriter.writerow([read_frames - 1, writ_frames - 1, ts])
                 # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
                 writ_frames = ((writ_frames + 1) % params['max_frames']) \
                     if params['max_frames'] > 0 else (writ_frames + 1)
