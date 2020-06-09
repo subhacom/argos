@@ -152,8 +152,8 @@ def make_parser():
     parser.add_argument('--max_frames', type=int, default=-1,
                         help='After these many frames, save in a '
                         'new video file')
-    parser.add_argument('--format', type=str, default='H264',
-                        help='Output cideo codec, see '
+    parser.add_argument('--format', type=str, default='X264',
+                        help='Output video codec, see '
                         'http://www.fourcc.org/codecs.php for description'
                         ' of available codecs on different platforms.'
                         ' default X264 produces the smallest videos')

@@ -98,7 +98,12 @@ def rect_iou(ra, rb):
     x, y, dx, dy = rect_intersection(ra, rb)
     area_i = dx * dy
     area_u = ra[2] * ra[3] + rb[2] * rb[3] - area_i
-    return 1.0 * area_i / area_u
+    if area_u <= 0 or area_i < 0:
+        raise ValueError('Area not positive')
+    ret = 1.0 * area_i / area_u
+    if np.isinf(ret) or np.isnan(ret) or ret < 0:
+        raise ValueError('Invalid intersection')
+    return ret
 
 
 def run_fn(arg0: np.ndarray, args: List) -> np.ndarray:

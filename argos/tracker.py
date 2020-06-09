@@ -14,12 +14,25 @@ from argos import utility as au
 
 setup = au.init()
 
+def xywh2xysr(x, y, w, h):
+    return np.array((x + w / 2.0,
+                     y + h / 2.0,
+                     w / float(h),
+                     h))
+
+def xysr2xywh(x, y, s, r):
+    w = s * r
+    h = r
+    return np.array((x - w / 2.0,
+                     y - h / 2.0,
+                     w, h))
+
 
 def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
     """Takes two lists of boxes and computes the distance between every possible
      pair.
 
-     new_bboxes: list of boxes as four anti-clockwise vertices, starting top-left
+     new_bboxes: list of boxes as (x, y, w, h)
 
      bboxes: list of boxes as four x, y, w, h
 
@@ -159,20 +172,22 @@ class KalmanTracker(object):
         ])
         # NOTE state covariance matrix (P) is initialized as a function of
         # measured height in DeepSORT, but constant (as below) in SORT
-        self.filter.errorCovPost = np.eye(2 * self.NDIM) * 10
-        self.filter.errorCovPost[self.NDIM:,
-        self.NDIM:] *= 1000  # High uncertainty for velocity at first
+        self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
+        self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
         # computed as a function of mean height in DeepSORT, but constant
         # (as below) in SORT
-        self.filter.processNoiseCov = np.eye(2 * self.NDIM)
+        self.filter.processNoiseCov = np.eye(2 * self.NDIM, dtype=float)
         self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
         self.filter.processNoiseCov[-1, -1] *= 0.01
         # Measurement noise covariance R
-        self.filter.measurementNoiseCov = np.eye(self.NDIM)
+        self.filter.measurementNoiseCov = np.eye(self.NDIM, dtype=float)
         self.filter.measurementNoiseCov[2:, 2:] *= 10.0
         self.filter.statePost = np.r_[bbox, np.zeros(self.NDIM)]
-        self.pos = np.array(bbox)
+
+    @property
+    def pos(self):
+        return self.filter.statePost[: self.NDIM]
 
     def predict(self):
         self.time_since_update += 1
@@ -189,8 +204,9 @@ class KalmanTracker(object):
         return self.pos
 
     def mark_missed(self):
-        if self.state == au.TrackState.tentative or \
-                self.time_since_update > self.max_age:
+        # if self.state == au.TrackState.tentative or \
+        #         self.time_since_update > self.max_age:
+        if  self.time_since_update > self.max_age:
             self.state = au.TrackState.deleted
 
     def is_deleted(self):
@@ -210,7 +226,7 @@ class SORTracker(qc.QObject):
     """
     sigTracked = qc.pyqtSignal(dict, int)
 
-    def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.8, max_age=10,
+    def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.3, max_age=1,
                  n_init=3, boxtype=au.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
@@ -255,26 +271,29 @@ class SORTracker(qc.QObject):
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
             prior = tracker.predict()
-            if np.any(np.isnan(prior)):
+            if np.any(np.isnan(prior)) or np.any(prior[2:] < 0):
                 continue
             bbox = prior[:KalmanTracker.NDIM]
-            predicted_bboxes[id_] = au.xyrh2tlwh(*bbox)
+            bbox = xysr2xywh(*bbox)
+            if np.any(np.isnan(bbox)) or np.any(bbox[2:] < 0):
+                continue
+            predicted_bboxes[id_] = bbox
         self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
         matched, new_unmatched, old_unmatched = match_bboxes(
             predicted_bboxes,
-            bboxes,
+            bboxes[:, :KalmanTracker.NDIM],
             boxtype=self.boxtype,
             metric=self.metric,
             max_dist=self.min_dist)
         for track_id, bbox_id in matched.items():
-            self.trackers[track_id].update(au.tlwh2xyrh(*bboxes[bbox_id]))
+            self.trackers[track_id].update(xywh2xysr(*bboxes[bbox_id]))
         for id_ in old_unmatched:
             self.trackers[id_].mark_missed()
         for ii in new_unmatched:
-            self._add_tracker(au.tlwh2xyrh(*bboxes[ii]))
+            self._add_tracker(xywh2xysr(*bboxes[ii, :KalmanTracker.NDIM]))
         self.trackers = {id_: tracker for id_, tracker in self.trackers.items()
                          if not tracker.is_deleted()}
-        ret = {id_: au.xyrh2tlwh(*tracker.pos) for id_, tracker in
+        ret = {id_: xysr2xywh(*tracker.pos) for id_, tracker in
                self.trackers.items()}
         return ret
 
@@ -319,11 +338,13 @@ class SORTWidget(qw.QWidget):
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
         self._min_dist_spin.setRange(0.1, 1.0)
-        self._min_dist_spin.setValue(0.8)
+        self._min_dist_spin.setValue(0.3)
+        self._disable_check = qw.QCheckBox('Disable tracking')
         layout = qw.QFormLayout()
         layout.addRow(self._min_dist_label, self._min_dist_spin)
         layout.addRow(self._conf_age_label, self._conf_age_spin)
         layout.addRow(self._max_age_label, self._max_age_spin)
+        layout.addWidget(self._disable_check)
         self.tracker = SORTracker(metric=au.DistanceMetric.iou,
                                   min_dist=self._min_dist_spin.value(),
                                   max_age=self._max_age_spin.value(),
@@ -333,6 +354,7 @@ class SORTWidget(qw.QWidget):
         self._max_age_spin.valueChanged.connect(self.tracker.setMaxAge)
         self._min_dist_spin.valueChanged.connect(self.tracker.setMinDist)
         self._conf_age_spin.valueChanged.connect(self.tracker.setMinHits)
+        self._disable_check.stateChanged.connect(self.disable)
         self.sigTrack.connect(self.tracker.track)
         self.tracker.sigTracked.connect(self.sigTracked)
         self.sigReset.connect(self.tracker.reset)
@@ -340,6 +362,19 @@ class SORTWidget(qw.QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         self.setLayout(layout)
         self.thread.start()
+
+    @qc.pyqtSlot(int)
+    def disable(self, state):
+        self.sigTrack.disconnect()
+        if state:
+            self.sigTrack.connect(self.sendDummySigTracked)
+        else:
+            self.sigTracked.connect(self.tracker.track)
+
+    @qc.pyqtSlot(np.ndarray, int)
+    def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
+        self.sigTracked.emit({ii: bboxes[ii] for ii in range(bboxes.shape[0])},
+                             pos)
 
 
 
