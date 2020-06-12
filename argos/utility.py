@@ -173,14 +173,14 @@ def poly2xyrh(vtx):
 
 def tlwh2xyrh(x, y, w, h):
     """Convert top-left, width, height into center, aspect ratio, height"""
-    return x +  w / 2.0, y + h / 2.0, w / float(h), float(h)
+    return np.array((x +  w / 2.0, y + h / 2.0, w / float(h), float(h)))
 
 
 def xyrh2tlwh(x, y, r, h):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
     w = r * h
-    return x - w / 2.0, y - h / 2.0, w, h
+    return np.array((x - w / 2.0, y - h / 2.0, w, h))
 
 
 def to_qpolygon(points, scale=1.0):

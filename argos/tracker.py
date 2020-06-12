@@ -13,19 +13,6 @@ from argos import utility as au
 
 setup = au.init()
 
-def xywh2xysr(x, y, w, h):
-    return np.array((x + w / 2.0,
-                     y + h / 2.0,
-                     w * h,
-                     w / float(h)))
-
-def xysr2xywh(x, y, s, r):
-    w = np.sqrt(s * r)
-    h = s / w
-    return np.array((x - w / 2.0,
-                     y - h / 2.0,
-                     w, h))
-
 
 def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
     """Takes two lists of boxes and computes the distance between every possible
@@ -182,19 +169,19 @@ class KalmanTracker(object):
         # Measurement noise covariance R
         self.filter.measurementNoiseCov = np.eye(self.NDIM, dtype=float)
         self.filter.measurementNoiseCov[2:, 2:] *= 10.0
-        self.filter.statePost = np.r_[xywh2xysr(*bbox), np.zeros(self.NDIM)]
+        self.filter.statePost = np.r_[au.tlwh2xyrh(*bbox), np.zeros(self.NDIM)]
 
     @property
     def pos(self):
-        return xysr2xywh(*self.filter.statePost[: self.NDIM])
+        return au.xyrh2tlwh(*self.filter.statePost[: self.NDIM])
 
     def predict(self):
         self.time_since_update += 1
         ret = self.filter.predict()
-        return xysr2xywh(*ret[:self.NDIM].squeeze())
+        return au.xyrh2tlwh(*ret[:self.NDIM].squeeze())
 
     def update(self, detection):
-        pos = self.filter.correct(xywh2xysr(*detection))
+        pos = self.filter.correct(au.tlwh2xyrh(*detection))
         self.time_since_update = 0
         self.hits += 1
         if self.state == au.TrackState.tentative and self.hits >= self.n_init:
