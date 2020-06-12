@@ -65,5 +65,16 @@ class Writer(qc.QObject):
         if self.track_file is not None and not self.track_file.closed:
             self.track_file.close()
 
+    @qc.pyqtSlot()
+    def reset(self):
+        """Overwrite current files, going back to start"""
+        self.close()
+        self.seg_file = open(self.seg_filename, 'w', newline='')
+        self.seg_writer = csv.writer(self.seg_file)
+        self.seg_writer.writerow('frame,x,y,w,h'.split(','))
+        self.track_file = open(self.track_filename, 'w', newline='')
+        self.track_writer = csv.writer(self.track_file)
+        self.track_writer.writerow('frame,trackid,x,y,w,h'.split(','))
+
     def __del__(self):
         self.close()

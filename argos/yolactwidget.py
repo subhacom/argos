@@ -183,8 +183,14 @@ class YolactWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(YolactWidget, self).__init__(*args, **kwargs)
         self.worker = YolactWorker()
-        self.load_config_action = qw.QAction('Load configuration', self)
+        self.load_config_action = qw.QAction('Load YOLACT configuration', self)
+        self.load_config_action.setToolTip('Load YOLACT configuration. This '
+                                           'should be a YAML (.yml) file '
+                                           'containing key value pairs for '
+                                           'various parameters for YOLACT')
         self.load_weights_action = qw.QAction('Load YOLACT weights', self)
+        self.load_config_action.setToolTip('Load the trained connection weights'
+                                           ' for the YOLACT neural network.')
         self.load_config_action.triggered.connect(self.loadConfig)
         self.load_weights_action.triggered.connect(self.loadWeights)
         self.cuda_action = qw.QAction('Use CUDA')
@@ -192,17 +198,28 @@ class YolactWidget(qw.QWidget):
         if torch.cuda.is_available():
             self.cuda_action.setChecked(self.worker.cuda)
             self.cuda_action.triggered.connect(self.worker.enableCuda)
+            self.cuda_action.setToolTip('Try to use GPU if available')
         else:
             self.cuda_action.setEnabled(False)
-            self.cuda_action.setToolTip('PyTorch on this system does not support CUDA')
+            self.cuda_action.setToolTip('PyTorch on this system does not '
+                                        'support CUDA')
         self.top_k_edit = qw.QLineEdit('10')
         self.top_k_edit.setText(str(self.worker.top_k))
         self.top_k_edit.editingFinished.connect(self.setTopK)
+        self.top_k_edit.setToolTip('Include only this many objects'
+                                   ' from all that are detected, ordered'
+                                   ' by their classification score')
         self.top_k_label = qw.QLabel('Number of objects to include')
+        self.top_k_label.setToolTip(self.top_k_edit.toolTip())
         self.score_thresh_edit = qw.QLineEdit('10')
+
         self.score_thresh_edit.setText(str(self.worker.score_threshold))
         self.score_thresh_edit.editingFinished.connect(self.setScoreThresh)
+        self.score_thresh_edit.setToolTip('a number > 0 and < 1. Higher score'
+                                          ' is more stringent criterion for'
+                                          ' classifying objects')
         self.score_thresh_label = qw.QLabel('Detection score minimum')
+        self.score_thresh_label.setToolTip(self.score_thresh_edit.toolTip())
         self.ignore = False
         ######################################################
         # Organize the actions as buttons in a form layout
@@ -211,12 +228,15 @@ class YolactWidget(qw.QWidget):
         self.setLayout(layout)
         button = qw.QToolButton()
         button.setDefaultAction(self.load_config_action)
+        button.setToolTip(self.load_config_action.toolTip())
         layout.addRow(button)
         button = qw.QToolButton()
         button.setDefaultAction(self.load_weights_action)
+        button.setToolTip(self.load_weights_action.toolTip())
         layout.addRow(button)
         button = qw.QToolButton()
         button.setDefaultAction(self.cuda_action)
+        button.setToolTip(self.cuda_action.toolTip())
         layout.addRow(button)
         layout.addRow(self.top_k_label, self.top_k_edit)
         layout.addRow(self.score_thresh_label, self.score_thresh_edit)

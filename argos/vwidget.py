@@ -23,6 +23,7 @@ class VideoWidget(qw.QWidget):
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
+    sigReset = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
@@ -44,9 +45,14 @@ class VideoWidget(qw.QWidget):
         self.openAction = qw.QAction('Open video')
         self.playAction = qw.QAction('Play/Pause')
         self.playAction.setCheckable(True)
+        self.resetAction = qw.QAction('Reset')
+        self.resetAction.setToolTip('Go back to the start and reset the'
+                                    ' tracker')
         self.openAction.triggered.connect(self.openVideo)
         self.playAction.triggered.connect(self.playVideo)
+        self.resetAction.triggered.connect(self.resetVideo)
         self.reader_thread = qc.QThread()
+        self.sigReset.connect(self.writer.reset)
         self.sigQuit.connect(self.reader_thread.quit)
         self.sigQuit.connect(self.writer.close)
         self.sigSetSegmented.connect(self.writer.writeSegmented)
@@ -100,9 +106,12 @@ class VideoWidget(qw.QWidget):
             ctrl_layout.addWidget(open_button)
             play_button = qw.QToolButton()
             play_button.setDefaultAction(self.playAction)
+            reset_button = qw.QToolButton()
+            reset_button.setDefaultAction(self.resetAction)
             ctrl_layout.addWidget(play_button)
             ctrl_layout.addWidget(self.slider)
             ctrl_layout.addWidget(self.spinbox)
+            ctrl_layout.addWidget(reset_button)
             layout = qw.QVBoxLayout()
             layout.addWidget(self.display_widget)
             layout.addLayout(ctrl_layout)
@@ -115,8 +124,8 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot(dict, int)
     def setTracked(self, bboxes: dict, pos: int) -> None:
         self.sigSetTracked.emit(bboxes, pos)
-        logging.debug(f'Set wait condition for frame {pos}')
         if self.playAction.isChecked():
+            logging.debug('Starting timer ...')
             self.timer.start(1000.0 / self.video_reader.fps)
 
     @qc.pyqtSlot(np.ndarray, int)
@@ -149,6 +158,11 @@ class VideoWidget(qw.QWidget):
     def pauseVideo(self):
         self.playAction.setChecked(False)
         self.timer.stop()
+
+    @qc.pyqtSlot()
+    def resetVideo(self):
+        self.sigReset.emit()
+        self.sigGotoFrame.emit(0)
 
 
 def test_vreader():

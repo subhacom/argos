@@ -11,18 +11,17 @@ from PyQt5 import (
     QtWidgets as qw)
 from argos import utility as au
 
-
 setup = au.init()
 
 def xywh2xysr(x, y, w, h):
     return np.array((x + w / 2.0,
                      y + h / 2.0,
-                     w / float(h),
-                     h))
+                     w * h,
+                     w / float(h)))
 
 def xysr2xywh(x, y, s, r):
-    w = s * r
-    h = r
+    w = np.sqrt(s * r)
+    h = s / w
     return np.array((x - w / 2.0,
                      y - h / 2.0,
                      w, h))
@@ -117,7 +116,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     for row, col in zip(row_ind, col_ind):
         if dist_matrix[row, col] < max_dist:
             good_rows.add(row)
-            good_cols.add(col)
+            good_cols.add(labels[col])
             matched[labels[col]] = row
     new_unmatched = set(range(len(new_bboxes))) - good_rows
     old_unmatched = set(id_bboxes.keys()) - good_cols
@@ -183,19 +182,19 @@ class KalmanTracker(object):
         # Measurement noise covariance R
         self.filter.measurementNoiseCov = np.eye(self.NDIM, dtype=float)
         self.filter.measurementNoiseCov[2:, 2:] *= 10.0
-        self.filter.statePost = np.r_[bbox, np.zeros(self.NDIM)]
+        self.filter.statePost = np.r_[xywh2xysr(*bbox), np.zeros(self.NDIM)]
 
     @property
     def pos(self):
-        return self.filter.statePost[: self.NDIM]
+        return xysr2xywh(*self.filter.statePost[: self.NDIM])
 
     def predict(self):
         self.time_since_update += 1
         ret = self.filter.predict()
-        return ret[:self.NDIM].squeeze()
+        return xysr2xywh(*ret[:self.NDIM].squeeze())
 
     def update(self, detection):
-        pos = self.filter.correct(detection)
+        pos = self.filter.correct(xywh2xysr(*detection))
         self.time_since_update = 0
         self.hits += 1
         if self.state == au.TrackState.tentative and self.hits >= self.n_init:
@@ -204,9 +203,8 @@ class KalmanTracker(object):
         return self.pos
 
     def mark_missed(self):
-        # if self.state == au.TrackState.tentative or \
-        #         self.time_since_update > self.max_age:
-        if  self.time_since_update > self.max_age:
+        if self.state == au.TrackState.tentative or \
+                self.time_since_update > self.max_age:
             self.state = au.TrackState.deleted
 
     def is_deleted(self):
@@ -230,19 +228,22 @@ class SORTracker(qc.QObject):
                  n_init=3, boxtype=au.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
-        self.min_dist = min_dist
         self.boxtype = boxtype
         self.metric = metric
+        if self.metric == au.DistanceMetric.iou:
+            self.min_dist = 1 - min_dist
+        else:
+            self.min_dist = min_dist
         self.max_age = max_age
         self.trackers = {}
-        self._next_id = 0
+        self._next_id = 1
         self._mutex = qc.QMutex()
         self._wait_cond = None
 
     @qc.pyqtSlot()
     def reset(self):
         self.trackers = {}
-        self._next_id = 0
+        self._next_id = 1
 
     @qc.pyqtSlot(threading.Event)
     def setWaitCond(self, cond: threading.Event) -> None:
@@ -252,7 +253,10 @@ class SORTracker(qc.QObject):
     @qc.pyqtSlot(float)
     def setMinDist(self, dist: float) -> None:
         _ = qc.QMutexLocker(self._mutex)
-        self.min_dist = dist
+        if self.metric == au.DistanceMetric.iou:
+            self.min_dist = 1 - dist
+        else:
+            self.min_dist = dist
 
     @qc.pyqtSlot(int)
     def setMaxAge(self, max_age: int) -> None:
@@ -273,11 +277,7 @@ class SORTracker(qc.QObject):
             prior = tracker.predict()
             if np.any(np.isnan(prior)) or np.any(prior[2:] < 0):
                 continue
-            bbox = prior[:KalmanTracker.NDIM]
-            bbox = xysr2xywh(*bbox)
-            if np.any(np.isnan(bbox)) or np.any(bbox[2:] < 0):
-                continue
-            predicted_bboxes[id_] = bbox
+            predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
         self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
         matched, new_unmatched, old_unmatched = match_bboxes(
             predicted_bboxes,
@@ -286,14 +286,14 @@ class SORTracker(qc.QObject):
             metric=self.metric,
             max_dist=self.min_dist)
         for track_id, bbox_id in matched.items():
-            self.trackers[track_id].update(xywh2xysr(*bboxes[bbox_id]))
+            self.trackers[track_id].update(bboxes[bbox_id])
         for id_ in old_unmatched:
             self.trackers[id_].mark_missed()
         for ii in new_unmatched:
-            self._add_tracker(xywh2xysr(*bboxes[ii, :KalmanTracker.NDIM]))
+            self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
         self.trackers = {id_: tracker for id_, tracker in self.trackers.items()
                          if not tracker.is_deleted()}
-        ret = {id_: xysr2xywh(*tracker.pos) for id_, tracker in
+        ret = {id_: tracker.pos for id_, tracker in
                self.trackers.items()}
         return ret
 

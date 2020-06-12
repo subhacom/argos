@@ -60,6 +60,7 @@ def init():
     settings = qc.QSettings()
     return settings
 
+
 def rect_intersection(ra, rb):
     """Find if two axis-aligned rectangles intersect.
 
