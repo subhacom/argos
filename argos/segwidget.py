@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-05 11:10 PM
+
 """Classical image-processing-based segmentation"""
+
+from typing import List, Tuple
 import logging
 from collections import OrderedDict
 import numpy as np
@@ -15,23 +18,30 @@ from PyQt5 import (
 from argos import utility as ut
 from argos.display import Display
 
+
 settings = ut.init()
 
-def segment_by_dbscan(binary_img, eps=5, min_samples=10):
+
+def segment_by_dbscan(binary_img: np.ndarray, eps: float=5,
+                      min_samples: int=10) -> List[np.ndarray]:
     """Use DBSCAN clustering to segment binary image.
 
-    binary_img: binary image, a 2D array containing 0s and 1s
-    (obtaind by thresholding an original image).
+    Parameters
+    ----------
+    binary_img: np.ndarray
+        binary image, a 2D array containing 0s and 1s (obtaind by thresholding
+        original image converted to grayscale).
+    eps: float
+        the epsilon parameter of DBSCAN.
+    min_samples: int
+        minimum number of pixels each cluster (object) must contain in order to
+        be considered a valid object.
 
-    eps: the epsilon parameter of DBSCAN.
-
-    min_samples: minimum number of pixels each cluster (object) must
-    contain in order to be considered a valid object.
-
-    :return a list of coordinate arrays [arr_0, arr_1, arr_2, ..., arr_n]
-            where `n` is the number of clusters (segmented objects),
-            `arr_i` is a k x 2 array where each rows are the coordinates
-            of the pixels classified as part of object no. `i`.
+    Returns
+    -------
+    list
+        List of coordinate arrays where the n-th entry is the array of
+        positions of the pixels belonging to the n-th segmented object.
     """
     indices = np.nonzero(binary_img)
     xy = np.vstack((indices[1], indices[0])).T
@@ -42,7 +52,7 @@ def segment_by_dbscan(binary_img, eps=5, min_samples=10):
     return [xy[labels == label] for label in sorted(unique_labels)]
 
 
-def segment_by_contours(binary_img):
+def segment_by_contours(binary_img: np.ndarray) -> List[np.ndarray]:
     """Segment binary image by finding contours of contiguous
     nonzero pixels and then filling those contours with an integer
     color value.
@@ -51,12 +61,16 @@ def segment_by_contours(binary_img):
     that are clearly separable from the background and each other, this
     works equally well.
 
-    binary_img: binary input image (obtained by thresholding grayscale image).
+    Parameters
+    ----------
+    binary_img: numpy.ndarray
+        binary input image (obtained by thresholding grayscale image).
 
-    :return a list of coordinate arrays [arr_0, arr_1, arr_2, ..., arr_n]
-            where `n` is the number of clusters (segmented objects),
-            `arr_i` is a k x 2 array where each rows are the coordinates
-            of the pixels classified as part of object no. `i`.
+    Returns
+    -------
+    list
+        List of coordinate arrays where the n-th entry is the array of
+        positions of the pixels belonging to the n-th segmented object.
     """
     contours, hierarchy = cv2.findContours(binary_img,
                                            cv2.RETR_EXTERNAL,
@@ -72,34 +86,44 @@ def segment_by_contours(binary_img):
     # Fast swapping of y and x - see answer by blax here:
     # https://stackoverflow.com/questions/4857927/swapping-columns-in-a-numpy-array
     for points in ret:
-        logging.debug('***** %r', points.shape)
         points[:, 0], points[:, 1] = points[:, 1], points[:, 0].copy()
-    logging.debug(f'Returning {len(ret)} point-arrays.')
-    if len(ret) > 0:
-        logging.debug(f'First points-array of shape {ret[0].shape}')
     return ret
 
 
 
-def segment_by_watershed(binary_img, img, dist_thresh=3.0):
-    """Segment binary image using watershed alorithm.
+def segment_by_watershed(binary_img: np.ndarray, img: np.ndarray,
+                         dist_thresh: float=3.0) -> Tuple[np.ndarray,
+                                                          List[np.ndarray]]:
+    """Segment image using watershed algorithm.
 
-    img: original image.
+    Parameters
+    ----------
+    binary_img:np.ndarray
+        Binary image derived from ``img`` with nonzero pixel blobs for objects.
+        This is usually produced after converting the ``img`` to grayscale and
+        then thresholding.
+    img: np.ndarray
+        Original image to be segmented.
+    dist_thresh: float, optional
+        Threshold for distance of pixels from boundary to consider them core
+        points. If it is < 1.0, it is interpreted as fraction of the maximum
+        of the distances.
 
-    binary_img: same image after conversion to grayscale and thresholding
-        to obtain a binary image.
+    Returns
+    -------
+    markers: np.ndarray[uint8]
+        2D array with same as ``binary_img`` with a positive integer labelling
+        the x, y coordinates for each segmented object.
+    points_list: list[np.ndarray]
+        List of arrays containing positions of the pixels in each object.
 
-    dmask_size:
+    Notes
+    -----
+    This code is derivative of this OpenCV tutorial:
 
-    dist_thresh: threshold for distance of pixels from boundary to consider them
-        core points. If it is < 1, it is interpreted as fraction of the maximum
-        distance.
+    https://docs.opencv.org/master/d3/db4/tutorial_py_watershed.html
 
-    :return (watersheds, points_list)
-
-    `watersheds` is an image with the pixel positions for watershed-segmented
-    objects labeled by positive integers. `points_list` is a list of arrays
-    containing positions of the pixels in each object.
+    and falls under the same licensing.
     """
     kernel = np.ones((3, 3), dtype=np.uint8)
     opening = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel, iterations=2)
@@ -140,11 +164,36 @@ def segment_by_watershed(binary_img, img, dist_thresh=3.0):
 
 
 def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
-    """From a list of coordinate arrays for object pixels find the ones that
-    is between `pmin` and `pmax` pixels, `wmin` and `wmax` width, and
-    `hmin` and `hmax` height. I arbitrarily take the length of the smaller
-    side of the minimum bounding rotated-rectangle as width and the larger
-    as height.
+    """
+    Filter valid objects based on size limits.
+
+    The length of the smaller side of the minimum bounding rotated-rectangle is
+    considered width and the larger as height.
+
+    Parameters
+    ----------
+    points_list: list[np.ndarray]
+        List of coordinate arrays for pixels in each segmented object pixels.
+    pmin: int
+        Minimum number of pixels.
+    pmax: int
+        Maximum number of pixels.
+    wmin: int
+        Minimum width of minimum bounding rotated rectangle.
+    wmax: int
+        Maximum width of minimum bounding rotated rectangle.
+    hmin: int
+        Minimum height/length of minimum bounding rotated rectangle.
+    hmax: int
+        Maximum height/length of minimum bounding rotated rectangle.
+
+    Returns
+    -------
+    list
+        Coordinate arrays of objects that are between ``pmin`` and ``pmax``
+        pixels, ``wmin`` and ``wmax`` width, and ``hmin`` and ``hmax`` height
+        where The length of the smaller side of the minimum bounding
+        rotated-rectangle is considered width and the larger as height.
     """
     logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
                   f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
@@ -175,6 +224,65 @@ segmethod_dict = OrderedDict([
 
 
 class SegWorker(qc.QObject):
+    """Worker class for carrying out segmentation.
+
+    This class provides access to three different segmentation methods:
+
+    thresholding: where the image is converted into grayscale and then an
+    adaptive thresholding algorithm is is applied to obtain blobs.
+
+    DBSCAN: where the binary pixels are spatially clustered using the DBSCAN
+    algorithm and the valid clusters constitute segmented objects.
+
+    Watershed: the classic Watershed algorithm.
+
+    Attributes
+    ----------
+    kernel_width: int
+        Width of Gaussian kernel used in blurring the image.
+    kernel_sd: float
+        Standard deviation of the Gaussian used in blurring the image.
+    thresh_method: {cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                    cv2.ADAPTIVE_THRESH_MEAN_C}
+        Method to use for adaptive thresholding the grayscaled, blurred image.
+    invert: bool
+        Inverse thresholding (threshold below, instead of above).
+    block_size:
+        Block size for adaptive thresholding.
+    max_intensity: int
+        Maximum intensity values to set for pixels crossing threshold value.
+    baseline: int
+        baseline value for adaptive thresholding.
+    seg_method: {argos.utility.SegmentationMethod.threshold,
+                argos.utility.SegmentationMethod.dbscan,
+                argos.utility.SegmentationMethod.watershed}
+        Segmentation method, choice between adaptive thresholding, DBSCAN and
+        Watershed algorithm.
+    dbscan_eps: float
+        epsilon parameter in DBSCAN algorithm.
+    dbscan_min_samples: int
+        Minimum number of samples in each cluster in DBSCAN algorithm.
+    wdist_thresh: float
+        Distance threshold for finding core pixels before applying watershed
+        algorithm.
+    pmin: int
+    pmax: int
+    wmin: int
+    wmax: int
+    hmin: int
+    hmax: int
+        See extract_valid function above.
+    intermediate: argos.utility.SegStep
+        Intermediate step whose output should be emitted via
+        ``sigIntermediate``. If ``argos.utility.SegStep.final``, then
+        intermediate result is not emitted. Otherwise this can be used for
+        deciding best parameters for various steps in the segmentation process.
+
+    cmap: int, cv2 colormap
+        Colormap for converting label image from grayscale to RGB for better
+        visualization of intermediate segmentation result.
+
+    """
     # bboxes of segmented objects and frame no.
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
     # intermediate processed image and frame no.
@@ -279,6 +387,28 @@ class SegWorker(qc.QObject):
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int) -> None:
+        """Segment image
+
+        Parameters
+        ----------
+        image: np.ndarray
+            Image to be segmented (an array in OpenCV's BGR format)
+        pos: int
+            Frame no. for this image. Not used in processing, but emitted along
+            with processed data so downstream components can associate the
+            result with frame position.
+
+        Notes
+        -----
+        Emits array of the bounding boxes of segmented objects via
+        ``sigProcessed`` signal.
+
+        Unless ``intermediate`` is not ``argos.utility.SegStep.final``, emits
+        intermediate result via ``sigIntermediate``. The intermediate result
+        is a grayscale or binary image after the blur and threshold steps
+        respectively, and for ``argos.utility.Segmented``, a pseudo-color image
+        with different color values for each segmented object.
+        """
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(
             gray,
@@ -328,6 +458,10 @@ class SegWorker(qc.QObject):
 
 
 class SegWidget(qw.QWidget):
+    """Widget for classical segmentation.
+
+
+    """
     # pass on the signal from worker
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
     # pass on the image to worker
@@ -495,7 +629,7 @@ class SegWidget(qw.QWidget):
         self._intermediate_win = Display()
         self._intermediate_win.setWindowFlag(qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
         self._intermediate_win.hide()
-        # Housekeeping for convenience
+        # Housekeeping - widgets to be shown or hidden based on choice of method
         self._seg_param_widgets = {
             'Threshold': [],
             'DBSCAN': [self._dbscan_eps, self._dbscan_minsamples,
