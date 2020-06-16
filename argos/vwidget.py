@@ -15,6 +15,9 @@ from argos.vreader import VideoReader
 from argos.writer import Writer
 
 
+settings = utility.init()
+
+
 class VideoWidget(qw.QWidget):
 
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
@@ -48,6 +51,8 @@ class VideoWidget(qw.QWidget):
         self.resetAction = qw.QAction('Reset')
         self.resetAction.setToolTip('Go back to the start and reset the'
                                     ' tracker')
+        self.showFrameNumAction = qw.QAction('Show frame #')
+        self.showFrameNumAction.setCheckable(True)
         self.openAction.triggered.connect(self.openVideo)
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
@@ -62,21 +67,26 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot()
     def openVideo(self):
         self.timer.stop()
-        fname = qw.QFileDialog.getOpenFileName(self, 'Open video')
+        directory = settings.value('video/directory', '.')
+        fname = qw.QFileDialog.getOpenFileName(self, 'Open video',
+                                               directory=directory)
         logging.debug(f'Opening file "{fname}"')
         if len(fname[0]) == 0:
             return
         try:
             self.video_reader = VideoReader(fname[0])
             logging.debug(f'Opened {fname[0]} with {self.video_reader.frame_count} frames')
+            settings.setValue('video/directory', os.path.dirname(fname[0]))
         except IOError as err:
             qw.QMessageBox.critical(self, 'Video open failed', str(err))
             return
         self.video_filename = fname[0]
         ## Set-up for saving data
+        directory = settings.value('data/directory', '.')
         self.output_dir = qw.QFileDialog.getExistingDirectory(
             self, 'Save data in directory')
         self.writer.set_path(self.output_dir, self.video_filename)
+        settings.setValue('data/directory', os.path.dirname(self.output_dir))
         qw.QMessageBox.information(self,
                                    'Data will be saved in',
                                    f'{self.output_dir}'

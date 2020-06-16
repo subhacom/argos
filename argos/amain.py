@@ -104,17 +104,19 @@ class ArgosMain(qw.QMainWindow):
         self.sigQuit.connect(self._video_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._seg_widget.sigQuit)
+        self.sigQuit.connect(self._seg_widget.saveSettings)
         self.sigQuit.connect(self._tracker_widget.sigQuit)
 
     def cleanup(self):
+        self.sigQuit.emit()
         settings.sync()
         logging.debug('Saved settings')
-        self.sigQuit.emit()
 
     @qc.pyqtSlot(qw.QAction)
     def switchSegmentation(self, action):
         """Switch segmentation widget between yolact and classical"""
         self._video_widget.sigSetFrame.disconnect()
+        self._video_widget.pauseVideo()
         if action == self._yolact_action:
             self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
             self._yolact_dock.setVisible(True)

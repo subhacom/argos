@@ -3,6 +3,7 @@
 # Created: 2020-06-05 11:10 PM
 """Classical image-processing-based segmentation"""
 import logging
+from collections import OrderedDict
 import numpy as np
 import cv2
 from sklearn import cluster
@@ -12,7 +13,9 @@ from PyQt5 import (
 )
 
 from argos import utility as ut
+from argos.display import Display
 
+settings = ut.init()
 
 def segment_by_dbscan(binary_img, eps=5, min_samples=10):
     """Use DBSCAN clustering to segment binary image.
@@ -78,6 +81,64 @@ def segment_by_contours(binary_img):
 
 
 
+def segment_by_watershed(binary_img, img, dist_thresh=3.0):
+    """Segment binary image using watershed alorithm.
+
+    img: original image.
+
+    binary_img: same image after conversion to grayscale and thresholding
+        to obtain a binary image.
+
+    dmask_size:
+
+    dist_thresh: threshold for distance of pixels from boundary to consider them
+        core points. If it is < 1, it is interpreted as fraction of the maximum
+        distance.
+
+    :return (watersheds, points_list)
+
+    `watersheds` is an image with the pixel positions for watershed-segmented
+    objects labeled by positive integers. `points_list` is a list of arrays
+    containing positions of the pixels in each object.
+    """
+    kernel = np.ones((3, 3), dtype=np.uint8)
+    opening = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel, iterations=2)
+    # Distance transform calculates the distance of each pixel from
+    # background (black in this case) pixels. So we have an image
+    # where pixel intensity means the distance of that pixel from the
+    # background
+    dist_xform = cv2.distanceTransform(opening, cv2.DIST_L2,
+                                       cv2.DIST_MASK_PRECISE)
+    # Thresholding the distance image to find pixels which are more
+    # than a certain distance away from background - this should give
+    # us the pixels central to foreground objects
+    if dist_thresh < 1.0:
+        # threshold relative to maximum of computed distance
+        dist_thresh *= dist_xform.max()
+    ret, sure_fg = cv2.threshold(dist_xform, dist_thresh, 255, 0)
+    sure_fg = np.uint8(sure_fg)
+    # border between background and foreground
+    sure_bg = cv2.dilate(opening, kernel, iterations=3)
+    unknown = cv2.subtract(sure_bg, sure_fg)
+    ret, markers = cv2.connectedComponents(sure_fg, connectivity=4)
+    logging.debug(f'Found {ret} connected components')
+    # 0 is for background - assign a large value to keep them off
+    markers += 1
+    markers[unknown == 255] = 0
+    markers = cv2.watershed(img, markers)
+    unique_labels = set(markers.flat)
+    unique_labels.discard(-1)
+    unique_labels.discard(0)
+    ret = [np.argwhere(markers == label) for label in sorted(unique_labels)]
+    markers[markers == -1] = 0
+    markers = np.uint8(markers)
+    # Fast swapping of y and x - see answer by blax here:
+    # https://stackoverflow.com/questions/4857927/swapping-columns-in-a-numpy-array
+    for points in ret:
+        points[:, 0], points[:, 1] = points[:, 1], points[:, 0].copy()
+    return markers, ret
+
+
 def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
     """From a list of coordinate arrays for object pixels find the ones that
     is between `pmin` and `pmax` pixels, `wmin` and `wmax` width, and
@@ -98,8 +159,26 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
     return [points_list[ii] for ii in good]
 
 
+segstep_dict = OrderedDict([
+    ('Final', ut.SegStep.final),
+    ('Blurred', ut.SegStep.blur),
+    ('Thresholded', ut.SegStep.threshold),
+    ('Segmented', ut.SegStep.segmented),
+    ('Filtered', ut.SegStep.filtered),
+    ])
+
+segmethod_dict = OrderedDict([
+    ('Threshold', ut.SegmentationMethod.threshold),
+    ('Watershed', ut.SegmentationMethod.watershed),
+    ('DBSCAN', ut.SegmentationMethod.dbscan)
+])
+
+
 class SegWorker(qc.QObject):
+    # bboxes of segmented objects and frame no.
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    # intermediate processed image and frame no.
+    sigIntermediate = qc.pyqtSignal(np.ndarray, int)
 
     def __init__(self):
         super(SegWorker, self).__init__()
@@ -115,8 +194,11 @@ class SegWorker(qc.QObject):
         self.baseline =10
         # segmentation method
         self.seg_method = ut.SegmentationMethod.threshold
+        #  DBSCAN parameters
         self.dbscan_eps = 5
         self.dbscan_min_samples =10
+        # Watershed algorithm - distance threshold
+        self.wdist_thresh = 3.0
         # cleanup params
         self.pmin = 10
         self.pmax = 500
@@ -124,6 +206,12 @@ class SegWorker(qc.QObject):
         self.wmax = 50
         self.hmin = 50
         self.hmax = 200
+        self.intermediate = ut.SegStep.final
+        self.cmap = cv2.COLORMAP_JET
+
+    @qc.pyqtSlot(ut.SegStep)
+    def setIntermediateOutput(self, step: ut.SegStep) -> None:
+        self.intermediate = step
 
     @qc.pyqtSlot(int)
     def setBlurWidth(self, width: int) -> None:
@@ -161,6 +249,10 @@ class SegWorker(qc.QObject):
     def setMinSamplesDBSCAN(self, value: int) -> None:
         self.dbscan_min_samples = value
 
+    @qc.pyqtSlot(float)
+    def setDistThreshWatershed(self, value: float) -> None:
+        self.wdist_thresh = value
+
     @qc.pyqtSlot(int)
     def setMinPixels(self, value: int) -> None:
         self.pmin = value
@@ -187,27 +279,50 @@ class SegWorker(qc.QObject):
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int) -> None:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = cv2.GaussianBlur(
-            image,
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(
+            gray,
             ksize=(self.kernel_width, self.kernel_width),
             sigmaX=self.kernel_sd)
+        if self.intermediate == ut.SegStep.blur:
+            self.sigIntermediate.emit(gray, pos)
         if self.invert:
             thresh_type = cv2.THRESH_BINARY_INV
         else:
             thresh_type = cv2.THRESH_BINARY
-        image = cv2.adaptiveThreshold(image, maxValue=self.max_intensity,
-                                      adaptiveMethod=self.thresh_method,
-                                      thresholdType=thresh_type,
-                                      blockSize=self.block_size,
-                                      C=self.baseline)
+        binary = cv2.adaptiveThreshold(gray,
+                                          maxValue=self.max_intensity,
+                                          adaptiveMethod=self.thresh_method,
+                                          thresholdType=thresh_type,
+                                          blockSize=self.block_size,
+                                          C=self.baseline)
+        if self.intermediate == ut.SegStep.threshold:
+            self.sigIntermediate.emit(binary, pos)
         if self.seg_method == ut.SegmentationMethod.threshold:
-            seg = segment_by_contours(image)
+            seg = segment_by_contours(binary)
         elif self.seg_method == ut.SegmentationMethod.dbscan:
-            seg = segment_by_dbscan(image, self.dbscan_eps,
+            seg = segment_by_dbscan(binary, self.dbscan_eps,
                                     self.dbscan_min_samples)
+        elif self.seg_method == ut.SegmentationMethod.watershed:
+            processed, seg = segment_by_watershed(binary, image,
+                                                  self.wdist_thresh)
+        if self.intermediate == ut.SegStep.segmented:
+            if self.seg_method == ut.SegmentationMethod.watershed:
+                self.sigIntermediate.emit(cv2.applyColorMap(processed, self.cmap), pos)
+            else:
+                for ii, points in enumerate(seg):
+                    binary[points[:, 1], points[:, 0]] = ii + 1
+                self.sigIntermediate.emit(
+                    cv2.applyColorMap(binary, self.cmap),
+                    pos)
         seg = extract_valid(seg, self.pmin, self.pmax, self.wmin, self.wmax,
                             self.hmin, self.hmax)
+        if self.intermediate == ut.SegStep.filtered:
+            for ii, points in enumerate(seg):
+                binary[points[:, 1], points[:, 0]] = ii + 1
+            self.sigIntermediate.emit(
+                cv2.applyColorMap(binary, self.cmap),
+                pos)
         bboxes = [cv2.boundingRect(points) for points in seg]
         self.sigProcessed.emit(np.array(bboxes), pos)
 
@@ -220,6 +335,7 @@ class SegWidget(qw.QWidget):
 
     sigThreshMethod = qc.pyqtSignal(int)
     sigSegMethod = qc.pyqtSignal(ut.SegmentationMethod)
+    sigIntermediateOutput = qc.pyqtSignal(ut.SegStep)
 
     sigQuit = qc.pyqtSignal()
 
@@ -231,16 +347,27 @@ class SegWidget(qw.QWidget):
         self._blur_width_label = qw.QLabel('Blur width')
         self._blur_width_edit = qw.QSpinBox()
         self._blur_width_edit.setRange(1, 100)
-        self._blur_width_edit.setValue(self.worker.kernel_width)
+        value = settings.value('segment/blur_width', self.worker.kernel_width,
+                               type=int)
+        self._blur_width_edit.setValue(value)
+        self.worker.kernel_width = value
         layout.addRow(self._blur_width_label, self._blur_width_edit)
         self._blur_sd_label = qw.QLabel('Blur sd')
         self._blur_sd_edit = qw.QDoubleSpinBox()
         self._blur_sd_edit.setRange(1, 100)
-        self._blur_sd_edit.setValue(self.worker.kernel_sd)
+        value = settings.value('segment/blur_sd', self.worker.kernel_sd,
+                               type=float)
+        self._blur_sd_edit.setValue(value)
+        self.worker.kernel_sd = value
         layout.addRow(self._blur_sd_label, self._blur_sd_edit)
         self._invert_label = qw.QLabel('Invert thresholding')
         self._invert_check = qw.QCheckBox()
-        self._invert_check.setChecked(self.worker.invert)
+        self._invert_check.setToolTip('Check this if the objects of interest'
+                                      ' are darker than background.')
+        value = settings.value('segment/thresh_invert', self.worker.invert,
+                               type=bool)
+        self._invert_check.setChecked(value)
+        self.worker.invert = value
         layout.addRow(self._invert_label, self._invert_check)
         self._thresh_label = qw.QLabel('Thresholding method')
         self._thresh_method = qw.QComboBox()
@@ -249,71 +376,137 @@ class SegWidget(qw.QWidget):
         self._maxint_label = qw.QLabel('Threshold maximum intensity')
         self._maxint_edit = qw.QSpinBox()
         self._maxint_edit.setRange(0, 255)
-        self._maxint_edit.setValue(self.worker.max_intensity)
+        value = settings.value('segment/thresh_max_intensity',
+                               self.worker.max_intensity, type=int)
+        self.worker.max_intensity = value
+        self._maxint_edit.setValue(value)
         layout.addRow(self._maxint_label, self._maxint_edit)
         self._baseline_label = qw.QLabel('Threshold baseline')
         self._baseline_edit = qw.QSpinBox()
         self._baseline_edit.setRange(0, 255)
-        self._baseline_edit.setValue(self.worker.baseline)
+        value = settings.value('segment/thresh_baseline', self.worker.baseline,
+                               type=int)
+        self._baseline_edit.setValue(value)
+        self.worker.baseline = value
         layout.addRow(self._baseline_label, self._baseline_edit)
         self._seg_label = qw.QLabel('Segmentation method')
         self._seg_method = qw.QComboBox()
-        self._seg_method.addItems(['Threshold', 'DBSCAN'])
+        self._seg_method.addItems(segmethod_dict.keys())
 
         layout.addRow(self._seg_label, self._seg_method)
         self._dbscan_minsamples_label = qw.QLabel('DBSCAN minimum samples')
         self._dbscan_minsamples = qw.QSpinBox()
         self._dbscan_minsamples.setRange(1, 1000)
-        self._dbscan_minsamples.setValue(self.worker.dbscan_min_samples)
+        value = settings.value('segment/dbscan_minsamples',
+                               self.worker.dbscan_min_samples,
+                               type=int)
+        self._dbscan_minsamples.setValue(value)
+        self.worker.dbscan_min_samples = value
         layout.addRow(self._dbscan_minsamples_label, self._dbscan_minsamples)
         self._dbscan_eps_label = qw.QLabel('DBSCAN epsilon')
         self._dbscan_eps = qw.QDoubleSpinBox()
         self._dbscan_eps.setRange(1, 100)
-        self._dbscan_eps.setValue(self.worker.dbscan_eps)
+        value = settings.value('segment/dbscan_eps',
+                               self.worker.dbscan_eps,
+                               type=float)
+        self._dbscan_eps.setValue(value)
+        self.worker.dbscan_eps = value
         layout.addRow(self._dbscan_eps_label, self._dbscan_eps)
         self._pmin_label = qw.QLabel('Minimum pixels')
         self._pmin_edit = qw.QSpinBox()
         self._pmin_edit.setRange(1, 1000)
-        self._pmin_edit.setValue(self.worker.pmin)
+        value = settings.value('segment/min_pixels',
+                               self.worker.pmin,
+                               type=int)
+        self._pmin_edit.setValue(value)
+        self.worker.pmin = value
         layout.addRow(self._pmin_label, self._pmin_edit)
         self._pmax_label = qw.QLabel('Maximum pixels')
         self._pmax_edit = qw.QSpinBox()
         self._pmax_edit.setRange(1, 1000)
-        self._pmax_edit.setValue(self.worker.pmax)
+        value = settings.value('segment/max_pixels',
+                               self.worker.pmax,
+                               type=int)
+        self._pmax_edit.setValue(value)
+        self.worker.pmax = value
         layout.addRow(self._pmax_label, self._pmax_edit)
         self._wmin_label = qw.QLabel('Minimum width')
         self._wmin_edit = qw.QSpinBox()
         self._wmin_edit.setRange(1, 1000)
-        self._wmin_edit.setValue(self.worker.wmin)
+        value = settings.value('segment/min_width',
+                               self.worker.wmin,
+                               type=int)
+        self._wmin_edit.setValue(value)
+        self.worker.wmin = value
         layout.addRow(self._wmin_label, self._wmin_edit)
         self._wmax_label = qw.QLabel('Maximum width')
         self._wmax_edit = qw.QSpinBox()
         self._wmax_edit.setRange(1, 1000)
-        self._wmax_edit.setValue(self.worker.wmax)
+        value = settings.value('segment/max_width',
+                               self.worker.wmax,
+                               type=int)
+        self._wmax_edit.setValue(value)
+        self.worker.wmax = value
         layout.addRow(self._wmax_label, self._wmax_edit)
         self._hmin_label = qw.QLabel('Minimum length')
         self._hmin_edit = qw.QSpinBox()
         self._hmin_edit.setRange(1, 1000)
-        self._hmin_edit.setValue(self.worker.hmin)
+        value = settings.value('segment/min_height',
+                               self.worker.hmin,
+                               type=int)
+        self._hmin_edit.setValue(value)
+        self.worker.hmin = value
         layout.addRow(self._hmin_label, self._hmin_edit)
         self._hmax_label = qw.QLabel('Maximum length')
         self._hmax_edit = qw.QSpinBox()
         self._hmax_edit.setRange(1, 1000)
-        self._hmax_edit.setValue(self.worker.hmax)
+        value = settings.value('segment/max_height',
+                               self.worker.hmax,
+                               type=int)
+        self._hmax_edit.setValue(value)
+        self.worker.hmax = value
         layout.addRow(self._hmax_label, self._hmax_edit)
+        self._wdist_label = qw.QLabel('Distance threshold')
+        self._wdist = qw.QDoubleSpinBox()
+        self._wdist.setRange(0, 10)
+        self._wdist.setSingleStep(0.1)
+        value = settings.value('segment/watershed_distthresh',
+                               self.worker.wdist_thresh,
+                               type=float)
+        self._wdist.setValue(value)
+        self.worker.wdist_thresh = value
+        self._wdist.setToolTip('Distance threshold for Watershed segmentation.'
+                               ' This is used for finding foreground areas in'
+                               ' the thresholded image. The pixels which are at'
+                               ' least this much (in pixel units) away from all'
+                               ' background pixels, are considered to be part'
+                               ' of the foreground.\n'
+                               ' If set between 0 and 1, it is assumed to be'
+                               ' the fraction of maximum of the distances of'
+                               ' each pixel from a zero-valued pixel in the'
+                               ' thresholded image.')
+        layout.addRow(self._wdist_label, self._wdist)
+        self._intermediate_label = qw.QLabel('Show intermediate steps')
+        self._intermediate_combo = qw.QComboBox()
+        self._intermediate_combo.addItems(segstep_dict.keys())
+        layout.addRow(self._intermediate_label, self._intermediate_combo)
         self.setLayout(layout)
+
+        self._intermediate_win = Display()
+        self._intermediate_win.setWindowFlag(qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
+        self._intermediate_win.hide()
         # Housekeeping for convenience
         self._seg_param_widgets = {
             'Threshold': [],
             'DBSCAN': [self._dbscan_eps, self._dbscan_minsamples,
-                       self._dbscan_minsamples_label, self._dbscan_eps_label]
-
+                       self._dbscan_minsamples_label, self._dbscan_eps_label],
+            'Watershed': [self._wdist_label, self._wdist]
         }
-        if self.worker.seg_method == ut.SegmentationMethod.threshold:
-            self._seg_method.setCurrentText('Threshold')
-        elif self.worker.seg_method == ut.SegmentationMethod.dbscan:
-            self._seg_method.setCurrentText('DBSCAN')
-        self.setSegmentationMethod(self._seg_method.currentText())
+
+        value = settings.value('segment/method', 'Threshold', type=str)
+        self.worker.seg_method = segmethod_dict[value]
+        self._seg_method.setCurrentText(value)
+        self.setSegmentationMethod(value)
         ###################################
         # Threading
         self.thread = qc.QThread()
@@ -340,8 +533,13 @@ class SegWidget(qw.QWidget):
         self._wmax_edit.valueChanged.connect(self.worker.setMaxWidth)
         self._hmin_edit.valueChanged.connect(self.worker.setMinHeight)
         self._hmax_edit.valueChanged.connect(self.worker.setMaxHeight)
+        self._wdist.valueChanged.connect(self.worker.setDistThreshWatershed)
+        self._intermediate_combo.currentTextChanged.connect(
+            self.setIntermediateOutput)
+        self.sigIntermediateOutput.connect(self.worker.setIntermediateOutput)
         self.sigProcess.connect(self.worker.process)
         self.worker.sigProcessed.connect(self.sigProcessed)
+        self.worker.sigIntermediate.connect(self._intermediate_win.setFrame)
         ###################
         # Thread setup
         self.sigQuit.connect(self.thread.quit)
@@ -362,12 +560,38 @@ class SegWidget(qw.QWidget):
                 [widget.setVisible(True) for widget in widgets]
             else:
                 [widget.setVisible(False) for widget in widgets]
-        if text == 'Threshold':
-            self.sigSegMethod.emit(ut.SegmentationMethod.threshold)
-        elif text == 'DBSCAN':
-            self.sigSegMethod.emit(ut.SegmentationMethod.dbscan)
+        if text in segmethod_dict:
+            self.sigSegMethod.emit(segmethod_dict[text])
         else:
             raise NotImplementedError(f'{text} method not available')
 
+    @qc.pyqtSlot(str)
+    def setIntermediateOutput(self, text: str) -> None:
+        if segstep_dict[text] == ut.SegStep.final:
+            self._intermediate_win.hide()
+        else:
+            self._intermediate_win.setWindowTitle(text)
+            self._intermediate_win.show()
+        self.sigIntermediateOutput.emit(segstep_dict[text])
 
+    @qc.pyqtSlot()
+    def saveSettings(self):
+        """Save the worker parameters"""
+        settings.setValue('segment/blur_width', self.worker.kernel_width)
+        settings.setValue('segment/blur_sd', self.worker.kernel_sd)
+        settings.setValue('segment/thresh_invert', self.worker.invert)
+        settings.setValue('segment/thresh_max_intensity',
+                               self.worker.max_intensity)
+        settings.setValue('segment/thresh_baseline', self.worker.baseline)
+        settings.setValue('segment/dbscan_minsamples',
+                               self.worker.dbscan_min_samples)
+        settings.setValue('segment/dbscan_eps', self.worker.dbscan_eps)
+        settings.setValue('segment/min_pixels', self.worker.pmin)
+        settings.setValue('segment/max_pixels', self.worker.pmax)
+        settings.setValue('segment/min_width', self.worker.wmin)
+        settings.setValue('segment/max_width', self.worker.wmax)
+        settings.setValue('segment/min_height', self.worker.hmin)
+        settings.setValue('segment/max_height', self.worker.hmax)
+        settings.setValue('segment/watershed_distthresh',
+                          self.worker.wdist_thresh)
 

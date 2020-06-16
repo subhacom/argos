@@ -23,7 +23,7 @@ class OutlineStyle(enum.Enum):
     bbox = enum.auto()
     minrect = enum.auto()
     contour = enum.auto()
-    fill = enum.auto
+    fill = enum.auto()
 
 
 class SegmentationMethod(enum.Enum):
@@ -31,6 +31,14 @@ class SegmentationMethod(enum.Enum):
     threshold = enum.auto()
     watershed = enum.auto()
 
+
+# Intermediate result for classical segmentation
+class SegStep(enum.Enum):
+    blur = enum.auto()
+    threshold = enum.auto()
+    segmented = enum.auto()
+    filtered = enum.auto()
+    final = enum.auto()
 
 # Enumeration for distance metrics
 class DistanceMetric(enum.Enum):
@@ -221,3 +229,15 @@ def cond_proximity(points_a, points_b, min_dist):
     return dx2 + dy2 < min_dist ** 2
 
 
+def cv2qimage(frame: np.ndarray, copy: bool=False) -> qg.QImage:
+    """Convert BGR/gray/bw frame into QImage"""
+    if (len(frame.shape) == 3) and (frame.shape[2] == 3):
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, c = img.shape
+        qimg = qg.QImage(img.tobytes(), w, h, w * c, qg.QImage.Format_RGB888)
+    elif len(frame.shape) == 2:  # grayscale
+        h, w = frame.shape
+        qimg = qg.QImage(frame.tobytes(), w, h, w * 1, qg.QImage.Format_Grayscale8)
+    if copy:
+        return qimg.copy()
+    return qimg

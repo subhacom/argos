@@ -6,7 +6,6 @@
 import sys
 import enum
 import logging
-from typing import Dict
 import numpy as np
 import cv2
 from PyQt5 import (
@@ -16,26 +15,13 @@ from PyQt5 import (
 )
 
 import argos.utility as util
+from argos.utility import cv2qimage
 
 
 class DrawingGeom(enum.Enum):
     rectangle = enum.auto()
     polygon = enum.auto()
     arena = enum.auto()
-
-
-def cv2qimage(frame: np.ndarray, copy: bool=False) -> qg.QImage:
-    """Convert BGR/gray/bw frame into QImage"""
-    if (len(frame.shape) == 3) and (frame.shape[2] == 3):
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, c = img.shape
-        qimg = qg.QImage(img.tobytes(), w, h, w * c, qg.QImage.Format_RGB888)
-    elif len(frame.shape) == 2:  # grayscale
-        h, w = frame.shape
-        qimg = qg.QImage(frame.tobytes(), w, h, w * 1, qg.QImage.Format_Grayscale8)
-    if copy:
-        return qimg.copy()
-    return qimg
 
 
 class Scene(qw.QGraphicsScene):
@@ -239,16 +225,22 @@ class Display(qw.QGraphicsView):
     def __init__(self, *args, **kwargs):
         super(Display, self).__init__(*args, **kwargs)
         scene = Scene()
+        self._framenum = 0
         self.setScene(scene)
         self.sigSetRectangles.connect(scene.setRectangles)
         self.setMouseTracking(True)
         self.resetArenaAction = qw.QAction('Reset arena')
         self.resetArenaAction.triggered.connect(scene.resetArena)
+        self.zoomInAction = qw.QAction('Zoom in')
+        self.zoomInAction.triggered.connect(self.zoomIn)
+        self.zoomOutAction = qw.QAction('Zoom out')
+        self.zoomOutAction.triggered.connect(self.zoomOut)
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int):
         logging.debug(f'Frame set {pos}')
         self.scene().setFrame(frame)
+        self._framenum = pos
         self.viewport().update()
 
     @qc.pyqtSlot()

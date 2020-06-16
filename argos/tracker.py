@@ -44,7 +44,6 @@ def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
                 dist_list.append((ii, jj, dist.sum()))
     elif metric == au.DistanceMetric.iou:
         if boxtype == au.OutlineStyle.bbox:  # This can be handled efficiently
-            # Convert four anticlockwise vertices from top left into x, y, w, h
             for ii in range(len(new_bboxes)):
                 for jj in range(len(bboxes)):
                     dist = 1.0 - au.rect_iou(bboxes[jj], new_bboxes[ii])
@@ -127,7 +126,8 @@ class KalmanTracker(object):
     NDIM = 4
     DT = 1.0
 
-    def __init__(self, bbox, track_id, n_init=3, max_age=10):
+    def __init__(self, bbox, track_id, n_init=3, max_age=10, deepsort=False):
+        """bbox is in xywh format and converted to xyrh format"""
         super(KalmanTracker, self).__init__()
         self.state = au.TrackState.tentative
         self.hits = 1
@@ -135,7 +135,11 @@ class KalmanTracker(object):
         self.time_since_update = 0
         self.n_init = n_init
         self.max_age = max_age
-
+        self._std_weight_pos = 1.0 / 20
+        self._std_weight_vel = 1.0 / 160
+        # flag to switch between fixed covariances like SORT vs
+        # measurement-based covariance like DeepSORT
+        self.cov_deepsort = deepsort
         self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM,
                                        measureParams=self.NDIM, type=cv2.CV_64F)
         # Borrowing ideas from DeepSORT
@@ -157,18 +161,49 @@ class KalmanTracker(object):
             [0, 0, 0, 0, 0, 0, 0, 1],
         ])
         # NOTE state covariance matrix (P) is initialized as a function of
-        # measured height in DeepSORT, but constant (as below) in SORT
-        self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
-        self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
+        # measured height in DeepSORT, but constant in SORT.
+        if self.cov_deepsort:
+            error_cov = [2 * self._std_weight_pos * bbox[3],
+                         2 * self._std_weight_pos * bbox[3],
+                         1e-2,
+                         2 * self._std_weight_pos * bbox[3],
+                         10 * self._std_weight_vel * bbox[3],
+                         10 * self._std_weight_vel * bbox[3],
+                         1e-5,
+                         10 * self._std_weight_vel * bbox[3]]
+            self.filter.errorCovPost = np.diag(np.square(error_cov))
+        else:
+            self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
+            self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
+
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
         # computed as a function of mean height in DeepSORT, but constant
-        # (as below) in SORT
-        self.filter.processNoiseCov = np.eye(2 * self.NDIM, dtype=float)
-        self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
-        self.filter.processNoiseCov[-1, -1] *= 0.01
+        # in SORT
+
+        if self.cov_deepsort:
+            proc_cov = [self._std_weight_pos * bbox[3],
+                        self._std_weight_pos * bbox[3],
+                        1e-2,
+                        self._std_weight_pos * bbox[3],
+                        self._std_weight_vel * bbox[3],
+                        self._std_weight_vel * bbox[3],
+                        1e-5,
+                        self._std_weight_vel * bbox[3]]
+            self.filter.processNoiseCov = np.diag(np.square(proc_cov))
+            # ~~ till here follows deepSORT
+        else:
+            # ~~~~ This is according to SORT
+            self.filter.processNoiseCov = np.eye(2 * self.NDIM)
+            self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
+            self.filter.processNoiseCov[-1, -1] *= 0.01
+            # ~~~~ Till here is according to SORT
+
         # Measurement noise covariance R
-        self.filter.measurementNoiseCov = np.eye(self.NDIM, dtype=float)
-        self.filter.measurementNoiseCov[2:, 2:] *= 10.0
+        if not self.cov_deepsort:
+            # ~~~~ This is according to SORT
+            self.filter.measurementNoiseCov = np.eye(self.NDIM)
+            self.filter.measurementNoiseCov[2:, 2:] *= 10.0
+            # ~~~~ Till here is according to SORT
         self.filter.statePost = np.r_[au.tlwh2xyrh(*bbox), np.zeros(self.NDIM)]
 
     @property
@@ -176,11 +211,31 @@ class KalmanTracker(object):
         return au.xyrh2tlwh(*self.filter.statePost[: self.NDIM])
 
     def predict(self):
+        if self.cov_deepsort:
+            # ~~ This follows deepSORT
+            proc_cov = [self._std_weight_pos * self.filter.statePost[3],
+                        self._std_weight_pos * self.filter.statePost[3],
+                        1e-2,
+                        self._std_weight_pos * self.filter.statePost[3],
+                        self._std_weight_vel * self.filter.statePost[3],
+                        self._std_weight_vel * self.filter.statePost[3],
+                        1e-5,
+                        self._std_weight_vel * self.filter.statePost[3]]
+            self.filter.processNoiseCov = np.diag(np.square(proc_cov))
+            # ~~ till here follows deepSORT
         self.time_since_update += 1
         ret = self.filter.predict()
         return au.xyrh2tlwh(*ret[:self.NDIM].squeeze())
 
     def update(self, detection):
+        if self.cov_deepsort:
+            # ~~ This follows deepSORT
+            measure_cov = [self._std_weight_pos * self.filter.statePost[3],
+                           self._std_weight_pos * self.filter.statePost[3],
+                           1e-1,
+                           self._std_weight_pos * self.filter.statePost[3]]
+            self.filter.measurementNoiseCov = np.diag(np.square(measure_cov))
+            # ~~ till here follows deepSORT
         pos = self.filter.correct(au.tlwh2xyrh(*detection))
         self.time_since_update = 0
         self.hits += 1
@@ -317,16 +372,22 @@ class SORTWidget(qw.QWidget):
         self._max_age_spin = qw.QSpinBox()
         self._max_age_spin.setRange(1, 100)
         self._max_age_spin.setValue(10)
+        self._max_age_spin.setToolTip(self._max_age_label.toolTip())
         self._conf_age_label = qw.QLabel('Minimum hits')
         self._conf_age_label.setToolTip('Minimum number of hits before a track is confirmed')
         self._conf_age_spin = qw.QSpinBox()
         self._conf_age_spin.setRange(1, 100)
         self._conf_age_spin.setValue(3)
+        self._conf_age_spin.setToolTip(self._conf_age_label.toolTip())
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
         self._min_dist_spin.setRange(0.1, 1.0)
         self._min_dist_spin.setValue(0.3)
+        self._min_dist_spin.setToolTip('Minimum overlap between bounding boxes '
+                                       'to consider them same object.')
         self._disable_check = qw.QCheckBox('Disable tracking')
+        self._disable_check.setToolTip('Just show the identified objects. Can '
+                                       'be useful for troubleshooting.')
         layout = qw.QFormLayout()
         layout.addRow(self._min_dist_label, self._min_dist_spin)
         layout.addRow(self._conf_age_label, self._conf_age_spin)

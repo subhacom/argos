@@ -3,6 +3,7 @@
 # Created: 2020-06-01 5:05 PM
 """Interface to YOLACT for segmentation"""
 
+import os
 import time
 import logging
 import numpy as np
@@ -189,7 +190,7 @@ class YolactWidget(qw.QWidget):
                                            'containing key value pairs for '
                                            'various parameters for YOLACT')
         self.load_weights_action = qw.QAction('Load YOLACT weights', self)
-        self.load_config_action.setToolTip('Load the trained connection weights'
+        self.load_weights_action.setToolTip('Load the trained connection weights'
                                            ' for the YOLACT neural network.')
         self.load_config_action.triggered.connect(self.loadConfig)
         self.load_weights_action.triggered.connect(self.loadWeights)
@@ -203,17 +204,22 @@ class YolactWidget(qw.QWidget):
             self.cuda_action.setEnabled(False)
             self.cuda_action.setToolTip('PyTorch on this system does not '
                                         'support CUDA')
-        self.top_k_edit = qw.QLineEdit('10')
-        self.top_k_edit.setText(str(self.worker.top_k))
+        self.top_k_edit = qw.QLineEdit()
+        saved_val = settings.value('yolact/topk', '10')
+        self.top_k_edit.setText(saved_val)
+        self.worker.top_k = int(saved_val)
+
         self.top_k_edit.editingFinished.connect(self.setTopK)
         self.top_k_edit.setToolTip('Include only this many objects'
                                    ' from all that are detected, ordered'
                                    ' by their classification score')
         self.top_k_label = qw.QLabel('Number of objects to include')
         self.top_k_label.setToolTip(self.top_k_edit.toolTip())
-        self.score_thresh_edit = qw.QLineEdit('10')
+        self.score_thresh_edit = qw.QLineEdit()
+        saved_val = settings.value('yolact/scorethreshold', '0.15')
+        self.score_thresh_edit.setText(saved_val)
+        self.worker.score_threshold = float(saved_val)
 
-        self.score_thresh_edit.setText(str(self.worker.score_threshold))
         self.score_thresh_edit.editingFinished.connect(self.setScoreThresh)
         self.score_thresh_edit.setToolTip('a number > 0 and < 1. Higher score'
                                           ' is more stringent criterion for'
@@ -267,16 +273,24 @@ class YolactWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def loadConfig(self):
-        filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open configuration')
+        directory = settings.value('yolact/configdir', '.')
+        filename, _ = qw.QFileDialog.getOpenFileName(
+            self,
+            'Open YOLACT configuration file',
+            directory=directory)
         if len(filename) == 0:
             return
+        settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigConfigFile.emit(filename)
 
     @qc.pyqtSlot()
     def loadWeights(self):
-        filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open trained model')
+        directory = settings.value('yolact/configdir', '.')
+        filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open trained model',
+                                                     directory=directory)
         if len(filename) == 0:
             return
+        settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigWeightsFile.emit(filename)
 
     @qc.pyqtSlot(np.ndarray, int)
@@ -298,3 +312,9 @@ class YolactWidget(qw.QWidget):
                 qw.QMessageBox.critical(self, 'Could not open file', str(err))
             finally:
                 self.ignore = True
+
+    def __del__(self):
+        settings = qc.QSettings()
+        settings.setValue('yolact/scorethreshold',
+                          self.score_thresh_edit.text())
+        settings.setValue('yolact/topk', self.top_k_edit.text())
