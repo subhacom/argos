@@ -345,6 +345,13 @@ class SegWorker(qc.QObject):
     def setBaseline(self, value: int) -> None:
         self.baseline = value
 
+    @qc.pyqtSlot(int)
+    def setBlockSize(self, value: int) -> None:
+        if value % 2 == 0:
+            self.block_size = value + 1
+        else:
+            self.block_size = value
+
     @qc.pyqtSlot(ut.SegmentationMethod)
     def setSegmentationMethod(self, method: ut.SegmentationMethod) -> None:
         self.seg_method = method
@@ -518,11 +525,31 @@ class SegWidget(qw.QWidget):
         self._baseline_label = qw.QLabel('Threshold baseline')
         self._baseline_edit = qw.QSpinBox()
         self._baseline_edit.setRange(0, 255)
+        self._baseline_edit.setToolTip('This value is subtracted from the'
+                                       ' (weighted) mean pixel value in the'
+                                       ' neighborhood of a pixel to get the'
+                                       ' threshold value at that pixel.')
         value = settings.value('segment/thresh_baseline', self.worker.baseline,
                                type=int)
         self._baseline_edit.setValue(value)
         self.worker.baseline = value
         layout.addRow(self._baseline_label, self._baseline_edit)
+        self._blocksize_label = qw.QLabel('Thresholding block size')
+        self._blocksize_edit = qw.QSpinBox()
+        self._blocksize_edit.setRange(3, 501)
+        self._blocksize_edit.setSingleStep(2)
+        self._blocksize_edit.setToolTip('Adapaive thresholding block size. Size'
+                                        ' of neighborhood for computing local'
+                                        ' threshold at each pixel. Should be'
+                                        ' odd number >= 3.')
+        value = settings.value('segment/thresh_blocksize',
+                               self.worker.block_size,
+                               type=int)
+        if value % 2 == 0:
+            value += 1
+        self.worker.block_size = value
+        self._blocksize_edit.setValue(value)
+        layout.addRow(self._blocksize_label, self._blocksize_edit)
         self._seg_label = qw.QLabel('Segmentation method')
         self._seg_method = qw.QComboBox()
         self._seg_method.addItems(segmethod_dict.keys())
@@ -539,7 +566,8 @@ class SegWidget(qw.QWidget):
         layout.addRow(self._dbscan_minsamples_label, self._dbscan_minsamples)
         self._dbscan_eps_label = qw.QLabel('DBSCAN epsilon')
         self._dbscan_eps = qw.QDoubleSpinBox()
-        self._dbscan_eps.setRange(1, 100)
+        self._dbscan_eps.setRange(0.1, 100)
+        self._dbscan_eps.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
         value = settings.value('segment/dbscan_eps',
                                self.worker.dbscan_eps,
                                type=float)
@@ -603,6 +631,7 @@ class SegWidget(qw.QWidget):
         self._wdist_label = qw.QLabel('Distance threshold')
         self._wdist = qw.QDoubleSpinBox()
         self._wdist.setRange(0, 10)
+        self._wdist.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
         self._wdist.setSingleStep(0.1)
         value = settings.value('segment/watershed_distthresh',
                                self.worker.wdist_thresh,
@@ -653,6 +682,7 @@ class SegWidget(qw.QWidget):
         self._thresh_method.currentTextChanged.connect(self.setThresholdMethod)
         self._maxint_edit.valueChanged.connect(self.worker.setMaxIntensity)
         self._baseline_edit.valueChanged.connect(self.worker.setBaseline)
+        self._blocksize_edit.valueChanged.connect(self.worker.setBlockSize)
         self._seg_method.currentTextChanged.connect(self.setSegmentationMethod)
         self.sigThreshMethod.connect(self.worker.setThresholdMethod)
         self.sigSegMethod.connect(self.worker.setSegmentationMethod)
@@ -717,6 +747,7 @@ class SegWidget(qw.QWidget):
         settings.setValue('segment/thresh_max_intensity',
                                self.worker.max_intensity)
         settings.setValue('segment/thresh_baseline', self.worker.baseline)
+        settings.value('segment/thresh_blocksize', self.worker.block_size)
         settings.setValue('segment/dbscan_minsamples',
                                self.worker.dbscan_min_samples)
         settings.setValue('segment/dbscan_eps', self.worker.dbscan_eps)

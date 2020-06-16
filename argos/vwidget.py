@@ -53,6 +53,9 @@ class VideoWidget(qw.QWidget):
                                     ' tracker')
         self.showFrameNumAction = qw.QAction('Show frame #')
         self.showFrameNumAction.setCheckable(True)
+        self.zoomInAction = qw.QAction('Zoom in')
+        self.zoomOutAction = qw.QAction('Zoom out')
+        self.resetArenaAction = qw.QAction('Reset arena')
         self.openAction.triggered.connect(self.openVideo)
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
@@ -105,6 +108,10 @@ class VideoWidget(qw.QWidget):
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
+            self.zoomInAction.triggered.connect(self.display_widget.zoomIn)
+            self.zoomOutAction.triggered.connect(self.display_widget.zoomOut)
+            self.resetArenaAction.triggered.connect(
+                self.display_widget.resetArenaAction.trigger)
             # self.sigSetTracked.connect(self.display_widget.sigSetRectangles)
             self.slider = qw.QSlider(qc.Qt.Horizontal)
             self.slider.valueChanged.connect(self.sigGotoFrame)

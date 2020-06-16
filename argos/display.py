@@ -147,6 +147,7 @@ class Scene(qw.QGraphicsScene):
         logging.debug(f'AAAA Number of items {len(self.items())}')
         if event.button() == qc.Qt.RightButton:
             self.points = []
+            self._clearIncomplete()
             return
         pos = event.scenePos().toPoint()
         if self.geom == DrawingGeom.rectangle or \
@@ -255,6 +256,22 @@ class Display(qw.QGraphicsView):
     def setRectangles(self, rect: dict, pos: int) -> None:
         logging.debug(f'Received signal from {self.sender()}, frame {pos}')
         self.sigSetRectangles.emit(rect, pos)
+
+    def wheelEvent(self, a0: qg.QWheelEvent) -> None:
+        """Zoom in or out when Ctrl+MouseWheel is used.
+
+        Most mice send rotation in units of 1/8 of a degree and each notch goes
+        15 degrees. I am changing the zoom as a
+        """
+        if a0.modifiers() == qc.Qt.ControlModifier:
+            ndegrees = a0.angleDelta().y() / 8.0
+            if ndegrees > 0:
+                [self.zoomIn() for ii in range(int(ndegrees / 15))]
+            else:
+                [self.zoomOut() for ii in range(int(-ndegrees / 15))]
+            # logging.debug('Angle %f degrees', a0.angleDelta().y() / 8)
+        else:
+            super(Display, self).wheelEvent(a0)
 
 
 def test_display():
