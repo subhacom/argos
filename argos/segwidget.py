@@ -467,7 +467,7 @@ class SegWorker(qc.QObject):
 class SegWidget(qw.QWidget):
     """Widget for classical segmentation.
 
-
+    Provides controls for parameters used in segmentation.
     """
     # pass on the signal from worker
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
@@ -747,7 +747,7 @@ class SegWidget(qw.QWidget):
         settings.setValue('segment/thresh_max_intensity',
                                self.worker.max_intensity)
         settings.setValue('segment/thresh_baseline', self.worker.baseline)
-        settings.value('segment/thresh_blocksize', self.worker.block_size)
+        settings.setValue('segment/thresh_blocksize', self.worker.block_size)
         settings.setValue('segment/dbscan_minsamples',
                                self.worker.dbscan_min_samples)
         settings.setValue('segment/dbscan_eps', self.worker.dbscan_eps)
