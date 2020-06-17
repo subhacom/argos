@@ -2,8 +2,7 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-04-25 12:03 AM
 """Some utility functions for geometry"""
-import enum
-from typing import List
+from typing import Tuple, List, Dict, Set
 import sys
 import cv2
 import numpy as np
@@ -13,45 +12,7 @@ import logging
 from PyQt5 import QtCore as qc, QtGui as qg
 from scipy import optimize
 
-rotrect_dtype = np.dtype([('cx', float), ('cy', float),
-                          ('w', float), ('h', float),
-                          ('a', float)])
-bbox_dtype = np.dtype([('x', int), ('y', int), ('w', int), ('h', int)])
-
-
-# Enumeration for outline styles
-class OutlineStyle(enum.Enum):
-    bbox = enum.auto()
-    minrect = enum.auto()
-    contour = enum.auto()
-    fill = enum.auto()
-
-
-class SegmentationMethod(enum.Enum):
-    dbscan = enum.auto()
-    threshold = enum.auto()
-    watershed = enum.auto()
-
-
-# Intermediate result for classical segmentation
-class SegStep(enum.Enum):
-    blur = enum.auto()
-    threshold = enum.auto()
-    segmented = enum.auto()
-    filtered = enum.auto()
-    final = enum.auto()
-
-
-# Enumeration for distance metrics
-class DistanceMetric(enum.Enum):
-    iou = enum.auto()
-    euclidean = enum.auto()
-
-
-class TrackState(enum.Enum):
-    tentative = enum.auto()
-    confirmed = enum.auto()
-    deleted = enum.auto()
+from argos.constants import OutlineStyle, DistanceMetric
 
 
 def init():
@@ -69,52 +30,6 @@ def init():
 
     settings = qc.QSettings()
     return settings
-
-
-def rect_intersection(ra, rb):
-    """Find if two axis-aligned rectangles intersect.
-
-    ra, rb: rectangles specified as (x, y, w, h) where (x, y) is
-    the coordinate of the lower left corner, w and h are width and height.
-
-    This runs almost 50 times faster than Polygon intersection in shapely.
-    and ~5 times faster than cv2.intersectConvexConvex.
-
-    :return (x, y, dx, dy) specifying the overlap rectangle.
-    If there is no overlap, all entries are 0.
-    """
-    xa, ya, wa, ha = ra
-    xb, yb, wb, hb = rb
-    x = max(xa, xb)
-    y = max(ya, yb)
-    dx = min(xa + wa, xb + wb) - x
-    dy = min(ya + ha, yb + hb) - y
-    if (dx > 0) and (dy > 0):
-        return (x, y, dx, dy)
-    return (0, 0, 0, 0)
-
-
-def rect_iou(ra, rb):
-    """
-    Compute Intersection over Union of two axis-aligned rectangles.
-    This is the ratio of the are of intersection to the area of the union
-    of the two rectangles.
-
-    ra, rb: two axis aligned rectangles specified as (x, y, w, h) where
-    (x, y) is the position of the lower left corner, w and h are width
-    and height.
-
-    :return the Intersection over Union of two rectangles.
-    """
-    x, y, dx, dy = rect_intersection(ra, rb)
-    area_i = dx * dy
-    area_u = ra[2] * ra[3] + rb[2] * rb[3] - area_i
-    if area_u <= 0 or area_i < 0:
-        raise ValueError('Area not positive')
-    ret = 1.0 * area_i / area_u
-    if np.isinf(ret) or np.isnan(ret) or ret < 0:
-        raise ValueError('Invalid intersection')
-    return ret
 
 
 def run_fn(arg0: np.ndarray, args: List) -> np.ndarray:
@@ -151,7 +66,7 @@ def rectpoly_points(p0: tuple, p1: tuple) -> tuple:
     return rect2points(xleft, ytop, w, h)
 
 
-def rect2points(xleft, ytop, w, h):
+def rect2points(xleft: int, ytop: int, w: int, h: int):
     """Convert topleft, width, height format rectangle into four clockwise
     vertices"""
     return ((xleft, ytop), (xleft, ytop + h),
@@ -179,18 +94,6 @@ def poly2xyrh(vtx):
     w = x1 - x0
     h = y1 - y0
     return (x0 + x1) / 2.0, (y0 + y1) / 2.0, w / float(h), float(h)
-
-
-def tlwh2xyrh(x, y, w, h):
-    """Convert top-left, width, height into center, aspect ratio, height"""
-    return np.array((x + w / 2.0, y + h / 2.0, w / float(h), float(h)))
-
-
-def xyrh2tlwh(x, y, r, h):
-    """Convert centre, aspect ratio, height into top-left, width, height
-    format"""
-    w = r * h
-    return np.array((x - w / 2.0, y - h / 2.0, w, h))
 
 
 def to_qpolygon(points, scale=1.0):
@@ -246,53 +149,143 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
     return qimg
 
 
-def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
-    """Takes two lists of boxes and computes the distance between every possible
-     pair.
+# Try to import cython version of these functions, otherwise define them in
+# pure python
+try:
+    import pyximport
+    pyximport.install(setup_args={"include_dirs": np.get_include()},
+                      reload_support=True)
+    from cutility import (tlwh2xyrh, xyrh2tlwh,
+                          rect_intersection,
+                          rect_iou,
+                          pairwise_distance)
+except:
+    def tlwh2xyrh(rect):
+        """Convert top-left, width, height into center, aspect ratio, height"""
+        return np.array((rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0,
+                         rect[2] / float(rect[3]), rect[3]))
 
-     new_bboxes: list of boxes as (x, y, w, h)
 
-     bboxes: list of boxes as four x, y, w, h
+    def xyrh2tlwh(rect):
+        """Convert centre, aspect ratio, height into top-left, width, height
+        format"""
+        w = rect[2] * rect[3]
+        return np.asanyarray((rect[0] - w / 2.0, rect[1] - rect[3] / 2.0,
+                              w, rect[3]),
+                             dtype=int)
 
-     boxtype: OutlineStyle.bbox for axis aligned rectangle bounding box or
-     OulineStyle.minrect for minimum area rotated rectangle
 
-     metric: DistanceMetric, iou or euclidean. When euclidean, the squared
-     Euclidean distance is used (calculating square root is expensive and
-     unnecessary. If iou, use the area of intersection divided by the area
-     of union.
+    def rect_intersection(ra: np.ndarray, rb: np.ndarray) -> np.ndarray:
+        """Find if two axis-aligned rectangles intersect.
 
-     :returns `list` `[(ii, jj, dist), ...]` `dist` is the computed distance
-     between `new_bboxes[ii]` and `bboxes[jj]`.
+        This runs almost 50 times faster than Polygon intersection in shapely.
+        and ~5 times faster than cv2.intersectConvexConvex.
 
-     """
-    dist_list = []
-    if metric == DistanceMetric.euclidean:
-        centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
-        new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
-        for ii in range(len(new_bboxes)):
-            for jj in range(len(bboxes)):
-                dist = (new_centers[ii] - centers[jj]) ** 2
-                dist_list.append((ii, jj, dist.sum()))
-    elif metric == DistanceMetric.iou:
-        if boxtype == OutlineStyle.bbox:  # This can be handled efficiently
+        Parameters
+        ----------
+        ra: np.ndarray
+        rb: np.ndarray
+            Rectangles specified as (x, y, w, h) where (x, y) is the coordinate
+            of the lower left corner, w and h are width and height.
+
+        Returns
+        -------
+        np.ndarray
+            (x, y, dx, dy) specifying the overlap rectangle. If there is no
+            overlap, all entries are 0.
+        """
+        ret = np.zeros((4,), dtype=int)
+        xa, ya, wa, ha = ra
+        xb, yb, wb, hb = rb
+        x = max(xa, xb)
+        y = max(ya, yb)
+        dx = min(xa + wa, xb + wb) - x
+        dy = min(ya + ha, yb + hb) - y
+        if (dx > 0) and (dy > 0):
+            ret[:] = (x, y, dx, dy)
+        return ret
+
+
+    def rect_iou(ra: np.ndarray, rb: np.ndarray) -> float:
+        """Compute Intersection over Union of two axis-aligned rectangles.
+
+        This is the ratio of the are of intersection to the area of the union
+        of the two rectangles.
+
+        Parameters
+        ----------
+        ra: np.ndarray
+        rb: np.ndarray
+            Axis aligned rectangles specified as (x, y, w, h) where (x, y) is
+            the position of the lower left corner, w and h are width and height.
+
+        Returns
+        -------
+        float
+            The Intersection over Union of two rectangles.
+        """
+        x, y, dx, dy = rect_intersection(ra, rb)
+        area_i = dx * dy
+        area_u = ra[2] * ra[3] + rb[2] * rb[3] - area_i
+        if area_u <= 0 or area_i < 0:
+            raise ValueError('Area not positive')
+        ret = 1.0 * area_i / area_u
+        if np.isinf(ret) or np.isnan(ret) or ret < 0:
+            raise ValueError('Invalid intersection')
+        return ret
+
+
+    def pairwise_distance(new_bboxes: np.ndarray, bboxes: np.ndarray,
+                          boxtype: OutlineStyle,
+                          metric: DistanceMetric) -> np.ndarray:
+        """Takes two lists of boxes and computes the distance between every possible
+        pair.
+
+        Parameters
+        ----------
+        new_bboxes: np.ndarray
+           Array of bounding boxes, each row as (x, y, w, h)
+        bboxes: np.ndarray
+           Array of bounding boxes, each row as (x, y, w, h)
+        boxtype: OutlineStyle
+           OutlineStyle.bbox for axis aligned rectangle bounding box or
+           OulineStyle.minrect for minimum area rotated rectangle
+        metric: DistanceMetric
+           iou or euclidean. When euclidean, the squared Euclidean distance is
+           used (calculating square root is expensive and unnecessary. If iou, use
+           the area of intersection divided by the area of union.
+        Returns
+        --------
+        np.ndarray
+            row ``ii``, column ``jj`` contains the computed distance `between
+            ``new_bboxes[ii]`` and ``bboxes[jj]``.
+         """
+        dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]), dtype=np.float)
+        if metric == DistanceMetric.euclidean:
+            centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
+            new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
             for ii in range(len(new_bboxes)):
                 for jj in range(len(bboxes)):
-                    dist = 1.0 - rect_iou(bboxes[jj], new_bboxes[ii])
-                    dist_list.append((ii, jj, dist))
+                    dist[ii, jj] = np.sum((new_centers[ii] - centers[jj]) ** 2)
+        elif metric == DistanceMetric.iou:
+            if boxtype == OutlineStyle.bbox:  # This can be handled efficiently
+                for ii in range(len(new_bboxes)):
+                    for jj in range(len(bboxes)):
+                        dist[ii, jj] = 1.0 - rect_iou(bboxes[jj],
+                                                      new_bboxes[ii])
+            else:
+                raise NotImplementedError(
+                    'Only handling axis-aligned bounding boxes')
         else:
-            raise NotImplementedError(
-                'Only handling axis-aligned bounding boxes')
-    else:
-        raise NotImplementedError(f'Unknown metric {metric}')
-    return dist_list
+            raise NotImplementedError(f'Unknown metric {metric}')
+        return dist
 
 
 def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
                  boxtype: OutlineStyle,
                  metric: DistanceMetric = DistanceMetric.euclidean,
-                 max_dist: int = 10000
-                 ):
+                 max_dist: float = 10000
+                 ) -> Tuple[Dict[int, int], Set[int], Set[int]]:
     """Match the bboxes in `new_bboxes` to the closest object in the
     ``id_bboxes`` dictionary.
 
@@ -331,11 +324,8 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         return ({}, set(range(len(new_bboxes))), {})
     labels = list(id_bboxes.keys())
     bboxes = np.array(list(id_bboxes.values()), dtype=float)
-    dist_list = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
-                                  metric=metric)
-    dist_matrix = np.zeros((len(new_bboxes), len(id_bboxes)), dtype=float)
-    for ii, jj, cost in dist_list:
-        dist_matrix[ii, jj] = cost
+    dist_matrix = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
+                                    metric=metric)
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
     matched = {}
     good_rows = set()

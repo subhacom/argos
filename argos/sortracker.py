@@ -8,6 +8,8 @@ import cv2
 from PyQt5 import (
     QtCore as qc,
     QtWidgets as qw)
+
+import argos.constants
 from argos import utility as au
 from argos.utility import match_bboxes
 
@@ -33,7 +35,7 @@ class KalmanTracker(object):
     def __init__(self, bbox, track_id, n_init=3, max_age=10, deepsort=False):
         """bbox is in xywh format and converted to xyrh format"""
         super(KalmanTracker, self).__init__()
-        self.state = au.TrackState.tentative
+        self.state = argos.constants.TrackState.tentative
         self.hits = 1
         self.features = []
         self.time_since_update = 0
@@ -108,11 +110,11 @@ class KalmanTracker(object):
             self.filter.measurementNoiseCov = np.eye(self.NDIM)
             self.filter.measurementNoiseCov[2:, 2:] *= 10.0
             # ~~~~ Till here is according to SORT
-        self.filter.statePost = np.r_[au.tlwh2xyrh(*bbox), np.zeros(self.NDIM)]
+        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM)]
 
     @property
     def pos(self):
-        return au.xyrh2tlwh(*self.filter.statePost[: self.NDIM])
+        return au.xyrh2tlwh(self.filter.statePost[: self.NDIM])
 
     def predict(self):
         if self.cov_deepsort:
@@ -129,7 +131,7 @@ class KalmanTracker(object):
             # ~~ till here follows deepSORT
         self.time_since_update += 1
         ret = self.filter.predict()
-        return au.xyrh2tlwh(*ret[:self.NDIM].squeeze())
+        return au.xyrh2tlwh(ret[:self.NDIM].squeeze())
 
     def update(self, detection):
         if self.cov_deepsort:
@@ -140,27 +142,28 @@ class KalmanTracker(object):
                            self._std_weight_pos * self.filter.statePost[3]]
             self.filter.measurementNoiseCov = np.diag(np.square(measure_cov))
             # ~~ till here follows deepSORT
-        pos = self.filter.correct(au.tlwh2xyrh(*detection))
+        pos = self.filter.correct(au.tlwh2xyrh(detection))
         self.time_since_update = 0
         self.hits += 1
-        if self.state == au.TrackState.tentative and self.hits >= self.n_init:
-            self.state = au.TrackState.confirmed
+        if self.state == argos.constants.TrackState.tentative and \
+                self.hits >= self.n_init:
+            self.state = argos.constants.TrackState.confirmed
         self.pos[:] = pos[:self.NDIM]
         return self.pos
 
     def mark_missed(self):
-        if self.state == au.TrackState.tentative or \
+        if self.state == argos.constants.TrackState.tentative or \
                 self.time_since_update > self.max_age:
-            self.state = au.TrackState.deleted
+            self.state = argos.constants.TrackState.deleted
 
     def is_deleted(self):
-        return self.state == au.TrackState.deleted
+        return self.state == argos.constants.TrackState.deleted
 
     def is_confirmed(self):
-        return self.state == au.TrackState.confirmed
+        return self.state == argos.constants.TrackState.confirmed
 
     def is_tentative(self):
-        return self.state == au.TrackState.tentative
+        return self.state == argos.constants.TrackState.tentative
 
 
 class SORTracker(qc.QObject):
@@ -170,13 +173,13 @@ class SORTracker(qc.QObject):
     """
     sigTracked = qc.pyqtSignal(dict, int)
 
-    def __init__(self, metric=au.DistanceMetric.iou, min_dist=0.3, max_age=1,
-                 n_init=3, boxtype=au.OutlineStyle.bbox):
+    def __init__(self, metric=argos.constants.DistanceMetric.iou, min_dist=0.3, max_age=1,
+                 n_init=3, boxtype=argos.constants.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
         self.boxtype = boxtype
         self.metric = metric
-        if self.metric == au.DistanceMetric.iou:
+        if self.metric == argos.constants.DistanceMetric.iou:
             self.min_dist = 1 - min_dist
         else:
             self.min_dist = min_dist
@@ -199,7 +202,7 @@ class SORTracker(qc.QObject):
     @qc.pyqtSlot(float)
     def setMinDist(self, dist: float) -> None:
         _ = qc.QMutexLocker(self._mutex)
-        if self.metric == au.DistanceMetric.iou:
+        if self.metric == argos.constants.DistanceMetric.iou:
             self.min_dist = 1 - dist
         else:
             self.min_dist = dist
@@ -297,7 +300,7 @@ class SORTWidget(qw.QWidget):
         layout.addRow(self._conf_age_label, self._conf_age_spin)
         layout.addRow(self._max_age_label, self._max_age_spin)
         layout.addWidget(self._disable_check)
-        self.tracker = SORTracker(metric=au.DistanceMetric.iou,
+        self.tracker = SORTracker(metric=argos.constants.DistanceMetric.iou,
                                   min_dist=self._min_dist_spin.value(),
                                   max_age=self._max_age_spin.value(),
                                   n_init=self._conf_age_spin.value())

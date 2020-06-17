@@ -15,6 +15,7 @@ from PyQt5 import (
     QtCore as qc
 )
 
+import argos.constants
 from argos import utility as ut
 from argos.display import Display
 
@@ -209,17 +210,17 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
 
 
 segstep_dict = OrderedDict([
-    ('Final', ut.SegStep.final),
-    ('Blurred', ut.SegStep.blur),
-    ('Thresholded', ut.SegStep.threshold),
-    ('Segmented', ut.SegStep.segmented),
-    ('Filtered', ut.SegStep.filtered),
+    ('Final', argos.constants.SegStep.final),
+    ('Blurred', argos.constants.SegStep.blur),
+    ('Thresholded', argos.constants.SegStep.threshold),
+    ('Segmented', argos.constants.SegStep.segmented),
+    ('Filtered', argos.constants.SegStep.filtered),
     ])
 
 segmethod_dict = OrderedDict([
-    ('Threshold', ut.SegmentationMethod.threshold),
-    ('Watershed', ut.SegmentationMethod.watershed),
-    ('DBSCAN', ut.SegmentationMethod.dbscan)
+    ('Threshold', argos.constants.SegmentationMethod.threshold),
+    ('Watershed', argos.constants.SegmentationMethod.watershed),
+    ('DBSCAN', argos.constants.SegmentationMethod.dbscan)
 ])
 
 
@@ -301,7 +302,7 @@ class SegWorker(qc.QObject):
         # this baseline value is subtracted from the neighborhood weighted mean
         self.baseline =10
         # segmentation method
-        self.seg_method = ut.SegmentationMethod.threshold
+        self.seg_method = argos.constants.SegmentationMethod.threshold
         #  DBSCAN parameters
         self.dbscan_eps = 5
         self.dbscan_min_samples =10
@@ -314,11 +315,11 @@ class SegWorker(qc.QObject):
         self.wmax = 50
         self.hmin = 50
         self.hmax = 200
-        self.intermediate = ut.SegStep.final
+        self.intermediate = argos.constants.SegStep.final
         self.cmap = cv2.COLORMAP_JET
 
-    @qc.pyqtSlot(ut.SegStep)
-    def setIntermediateOutput(self, step: ut.SegStep) -> None:
+    @qc.pyqtSlot(argos.constants.SegStep)
+    def setIntermediateOutput(self, step: argos.constants.SegStep) -> None:
         self.intermediate = step
 
     @qc.pyqtSlot(int)
@@ -352,8 +353,8 @@ class SegWorker(qc.QObject):
         else:
             self.block_size = value
 
-    @qc.pyqtSlot(ut.SegmentationMethod)
-    def setSegmentationMethod(self, method: ut.SegmentationMethod) -> None:
+    @qc.pyqtSlot(argos.constants.SegmentationMethod)
+    def setSegmentationMethod(self, method: argos.constants.SegmentationMethod) -> None:
         self.seg_method = method
 
     @qc.pyqtSlot(float)
@@ -421,7 +422,7 @@ class SegWorker(qc.QObject):
             gray,
             ksize=(self.kernel_width, self.kernel_width),
             sigmaX=self.kernel_sd)
-        if self.intermediate == ut.SegStep.blur:
+        if self.intermediate == argos.constants.SegStep.blur:
             self.sigIntermediate.emit(gray, pos)
         if self.invert:
             thresh_type = cv2.THRESH_BINARY_INV
@@ -433,18 +434,18 @@ class SegWorker(qc.QObject):
                                           thresholdType=thresh_type,
                                           blockSize=self.block_size,
                                           C=self.baseline)
-        if self.intermediate == ut.SegStep.threshold:
+        if self.intermediate == argos.constants.SegStep.threshold:
             self.sigIntermediate.emit(binary, pos)
-        if self.seg_method == ut.SegmentationMethod.threshold:
+        if self.seg_method == argos.constants.SegmentationMethod.threshold:
             seg = segment_by_contours(binary)
-        elif self.seg_method == ut.SegmentationMethod.dbscan:
+        elif self.seg_method == argos.constants.SegmentationMethod.dbscan:
             seg = segment_by_dbscan(binary, self.dbscan_eps,
                                     self.dbscan_min_samples)
-        elif self.seg_method == ut.SegmentationMethod.watershed:
+        elif self.seg_method == argos.constants.SegmentationMethod.watershed:
             processed, seg = segment_by_watershed(binary, image,
                                                   self.wdist_thresh)
-        if self.intermediate == ut.SegStep.segmented:
-            if self.seg_method == ut.SegmentationMethod.watershed:
+        if self.intermediate == argos.constants.SegStep.segmented:
+            if self.seg_method == argos.constants.SegmentationMethod.watershed:
                 self.sigIntermediate.emit(cv2.applyColorMap(processed, self.cmap), pos)
             else:
                 for ii, points in enumerate(seg):
@@ -454,7 +455,7 @@ class SegWorker(qc.QObject):
                     pos)
         seg = extract_valid(seg, self.pmin, self.pmax, self.wmin, self.wmax,
                             self.hmin, self.hmax)
-        if self.intermediate == ut.SegStep.filtered:
+        if self.intermediate == argos.constants.SegStep.filtered:
             for ii, points in enumerate(seg):
                 binary[points[:, 1], points[:, 0]] = ii + 1
             self.sigIntermediate.emit(
@@ -475,8 +476,8 @@ class SegWidget(qw.QWidget):
     sigProcess = qc.pyqtSignal(np.ndarray, int)
 
     sigThreshMethod = qc.pyqtSignal(int)
-    sigSegMethod = qc.pyqtSignal(ut.SegmentationMethod)
-    sigIntermediateOutput = qc.pyqtSignal(ut.SegStep)
+    sigSegMethod = qc.pyqtSignal(argos.constants.SegmentationMethod)
+    sigIntermediateOutput = qc.pyqtSignal(argos.constants.SegStep)
 
     sigQuit = qc.pyqtSignal()
 
@@ -732,7 +733,7 @@ class SegWidget(qw.QWidget):
 
     @qc.pyqtSlot(str)
     def setIntermediateOutput(self, text: str) -> None:
-        if segstep_dict[text] == ut.SegStep.final:
+        if segstep_dict[text] == argos.constants.SegStep.final:
             self._intermediate_win.hide()
         else:
             self._intermediate_win.setWindowTitle(text)

@@ -12,10 +12,11 @@ from PyQt5 import (
     QtWidgets as qw
 )
 
-from argos.utility import match_bboxes, DistanceMetric, OutlineStyle, init
-
+from argos.utility import match_bboxes, init
+from argos.constants import OutlineStyle, DistanceMetric
 
 settings = init()
+
 
 class CSRTracker(object):
     """Wrapper around OpenCV CSRT to maintain age information and
