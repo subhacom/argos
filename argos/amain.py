@@ -22,8 +22,9 @@ from PyQt5 import (
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
-from argos.tracker import SORTWidget
+from argos.sortracker import SORTWidget
 from argos.segwidget import SegWidget
+from argos.csrtracker import CSRTWidget
 
 # from argos.drawingtools import DrawingTools, ArenaFilter
 # from argos.conversions import cv2qimage
@@ -52,7 +53,8 @@ class ArgosMain(qw.QMainWindow):
         self._yolact_widget = YolactWidget()
         self._seg_widget = SegWidget()
 
-        self._tracker_widget = SORTWidget()
+        self._sort_widget = SORTWidget()
+        self._csrt_widget = CSRTWidget()
 
         self._yolact_dock = qw.QDockWidget('Yolact settings')
         self._yolact_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
@@ -66,12 +68,17 @@ class ArgosMain(qw.QMainWindow):
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._seg_dock)
         self._seg_dock.setWidget(self._seg_widget)
 
-        self._tracker_dock = qw.QDockWidget('Tracker settings')
-        self._tracker_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                          qc.Qt.RightDockWidgetArea)
-        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._tracker_dock)
-        self._tracker_dock.setWidget(self._tracker_widget)
+        self._sort_dock = qw.QDockWidget('SORTracker settings')
+        self._sort_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                        qc.Qt.RightDockWidgetArea)
+        self._sort_dock.setWidget(self._sort_widget)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._sort_dock)
 
+        self._csrt_dock = qw.QDockWidget('CSRTracker settings')
+        self._csrt_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                        qc.Qt.RightDockWidgetArea)
+        self._csrt_dock.setWidget(self._csrt_widget)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._csrt_dock)
         self._yolact_action = qw.QAction('Use Yolact segmentation')
         self._seg_action = qw.QAction('Use classical segmentation')
         self._seg_grp = qw.QActionGroup(self)
@@ -81,13 +88,23 @@ class ArgosMain(qw.QMainWindow):
         self._yolact_action.setCheckable(True)
         self._seg_action.setCheckable(True)
         self._yolact_action.setChecked(True)
-        self._seg_dock.setVisible(False)
-
+        self._seg_dock.hide()
+        self._sort_action = qw.QAction('Use SORT for tracking')
+        self._sort_action.setCheckable(True)
+        self._csrt_action = qw.QAction('Use CSRT for tracking')
+        self._csrt_action.setCheckable(True)
+        self._track_grp = qw.QActionGroup(self)
+        self._track_grp.addAction(self._sort_action)
+        self._track_grp.addAction(self._csrt_action)
+        self._sort_action.setChecked(True)
+        self._csrt_dock.hide()
         self._menubar = self.menuBar()
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
         self._seg_menu = self._menubar.addMenu('&Segmentation method')
         self._seg_menu.addActions(self._seg_grp.actions())
+        self._track_menu = self._menubar.addMenu('&Tracking method')
+        self._track_menu.addActions(self._track_grp.actions())
         self._zoom_menu = self._menubar.addMenu('Zoom')
         self._zoom_menu.addActions([self._video_widget.zoomInAction,
                                     self._video_widget.zoomOutAction,
@@ -97,19 +114,22 @@ class ArgosMain(qw.QMainWindow):
         ##########################
         # Connections
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
-        self._yolact_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
+        self._yolact_widget.sigProcessed.connect(self._sort_widget.sigTrack)
         self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
-        self._seg_widget.sigProcessed.connect(self._tracker_widget.sigTrack)
+        self._seg_widget.sigProcessed.connect(self._sort_widget.sigTrack)
         self._seg_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
-        self._tracker_widget.sigTracked.connect(self._video_widget.setTracked)
-        self._video_widget.openAction.triggered.connect(self._tracker_widget.sigReset)
-        self._video_widget.sigReset.connect(self._tracker_widget.sigReset)
+        self._sort_widget.sigTracked.connect(self._video_widget.setTracked)
+        self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
+        self._video_widget.openAction.triggered.connect(self._sort_widget.sigReset)
+        self._video_widget.sigReset.connect(self._sort_widget.sigReset)
+        self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._seg_grp.triggered.connect(self.switchSegmentation)
+        self._track_grp.triggered.connect(self.switchTracking)
         self.sigQuit.connect(self._video_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._seg_widget.sigQuit)
-        self.sigQuit.connect(self._seg_widget.saveSettings)
-        self.sigQuit.connect(self._tracker_widget.sigQuit)
+        self.sigQuit.connect(self._sort_widget.sigQuit)
+        self.sigQuit.connect(self._csrt_widget.sigQuit)
 
     def cleanup(self):
         self.sigQuit.emit()
@@ -119,18 +139,45 @@ class ArgosMain(qw.QMainWindow):
     @qc.pyqtSlot(qw.QAction)
     def switchSegmentation(self, action):
         """Switch segmentation widget between yolact and classical"""
-        self._video_widget.sigSetFrame.disconnect()
         self._video_widget.pauseVideo()
         if action == self._yolact_action:
-            self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+            util.reconnect(self._video_widget.sigSetFrame,
+                           newhandler=self._yolact_widget.process,
+                           oldhandler=self._seg_widget.sigProcess)
             self._yolact_dock.setVisible(True)
             self._seg_dock.setVisible(False)
         else:  # classical segmentation, self._seg_action
-            self._video_widget.sigSetFrame.connect(self._seg_widget.sigProcess)
+            util.reconnect(self._video_widget.sigSetFrame,
+                           newhandler=self._seg_widget.sigProcess,
+                           oldhandler=self._yolact_widget.process)
             self._yolact_dock.setVisible(False)
             self._seg_dock.setVisible(True)
 
-
+    @qc.pyqtSlot(qw.QAction)
+    def switchTracking(self, action):
+        """Switch tracking between SORT and CSRT"""
+        self._video_widget.pauseVideo()
+        if action == self._sort_action:
+            self._sort_dock.show()
+            self._csrt_dock.hide()
+            try:
+                self._video_widget.sigSetFrame.disconnect(
+                    self._csrt_widget.setFrame)
+            except TypeError:
+                pass
+            newhandler = self._sort_widget.sigTrack
+            oldhandler = self._csrt_widget.setBboxes
+        else:  # csrt
+            self._csrt_dock.show()
+            self._sort_dock.hide()
+            self._video_widget.sigSetFrame.connect(self._csrt_widget.setFrame)
+            newhandler = self._csrt_widget.setBboxes
+            oldhandler = self._sort_widget.sigTrack
+        if self._yolact_action.isChecked():
+            sig = self._yolact_widget.sigProcessed
+        else:
+            sig = self._seg_widget.sigProcessed
+        util.reconnect(sig, newhandler, oldhandler)
 
 if __name__ == '__main__':
     app = qw.QApplication(sys.argv)

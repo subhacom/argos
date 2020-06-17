@@ -11,6 +11,7 @@ import logging
 
 # Data type for rotated rectangle array
 from PyQt5 import QtCore as qc, QtGui as qg
+from scipy import optimize
 
 rotrect_dtype = np.dtype([('cx', float), ('cy', float),
                           ('w', float), ('h', float),
@@ -39,6 +40,7 @@ class SegStep(enum.Enum):
     segmented = enum.auto()
     filtered = enum.auto()
     final = enum.auto()
+
 
 # Enumeration for distance metrics
 class DistanceMetric(enum.Enum):
@@ -181,7 +183,7 @@ def poly2xyrh(vtx):
 
 def tlwh2xyrh(x, y, w, h):
     """Convert top-left, width, height into center, aspect ratio, height"""
-    return np.array((x +  w / 2.0, y + h / 2.0, w / float(h), float(h)))
+    return np.array((x + w / 2.0, y + h / 2.0, w / float(h), float(h)))
 
 
 def xyrh2tlwh(x, y, r, h):
@@ -229,7 +231,7 @@ def cond_proximity(points_a, points_b, min_dist):
     return dx2 + dy2 < min_dist ** 2
 
 
-def cv2qimage(frame: np.ndarray, copy: bool=False) -> qg.QImage:
+def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
     """Convert BGR/gray/bw frame into QImage"""
     if (len(frame.shape) == 3) and (frame.shape[2] == 3):
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -237,7 +239,128 @@ def cv2qimage(frame: np.ndarray, copy: bool=False) -> qg.QImage:
         qimg = qg.QImage(img.tobytes(), w, h, w * c, qg.QImage.Format_RGB888)
     elif len(frame.shape) == 2:  # grayscale
         h, w = frame.shape
-        qimg = qg.QImage(frame.tobytes(), w, h, w * 1, qg.QImage.Format_Grayscale8)
+        qimg = qg.QImage(frame.tobytes(), w, h, w * 1,
+                         qg.QImage.Format_Grayscale8)
     if copy:
         return qimg.copy()
     return qimg
+
+
+def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
+    """Takes two lists of boxes and computes the distance between every possible
+     pair.
+
+     new_bboxes: list of boxes as (x, y, w, h)
+
+     bboxes: list of boxes as four x, y, w, h
+
+     boxtype: OutlineStyle.bbox for axis aligned rectangle bounding box or
+     OulineStyle.minrect for minimum area rotated rectangle
+
+     metric: DistanceMetric, iou or euclidean. When euclidean, the squared
+     Euclidean distance is used (calculating square root is expensive and
+     unnecessary. If iou, use the area of intersection divided by the area
+     of union.
+
+     :returns `list` `[(ii, jj, dist), ...]` `dist` is the computed distance
+     between `new_bboxes[ii]` and `bboxes[jj]`.
+
+     """
+    dist_list = []
+    if metric == DistanceMetric.euclidean:
+        centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
+        new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
+        for ii in range(len(new_bboxes)):
+            for jj in range(len(bboxes)):
+                dist = (new_centers[ii] - centers[jj]) ** 2
+                dist_list.append((ii, jj, dist.sum()))
+    elif metric == DistanceMetric.iou:
+        if boxtype == OutlineStyle.bbox:  # This can be handled efficiently
+            for ii in range(len(new_bboxes)):
+                for jj in range(len(bboxes)):
+                    dist = 1.0 - rect_iou(bboxes[jj], new_bboxes[ii])
+                    dist_list.append((ii, jj, dist))
+        else:
+            raise NotImplementedError(
+                'Only handling axis-aligned bounding boxes')
+    else:
+        raise NotImplementedError(f'Unknown metric {metric}')
+    return dist_list
+
+
+def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
+                 boxtype: OutlineStyle,
+                 metric: DistanceMetric = DistanceMetric.euclidean,
+                 max_dist: int = 10000
+                 ):
+    """Match the bboxes in `new_bboxes` to the closest object in the
+    ``id_bboxes`` dictionary.
+
+    Parameters
+    ----------
+    id_bboxes: dict[int, np.ndarray]
+        Mapping ids to bounding boxes
+    new_bboxes: np.ndarray
+        Array of new bounding boxes to be matched to those in ``id_bboxes``.
+    boxtype: {OutlineStyle.bbox, OutlineStyle.minrect}
+        Type of bounding box to match.
+    max_dist: int
+        Anything that is more than this distance from all of the bboxes in
+        ``id_bboxes`` are put in the unmatched list
+    metric: {DistanceMetric.euclidean, DistanceMetric.iou}
+        iou for area of inetersection over union of the rectangles,
+        and euclidean for Euclidean distance between centers.
+
+    Returns
+    -------
+    matched: dict[int, int]
+        Mapping keys in ``id_bboxes`` to bbox indices in ``new_bboxes`` that are
+        closest.
+    new_unmatched: set[int]
+        Set of indices into `bboxes` that did not match anything in
+        ``id_bboxes``
+    old_unmatched: set[int]
+        Set of keys in ``id_bboxes`` whose corresponding bbox values did not
+        match anything in ``bboxes``.
+    """
+    logging.debug('Current bboxes: %r', id_bboxes)
+    logging.debug('New bboxes: %r', new_bboxes)
+    logging.debug('Box type: %r', boxtype)
+    logging.debug('Max dist: %r', max_dist)
+    if len(id_bboxes) == 0:
+        return ({}, set(range(len(new_bboxes))), {})
+    labels = list(id_bboxes.keys())
+    bboxes = np.array(list(id_bboxes.values()), dtype=float)
+    dist_list = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
+                                  metric=metric)
+    dist_matrix = np.zeros((len(new_bboxes), len(id_bboxes)), dtype=float)
+    for ii, jj, cost in dist_list:
+        dist_matrix[ii, jj] = cost
+    row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
+    matched = {}
+    good_rows = set()
+    good_cols = set()
+    if metric == DistanceMetric.euclidean:
+        max_dist *= max_dist
+    for row, col in zip(row_ind, col_ind):
+        if dist_matrix[row, col] < max_dist:
+            good_rows.add(row)
+            good_cols.add(labels[col])
+            matched[labels[col]] = row
+    new_unmatched = set(range(len(new_bboxes))) - good_rows
+    old_unmatched = set(id_bboxes.keys()) - good_cols
+    return matched, new_unmatched, old_unmatched
+
+
+def reconnect(signal, newhandler=None, oldhandler=None):
+    """Disconnect signal from oldhandler and connect to newhandler"""
+    while True:
+        try:
+            if oldhandler is not None:
+                signal.disconnect(oldhandler)
+            else:
+                signal.disconnect()
+        except TypeError:
+            break
+    if newhandler is not None:
+        signal.connect(newhandler)

@@ -4,110 +4,14 @@
 import logging
 import threading
 import numpy as np
-from scipy import optimize
 import cv2
 from PyQt5 import (
     QtCore as qc,
     QtWidgets as qw)
 from argos import utility as au
+from argos.utility import match_bboxes
 
 setup = au.init()
-
-
-def pairwise_distance(new_bboxes, bboxes, boxtype, metric):
-    """Takes two lists of boxes and computes the distance between every possible
-     pair.
-
-     new_bboxes: list of boxes as (x, y, w, h)
-
-     bboxes: list of boxes as four x, y, w, h
-
-     boxtype: OutlineStyle.bbox for axis aligned rectangle bounding box or
-     OulineStyle.minrect for minimum area rotated rectangle
-
-     metric: DistanceMetric, iou or euclidean. When euclidean, the squared
-     Euclidean distance is used (calculating square root is expensive and
-     unnecessary. If iou, use the area of intersection divided by the area
-     of union.
-
-     :returns `list` `[(ii, jj, dist), ...]` `dist` is the computed distance
-     between `new_bboxes[ii]` and `bboxes[jj]`.
-
-     """
-    dist_list = []
-    if metric == au.DistanceMetric.euclidean:
-        centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
-        new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
-        for ii in range(len(new_bboxes)):
-            for jj in range(len(bboxes)):
-                dist = (new_centers[ii] - centers[jj]) ** 2
-                dist_list.append((ii, jj, dist.sum()))
-    elif metric == au.DistanceMetric.iou:
-        if boxtype == au.OutlineStyle.bbox:  # This can be handled efficiently
-            for ii in range(len(new_bboxes)):
-                for jj in range(len(bboxes)):
-                    dist = 1.0 - au.rect_iou(bboxes[jj], new_bboxes[ii])
-                    dist_list.append((ii, jj, dist))
-        else:
-            raise NotImplementedError('Only handling axis-aligned bounding boxes')
-    else:
-        raise NotImplementedError(f'Unknown metric {metric}')
-    return dist_list
-
-
-def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
-                 boxtype: au.OutlineStyle,
-                 metric: au.DistanceMetric = au.DistanceMetric.euclidean,
-                 max_dist: int = 1e4
-    ):
-    """Match the bboxes in `new_bboxes` to the closest object.
-
-    id_bboxes: dict mapping ids to bboxes
-
-    new_bboxes: array of new bboxes to be matched to those in id_bboxes
-
-    boxtype: OutlineStyle.bbox or OutlineStyle.minrect
-
-    max_dist: anything that is more than this distance from all of the bboxes in
-    id_bboxes are put in the unmatched list
-
-    metric: iou for area of inetersection over union of the rectangles and
-    euclidean for Euclidean distance between centers.
-
-    :returns matched, new_unmatched, old_unmatched: `matched` is a dict mapping
-    keys in `id_bboxes` to bbox indices in `new_bboxes` that are closest.
-    `new_unmatched` is the set of indices into `bboxes` that did not match
-    anything in `id_bboxes`, `old_unmatched` is the set of keys in `id_bboxes`
-    whose corresponding bbox values did not match anything in `bboxes`.
-    """
-    logging.debug('Current bboxes: %r', id_bboxes)
-    logging.debug('New bboxes: %r', new_bboxes)
-    logging.debug('Box type: %r', boxtype)
-    logging.debug('Max dist: %r', max_dist)
-    if len(id_bboxes) == 0:
-        return ({}, set(range(len(new_bboxes))), {})
-    labels = list(id_bboxes.keys())
-    bboxes = np.array(list(id_bboxes.values()), dtype=float)
-    dist_list = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
-                                  metric=metric)
-    dist_matrix = np.zeros((len(new_bboxes), len(id_bboxes)), dtype=float)
-    for ii, jj, cost in dist_list:
-        dist_matrix[ii, jj] = cost
-    row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
-    matched = {}
-    good_rows = set()
-    good_cols = set()
-    if metric == au.DistanceMetric.euclidean:
-        max_dist *= max_dist
-    for row, col in zip(row_ind, col_ind):
-        if dist_matrix[row, col] < max_dist:
-            good_rows.add(row)
-            good_cols.add(labels[col])
-            matched[labels[col]] = row
-    new_unmatched = set(range(len(new_bboxes))) - good_rows
-    old_unmatched = set(id_bboxes.keys()) - good_cols
-    return matched, new_unmatched, old_unmatched
-
 
 
 class KalmanTracker(object):

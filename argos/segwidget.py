@@ -704,6 +704,7 @@ class SegWidget(qw.QWidget):
         self.sigProcess.connect(self.worker.process)
         self.worker.sigProcessed.connect(self.sigProcessed)
         self.worker.sigIntermediate.connect(self._intermediate_win.setFrame)
+        self.sigQuit.connect(self.saveSettings)
         ###################
         # Thread setup
         self.sigQuit.connect(self.thread.quit)
