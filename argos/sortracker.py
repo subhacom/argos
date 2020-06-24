@@ -32,39 +32,40 @@ class KalmanTracker(object):
     NDIM = 4
     DT = 1.0
 
-    def __init__(self, bbox, track_id, n_init=3, max_age=10, deepsort=False):
+    def __init__(self, bbox, track_id, min_hits=3, max_age=10, deepsort=False):
         """bbox is in xywh format and converted to xyrh format"""
         super(KalmanTracker, self).__init__()
-        self.state = argos.constants.TrackState.tentative
+        self.tid = track_id
         self.hits = 1
+        self.min_hits = min_hits
         self.features = []
         self.time_since_update = 0
-        self.n_init = n_init
+        self.n_init = min_hits
         self.max_age = max_age
         self._std_weight_pos = 1.0 / 20
         self._std_weight_vel = 1.0 / 160
         # flag to switch between fixed covariances like SORT vs
         # measurement-based covariance like DeepSORT
         self.cov_deepsort = deepsort
-        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM,
+        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM - 1,
                                        measureParams=self.NDIM, type=cv2.CV_64F)
-        # Borrowing ideas from DeepSORT
+        # Borrowing ideas from SORT/DeepSORT
+        # Measurement marix H
         self.filter.measurementMatrix = np.array([
-            [1., 0, 0, 0, 0, 0, 0, 0],
-            [0, 1., 0, 0, 0, 0, 0, 0],
-            [0, 0, 1., 0, 0, 0, 0, 0],
-            [0, 0, 0, 1., 0, 0, 0, 0]
+            [1., 0, 0, 0, 0, 0, 0],
+            [0, 1., 0, 0, 0, 0, 0],
+            [0, 0, 1., 0, 0, 0, 0],
+            [0, 0, 0, 1., 0, 0, 0]
         ])
         # This is state transition matrix F
         self.filter.transitionMatrix = np.array([
-            [1., 0, 0, 0, self.DT, 0, 0, 0],
-            [0, 1., 0, 0, 0, self.DT, 0, 0],
-            [0, 0, 1., 0, 0, 0, self.DT, 0],
-            [0, 0, 0, 1., 0, 0, 0, self.DT],
-            [0, 0, 0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 0, 0, 1],
+            [1., 0, 0, 0, self.DT, 0, 0],
+            [0, 1., 0, 0, 0, self.DT, 0],
+            [0, 0, 1., 0, 0, 0, self.DT],
+            [0, 0, 0, 1., 0, 0, 0],
+            [0, 0, 0, 0, self.DT, 0, 0],
+            [0, 0, 0, 0, 0, self.DT, 0],
+            [0, 0, 0, 0, 0, 0, self.DT],
         ])
         # NOTE state covariance matrix (P) is initialized as a function of
         # measured height in DeepSORT, but constant in SORT.
@@ -79,7 +80,7 @@ class KalmanTracker(object):
                          10 * self._std_weight_vel * bbox[3]]
             self.filter.errorCovPost = np.diag(np.square(error_cov))
         else:
-            self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
+            self.filter.errorCovPost = np.eye(2 * self.NDIM-1, dtype=float) * 10.0
             self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
 
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
@@ -99,7 +100,8 @@ class KalmanTracker(object):
             # ~~ till here follows deepSORT
         else:
             # ~~~~ This is according to SORT
-            self.filter.processNoiseCov = np.eye(2 * self.NDIM)
+            self.filter.processNoiseCov = np.eye(2 * self.NDIM-1)
+            # self.filter.processNoiseCov[2, 2] = 1e-2
             self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
             self.filter.processNoiseCov[-1, -1] *= 0.01
             # ~~~~ Till here is according to SORT
@@ -110,7 +112,7 @@ class KalmanTracker(object):
             self.filter.measurementNoiseCov = np.eye(self.NDIM)
             self.filter.measurementNoiseCov[2:, 2:] *= 10.0
             # ~~~~ Till here is according to SORT
-        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM)]
+        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM-1)]
 
     @property
     def pos(self):
@@ -129,6 +131,8 @@ class KalmanTracker(object):
                         self._std_weight_vel * self.filter.statePost[3]]
             self.filter.processNoiseCov = np.diag(np.square(proc_cov))
             # ~~ till here follows deepSORT
+        if self.time_since_update > 0:
+            self.hits = 0
         self.time_since_update += 1
         ret = self.filter.predict()
         return au.xyrh2tlwh(ret[:self.NDIM].squeeze())
@@ -145,25 +149,9 @@ class KalmanTracker(object):
         pos = self.filter.correct(au.tlwh2xyrh(detection))
         self.time_since_update = 0
         self.hits += 1
-        if self.state == argos.constants.TrackState.tentative and \
-                self.hits >= self.n_init:
-            self.state = argos.constants.TrackState.confirmed
         self.pos[:] = pos[:self.NDIM]
         return self.pos
 
-    def mark_missed(self):
-        if self.state == argos.constants.TrackState.tentative or \
-                self.time_since_update > self.max_age:
-            self.state = argos.constants.TrackState.deleted
-
-    def is_deleted(self):
-        return self.state == argos.constants.TrackState.deleted
-
-    def is_confirmed(self):
-        return self.state == argos.constants.TrackState.confirmed
-
-    def is_tentative(self):
-        return self.state == argos.constants.TrackState.tentative
 
 
 class SORTracker(qc.QObject):
@@ -174,9 +162,10 @@ class SORTracker(qc.QObject):
     sigTracked = qc.pyqtSignal(dict, int)
 
     def __init__(self, metric=argos.constants.DistanceMetric.iou, min_dist=0.3, max_age=1,
-                 n_init=3, boxtype=argos.constants.OutlineStyle.bbox):
+                 n_init=3, min_hits=3, boxtype=argos.constants.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
+        self.min_hits = min_hits
         self.boxtype = boxtype
         self.metric = metric
         if self.metric == argos.constants.DistanceMetric.iou:
@@ -186,6 +175,7 @@ class SORTracker(qc.QObject):
         self.max_age = max_age
         self.trackers = {}
         self._next_id = 1
+        self.frame_count = 0
         self._mutex = qc.QMutex()
         self._wait_cond = None
 
@@ -193,6 +183,7 @@ class SORTracker(qc.QObject):
     def reset(self):
         self.trackers = {}
         self._next_id = 1
+        self.frame_count = 0
 
     @qc.pyqtSlot(threading.Event)
     def setWaitCond(self, cond: threading.Event) -> None:
@@ -224,7 +215,8 @@ class SORTracker(qc.QObject):
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
             prior = tracker.predict()
-            if np.any(np.isnan(prior)) or np.any(prior[2:] < 0):
+            if np.any(np.isnan(prior)):
+                logging.info(f'Found nan in prior of {id_}')
                 continue
             predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
         self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
@@ -236,14 +228,17 @@ class SORTracker(qc.QObject):
             max_dist=self.min_dist)
         for track_id, bbox_id in matched.items():
             self.trackers[track_id].update(bboxes[bbox_id])
-        for id_ in old_unmatched:
-            self.trackers[id_].mark_missed()
         for ii in new_unmatched:
             self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
-        self.trackers = {id_: tracker for id_, tracker in self.trackers.items()
-                         if not tracker.is_deleted()}
-        ret = {id_: tracker.pos for id_, tracker in
-               self.trackers.items()}
+        ret = {}
+        for id_ in list(self.trackers.keys()):
+            tracker = self.trackers[id_]
+            if (tracker.time_since_update < 1) and \
+                (tracker.hits >= self.min_hits or
+                 self.frame_count <= self.min_hits):
+                ret[id_] = tracker.pos
+            if tracker.time_since_update > self.max_age:
+                self.trackers.pop(id_)
         return ret
 
     def _add_tracker(self, bbox):

@@ -84,12 +84,22 @@ class VideoWidget(qw.QWidget):
         directory = settings.value('data/directory', '.')
         filename = writer.makepath(directory, self.video_filename)
         self.outfile, _ = qw.QFileDialog.getSaveFileName(
-            self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf)')
-        self.writer = writer.DataHandler(self.outfile, mode='w')
+            self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf);;Text (*.csv)')
+        if self.writer is not None:
+            self.writer = None
+        if self.outfile.endswith('.csv'):
+            self.writer = writer.CSVWriter(self.outfile, mode='w')
+            qw.QMessageBox.information(self,
+                                       'Data will be saved in',
+                                       f'{self.writer.seg_filename} and'
+                                       f' {self.writer.track_filename}')
+        else:
+            self.writer = writer.HDFWriter(self.outfile, mode='w')
+            qw.QMessageBox.information(self,
+                                       'Data will be saved in',
+                                       f'{self.outfile}')
+
         settings.setValue('data/directory', os.path.dirname(self.outfile))
-        qw.QMessageBox.information(self,
-                                   'Data will be saved in',
-                                   f'{self.outfile}')
         self.video_reader.moveToThread(self.reader_thread)
         self.timer.timeout.connect(self.video_reader.read)
         self.sigGotoFrame.connect(self.video_reader.gotoFrame)

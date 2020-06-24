@@ -5,6 +5,7 @@ import logging
 import os
 from collections import OrderedDict
 import csv
+from zipfile import ZipFile
 import numpy as np
 from PyQt5 import QtCore as qc
 import pandas as pd
@@ -32,26 +33,9 @@ class DataHandler(qc.QObject):
         super(DataHandler, self).__init__()
         self.filename = filename
         self.mode = mode
-        self.data_store = pd.HDFStore(filename, mode=mode,
-                                      complib='blosc')
         # Buffer the data in OrderedDicts keyed by frame num.
         self._segmented = OrderedDict()
         self._tracked = OrderedDict()
-        try:
-            seg = self.data_store.get(segmented_key)
-            for frame_no, grp in seg.groupby('frame'):
-                self._segmented[frame_no] = grp[['x', 'y', 'w', 'h']].values
-        except KeyError:
-            logging.debug(f'No segmentation data in {self.filename}')
-        try:
-            trk = self.data_store.get(tracked_key)
-            for frame_no, grp in trk.groupby('frame'):
-                self._tracked[frame_no] = grp[['trackid',
-                                              'x', 'y', 'w', 'h']].values
-        except KeyError:
-            logging.debug(f'No tracking data in {self.filename}')
-        assert len(self._segmented) == len(self._tracked),  \
-        'Segmented and tracked frame count are different. Corrupt data file?'
 
     @qc.pyqtSlot(np.ndarray, int)
     def appendSegmented(self, bboxes: np.ndarray, frame_no: int):
@@ -60,6 +44,21 @@ class DataHandler(qc.QObject):
     @qc.pyqtSlot(dict, int)
     def appendTracked(self, id_bbox: dict, frame_no: int):
         self._tracked[frame_no] = id_bbox
+
+    def _write(self):
+        raise NotImplementedError('Must be implemented in subclasses')
+
+    @qc.pyqtSlot()
+    def close(self):
+        self._segmented = OrderedDict()
+        self._tracked = OrderedDict()
+
+
+class HDFWriter(DataHandler):
+    def __init__(self, filename, mode='w'):
+        super(HDFWriter, self).__init__(filename, mode)
+        self.data_store = pd.HDFStore(filename, mode=mode,
+                                      complib='blosc')
 
     def _write(self):
         """
@@ -98,8 +97,7 @@ class DataHandler(qc.QObject):
         if self.data_store.is_open:
             self._write()
             self.data_store.close()
-        self._segmented = OrderedDict()
-        self._tracked = OrderedDict()
+        super(HDFWriter, self).close()
 
     @qc.pyqtSlot()
     def reset(self):
@@ -113,54 +111,28 @@ class DataHandler(qc.QObject):
         self.close()
 
 
-class CSVWriter(qc.QObject):
+class CSVWriter(DataHandler):
     """Not used any more. Using HDF5 is much faster"""
-    def __init__(self):
-        super(CSVWriter, self).__init__()
-        self.out_dir = '.'
-        self.seg_filename = ''
-        self.track_filename = ''
-        self.seg_file = None
-        self.track_file = None
-        self.seg_writer = None
-        self.track_writer = None
-
-    def set_path(self, directory, fileprefix):
-        self.seg_filename = os.path.join(
-            directory,
-            f'{os.path.basename(fileprefix)}.seg.csv')
-        ii = 0
-        while os.path.exists(self.seg_filename):
-            ii += 1
-            self.seg_filename = os.path.join(
-                directory,
-                f'{os.path.basename(fileprefix)}.seg{ii}.csv')
-
-        if self.seg_file is not None and not self.seg_file.closed:
-            self.seg_file.close()
+    def __init__(self, filename, mode='w'):
+        super(CSVWriter, self).__init__(filename, mode)
+        prefix, _, ext = filename.rpartition('.')
+        self.seg_filename = f'{prefix}.seg.csv'
+        self.track_filename = f'{prefix}.trk.csv'
         self.seg_file = open(self.seg_filename, 'w', newline='')
         self.seg_writer = csv.writer(self.seg_file)
         self.seg_writer.writerow('frame,x,y,w,h'.split(','))
-        self.track_filename = os.path.join(
-                directory,
-                '{}.track{}.csv'.format(os.path.basename(fileprefix),
-                    '' if ii == 0 else ii))
-        if os.path.exists(self.track_filename):
-            raise Exception(f'File already exists {self.track_filename}')
-        if self.track_file is not None and not self.track_file.closed:
-            self.track_file.close()
         self.track_file = open(self.track_filename, 'w', newline='')
         self.track_writer = csv.writer(self.track_file)
         self.track_writer.writerow('frame,trackid,x,y,w,h'.split(','))
 
     @qc.pyqtSlot(np.ndarray, int)
-    def writeSegmented(self, bboxes: np.ndarray, frame_no: int):
+    def appendSegmented(self, bboxes: np.ndarray, frame_no: int):
         for bbox in bboxes:
             data = [frame_no] + list(bbox)
             self.seg_writer.writerow(data)
 
     @qc.pyqtSlot(dict, int)
-    def writeTracked(self, id_bbox: dict, frame_no: int):
+    def appendTracked(self, id_bbox: dict, frame_no: int):
         for id_ in sorted(id_bbox):
             data = [frame_no, id_] + list(id_bbox[id_])
             self.track_writer.writerow(data)
