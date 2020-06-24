@@ -124,7 +124,7 @@ class Scene(qw.QGraphicsScene):
         self.incomplete_color = color
 
     @qc.pyqtSlot(dict)
-    def setRectangles(self, rects: dict):
+    def setRectangles(self, rects: dict) -> None:
         """rects: a dict of id: (x, y, w, h)"""
         logging.debug(f'Received rectangles from {self.sender}')
         self.polygons = {}

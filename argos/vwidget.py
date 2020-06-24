@@ -12,7 +12,7 @@ from PyQt5 import QtWidgets as qw, QtCore as qc
 from argos import utility
 from argos.display import Display
 from argos.vreader import VideoReader
-from argos.writer import Writer
+from argos import writer
 
 
 settings = utility.init()
@@ -36,7 +36,7 @@ class VideoWidget(qw.QWidget):
         self.tracker = None
         self.slider = None
         self.video_filename = ''
-        self.writer = Writer()
+        self.writer = None
         # As the time to process the data is generally much longer than FPS
         # using a regular interval timer puts too much backlog and the
         # play/pause functionality does not work on timer.stop() call.
@@ -60,11 +60,7 @@ class VideoWidget(qw.QWidget):
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
         self.reader_thread = qc.QThread()
-        self.sigReset.connect(self.writer.reset)
         self.sigQuit.connect(self.reader_thread.quit)
-        self.sigQuit.connect(self.writer.close)
-        self.sigSetSegmented.connect(self.writer.writeSegmented)
-        self.sigSetTracked.connect(self.writer.writeTracked)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
     @qc.pyqtSlot()
@@ -86,23 +82,25 @@ class VideoWidget(qw.QWidget):
         self.video_filename = fname[0]
         ## Set-up for saving data
         directory = settings.value('data/directory', '.')
-        self.output_dir = qw.QFileDialog.getExistingDirectory(
-            self, 'Save data in directory')
-        self.writer.set_path(self.output_dir, self.video_filename)
-        settings.setValue('data/directory', os.path.dirname(self.output_dir))
+        filename = writer.makepath(directory, self.video_filename)
+        self.outfile, _ = qw.QFileDialog.getSaveFileName(
+            self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf)')
+        self.writer = writer.DataHandler(self.outfile, mode='w')
+        settings.setValue('data/directory', os.path.dirname(self.outfile))
         qw.QMessageBox.information(self,
                                    'Data will be saved in',
-                                   f'{self.output_dir}'
-                                   '\nSegmentation: '
-                                   f'{os.path.basename(self.writer.seg_filename)}'
-                                   '\nTracked: '
-                                   f'{os.path.basename(self.writer.track_filename)}')
+                                   f'{self.outfile}')
         self.video_reader.moveToThread(self.reader_thread)
-
         self.timer.timeout.connect(self.video_reader.read)
         self.sigGotoFrame.connect(self.video_reader.gotoFrame)
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.video_reader.sigVideoEnd.connect(self.pauseVideo)
+        self.video_reader.sigVideoEnd.connect(self.writer.close)
+        self.sigReset.connect(self.writer.reset)
+        self.sigQuit.connect(self.writer.close)
+        self.sigSetSegmented.connect(self.writer.appendSegmented)
+        self.sigSetTracked.connect(self.writer.appendTracked)
+
         if self.display_widget is None:
             self.display_widget = Display()
             self.sigSetFrame.connect(self.display_widget.setFrame)

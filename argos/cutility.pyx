@@ -9,7 +9,7 @@ from argos.constants import OutlineStyle, DistanceMetric
 
 def tlwh2xyrh(np.ndarray rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
-    cdef np.ndarray ret = np.float(rect)
+    cdef np.ndarray ret = np.asanyarray(rect, dtype=float)
     ret[:2] += ret[2:] * 0.5
     ret[2] /= ret[3]
     return ret

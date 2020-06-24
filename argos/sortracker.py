@@ -252,8 +252,8 @@ class SORTracker(qc.QObject):
                                                      self.max_age)
         self._next_id += 1
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int):
+    @qc.pyqtSlot(dict, int)
+    def track(self, bboxes: dict, pos: int) -> None:
         _ = qc.QMutexLocker(self._mutex)
         if len(bboxes) == 0:
             ret = {}
@@ -324,12 +324,12 @@ class SORTWidget(qw.QWidget):
         if state:
             self.sigTrack.connect(self.sendDummySigTracked)
         else:
-            self.sigTracked.connect(self.tracker.track)
+            self.sigTrack.connect(self.tracker.track)
 
     @qc.pyqtSlot(np.ndarray, int)
     def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
-        self.sigTracked.emit({ii: bboxes[ii] for ii in range(bboxes.shape[0])},
-                             pos)
+        ret = {ii+1: bboxes[ii] for ii in range(bboxes.shape[0])}
+        self.sigTracked.emit(ret, pos)
 
 
 

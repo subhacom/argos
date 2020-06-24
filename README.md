@@ -11,7 +11,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    Anaconda prompt):
    
    ```
-   conda create -n track -c conda-forge python cython scipy numpy pyqt pyyaml matplotlib pandas opencv ffmpeg
+   conda create -n track -c conda-forge python cython scipy numpy pyqt pyyaml matplotlib pandas ffmpeg
    ```
    
    This will create a virtual Python environment called `track`
@@ -21,7 +21,13 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    conda activate track
    ```
    
-4. Install PyTorch. If you want to use CPU-only version, in the Anaconda prompt 
+4. Install OpenCV with contributed modules (required for some recent tracking 
+   algorithms, but not part of the main OpenCV distribution available in conda):
+   ```commandline
+    pip install opencv-contrib-python
+   ```
+   
+5. Install PyTorch. If you want to use CPU-only version, in the Anaconda prompt 
 
    ``` 
    conda install pytorch torchvision cpuonly -c pytorch 
@@ -31,7 +37,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    [pytorch website](https://pytorch.org/get-started/locally/) to select the 
    right command. But note that you will need to install the appropriate 
    [NVIDIA driver](https://www.nvidia.com/Download/index.aspx) for it to work.
-5. Install `pycocotools`
+6. Install `pycocotools`
 
    On Windows:
      1. Install [MS Visual Studio Build Tools](https://go.microsoft.com/fwlink/?LinkId=691126). 
@@ -51,14 +57,14 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    pip install pycocotools
    ```
-6. In the Anaconda prompt, go to where `argos` is unpacked:
+7. In the Anaconda prompt, go to where `argos` is unpacked:
 
    ```
    cd {your_argos_directory} 
    ```
    
    it should have these directories there: `argos`, `config`, and `yolact`.
-7. In the Anaconda prompt, update Python path to include this directory:
+8. In the Anaconda prompt, update Python path to include this directory:
 
    on Windows command prompt:
    
@@ -71,7 +77,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    export PYTHONPATH=.:$PYTHONPATH
    ```
-8. Run `argos` main script on the Anaconda prompt:
+9. Run `argos` main script on the Anaconda prompt:
 
    on Windows: 
    
@@ -85,14 +91,14 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    python argos/amain.py
    ```
-9. Open the video file using either the `File` menu. After selecting the video
+10. Open the video file using either the `File` menu. After selecting the video
    file, you will be prompted to:
    1. Select output data directory. 
    2. Select Yolact configuration file, go to the `config` directory inside 
       argos directory and select `yolact.yml`.
    3. File containing trained network weights, and here you should select the 
       `babylocust_resnet101_119999_240000.pth` file.
-10. Start tracking: click the `play/pause` button and you should see the 
+11. Start tracking: click the `play/pause` button and you should see the 
     tracked locusts. The data will be saved in the directory you chose in step 
     above.
 
@@ -104,7 +110,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
     The tracks will be saved in `{videofile}.trk.csv`. Each row in this file 
     contains `frame-no,track-id,x,y,w,h`.
      
-11. Classical segmentation: Using the `Segmentation method` menu you can switch
+12. Classical segmentation: Using the `Segmentation method` menu you can switch
     from YOLACT to classical image segmentation for detecting target objects. 
     This method uses patterns in the pixel values in the image to detect 
     contiguous patches. If your target objects are small but have high contrast 
