@@ -16,18 +16,21 @@ from argos import utility as au
 logging.getLogger().addHandler(logging.FileHandler('log_argos_sort.log', mode='w'))
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 logging.getLogger().setLevel(logging.DEBUG)
+data_dump = logging.getLogger('data')
+data_dump.addHandler(logging.FileHandler('data_dump.csv', mode='w'))
+data_dump.setLevel(logging.INFO)
 
 def xywh2xysr(x, y, w, h):
     return np.array((x + w / 2.0,
                      y + h / 2.0,
-                     w * h, #w / float(h), #
-                     w / float(h))) # h)) #
+                     w / float(h), #w * h, #
+                     h)) #w / float(h))) #
 
 def xysr2xywh(x, y, s, r):
-    w = np.sqrt(s * r)
-    h = s / w
-    # w = s * r
-    # h = r
+    # w = np.sqrt(s * r)
+    # h = s / w
+    w = s * r
+    h = r
     return np.array((x - w / 2.0,
                      y - h / 2.0,
                      w, h))
@@ -254,8 +257,7 @@ class KalmanTracker(object):
                         self._std_weight_pos * self.filter.statePost[3],
                         self._std_weight_vel * self.filter.statePost[3],
                         self._std_weight_vel * self.filter.statePost[3],
-                        1e-5,
-                        self._std_weight_vel * self.filter.statePost[3]]
+                        1e-5]
             self.filter.processNoiseCov = np.diag(np.square(proc_cov))
             # ~~ till here follows deepSORT
         if self.time_since_update > 0:
@@ -304,7 +306,8 @@ class SORTracker(object):
     NOTE: accepts bounding boxes in (x, y, w, h) format.
     """
     def __init__(self, metric=argos.constants.DistanceMetric.iou, min_dist=0.3, max_age=1,
-                 n_init=3, min_hits=3, boxtype=argos.constants.OutlineStyle.bbox):
+                 n_init=3, min_hits=3,
+                 boxtype=argos.constants.OutlineStyle.bbox, deepsort=False):
         super(SORTracker, self).__init__()
         self.n_init = n_init
         self.min_hits = min_hits
@@ -318,6 +321,7 @@ class SORTracker(object):
         self.trackers = {}
         self._next_id = 1
         self.frame_count = 0
+        self.deepsort = deepsort
 
     def reset(self):
         self.trackers = {}
@@ -368,6 +372,11 @@ class SORTracker(object):
         logging.info(f'-----Unmatched old\n{old_unmatched}')
         for track_id, bbox_id in matched.items():
             self.trackers[track_id].update(bboxes[bbox_id])
+            prior = self.trackers[track_id].filter.statePre.squeeze()
+            posterior = self.trackers[track_id].filter.statePost.squeeze()
+            debug_data = np.concatenate(([self.frame_count, track_id], prior, posterior, posterior - prior))
+            dump = ','.join([str(x) for x in debug_data])
+            data_dump.info(dump)
         for ii in new_unmatched:
             self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
         ret = {}
@@ -386,21 +395,23 @@ class SORTracker(object):
     def _add_tracker(self, bbox):
         self.trackers[self._next_id] = KalmanTracker(bbox, self._next_id,
                                                      self.n_init,
-                                                     self.max_age)
+                                                     self.max_age, deepsort=self.deepsort)
         self._next_id += 1
 
 
 import pandas as pd
 
 def test():
-    dfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00267_test.avi.h5'
-    vfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00267_test.avi'
+    # dfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00267_test.avi.h5'
+    # vfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00267_test.avi'
+    dfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00270.avi.h5'
+    vfile = 'C:/Users/raysu/Documents/src/argos/test_data/2020_02_20_00270.avi'
     store = pd.HDFStore(dfile)
     detections = store['segmented']
     video = cv2.VideoCapture(vfile)
     win = 'Argos'
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
-    tracker = SORTracker(max_age=10, n_init=3, min_dist=0.3)
+    tracker = SORTracker(max_age=10, n_init=3, min_dist=0.3, deepsort=True)
     tracked = []
     for frameno, dgrp in detections.groupby('frame'):
         v = dgrp.values[:, 1:].copy()
@@ -417,15 +428,15 @@ def test():
             logging.info(f'--- {bbs_id} ---')
             bbox = np.int0(bbox)
             logging.info(bbox)
-            cv2.rectangle(frame, tuple(bbox[:2]), tuple(bbox[:2] + bbox[2:4]), 255)
+            cv2.rectangle(frame, tuple(bbox[:2]), tuple(bbox[:2] + bbox[2:4]), 255, 2)
             cv2.putText(frame, str(frameno), (20, 50),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 0, 255), 1)
+                        0.5, (0, 0, 255), 2)
             cv2.putText(frame, str(bbs_id), tuple(bbox[:2]),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 0, 255), 1)
+                        0.5, (0, 0, 255), 2)
         cv2.imshow(win, frame)
-        key = cv2.waitKey(1000)
+        key = cv2.waitKey(10)
         if key == 27 or key == ord('q'):
             break
 
