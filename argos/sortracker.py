@@ -47,26 +47,16 @@ class KalmanTracker(object):
         # flag to switch between fixed covariances like SORT vs
         # measurement-based covariance like DeepSORT
         self.cov_deepsort = deepsort
-        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM - 1,
+        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM,
                                        measureParams=self.NDIM, type=cv2.CV_64F)
         # Borrowing ideas from SORT/DeepSORT
         # Measurement marix H
-        self.filter.measurementMatrix = np.array([
-            [1., 0, 0, 0, 0, 0, 0],
-            [0, 1., 0, 0, 0, 0, 0],
-            [0, 0, 1., 0, 0, 0, 0],
-            [0, 0, 0, 1., 0, 0, 0]
-        ])
+        self.filter.measurementMatrix = np.eye(self.NDIM, 2 * self.NDIM)
+
         # This is state transition matrix F
-        self.filter.transitionMatrix = np.array([
-            [1., 0, 0, 0, self.DT, 0, 0],
-            [0, 1., 0, 0, 0, self.DT, 0],
-            [0, 0, 1., 0, 0, 0, self.DT],
-            [0, 0, 0, 1., 0, 0, 0],
-            [0, 0, 0, 0, self.DT, 0, 0],
-            [0, 0, 0, 0, 0, self.DT, 0],
-            [0, 0, 0, 0, 0, 0, self.DT],
-        ])
+        self.filter.transitionMatrix = np.eye(2 * self.NDIM, 2 * self.NDIM)
+        for ii in range(self.NDIM):
+            self.filter.transitionMatrix[ii, ii + self.NDIM] = self.DT
         # NOTE state covariance matrix (P) is initialized as a function of
         # measured height in DeepSORT, but constant in SORT.
         if self.cov_deepsort:
@@ -80,7 +70,7 @@ class KalmanTracker(object):
                          10 * self._std_weight_vel * bbox[3]]
             self.filter.errorCovPost = np.diag(np.square(error_cov))
         else:
-            self.filter.errorCovPost = np.eye(2 * self.NDIM-1, dtype=float) * 10.0
+            self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
             self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
 
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
@@ -100,10 +90,10 @@ class KalmanTracker(object):
             # ~~ till here follows deepSORT
         else:
             # ~~~~ This is according to SORT
-            self.filter.processNoiseCov = np.eye(2 * self.NDIM-1)
+            self.filter.processNoiseCov = np.eye(2 * self.NDIM)
             # self.filter.processNoiseCov[2, 2] = 1e-2
             self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
-            self.filter.processNoiseCov[-1, -1] *= 0.01
+            self.filter.processNoiseCov[-2:, -2:] *= 0.01
             # ~~~~ Till here is according to SORT
 
         # Measurement noise covariance R
@@ -112,7 +102,7 @@ class KalmanTracker(object):
             self.filter.measurementNoiseCov = np.eye(self.NDIM)
             self.filter.measurementNoiseCov[2:, 2:] *= 10.0
             # ~~~~ Till here is according to SORT
-        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM-1)]
+        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM)]
 
     @property
     def pos(self):

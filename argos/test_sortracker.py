@@ -174,26 +174,30 @@ class KalmanTracker(object):
         # flag to switch between fixed covariances like SORT vs
         # measurement-based covariance like DeepSORT
         self.cov_deepsort = deepsort
-        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM - 1,
+        self.filter = cv2.KalmanFilter(dynamParams=2 * self.NDIM,
                                        measureParams=self.NDIM, type=cv2.CV_64F)
         # Borrowing ideas from SORT/DeepSORT
         # Measurement marix H
-        self.filter.measurementMatrix = np.array([
-            [1., 0, 0, 0, 0, 0, 0],
-            [0, 1., 0, 0, 0, 0, 0],
-            [0, 0, 1., 0, 0, 0, 0],
-            [0, 0, 0, 1., 0, 0, 0]
-        ])
+        self.filter.measurementMatrix = np.eye(self.NDIM, 2 * self.NDIM)
+        # self.filter.measurementMatrix = np.array([
+        #     [1., 0, 0, 0, 0, 0, 0],
+        #     [0, 1., 0, 0, 0, 0, 0],
+        #     [0, 0, 1., 0, 0, 0, 0],
+        #     [0, 0, 0, 1., 0, 0, 0]
+        # ])
         # This is state transition matrix F
-        self.filter.transitionMatrix = np.array([
-            [1., 0, 0, 0, self.DT, 0, 0],
-            [0, 1., 0, 0, 0, self.DT, 0],
-            [0, 0, 1., 0, 0, 0, self.DT],
-            [0, 0, 0, 1., 0, 0, 0],
-            [0, 0, 0, 0, self.DT, 0, 0],
-            [0, 0, 0, 0, 0, self.DT, 0],
-            [0, 0, 0, 0, 0, 0, self.DT],
-        ])
+        self.filter.transitionMatrix = np.eye(2 * self.NDIM, 2 * self.NDIM)
+        for ii in range(self.NDIM):
+            self.filter.transitionMatrix[ii, ii + self.NDIM] = self.DT
+        # self.filter.transitionMatrix = np.array([
+        #     [1., 0, 0, 0, self.DT, 0, 0, 0],
+        #     [0, 1., 0, 0, 0, self.DT, 0, 0],
+        #     [0, 0, 1., 0, 0, 0, self.DT, 0],
+        #     [0, 0, 0, 1., 0, 0, 0, self.DT],
+        #     [0, 0, 0, 0, self.DT, 0, 0, 0],
+        #     [0, 0, 0, 0, 0, self.DT, 0, 0],
+        #     [0, 0, 0, 0, 0, 0, self.DT],
+        # ])
         # NOTE state covariance matrix (P) is initialized as a function of
         # measured height in DeepSORT, but constant in SORT.
         if self.cov_deepsort:
@@ -207,7 +211,7 @@ class KalmanTracker(object):
                          10 * self._std_weight_vel * bbox[3]]
             self.filter.errorCovPost = np.diag(np.square(error_cov))
         else:
-            self.filter.errorCovPost = np.eye(2 * self.NDIM-1, dtype=float) * 10.0
+            self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
             self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
 
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
@@ -227,10 +231,11 @@ class KalmanTracker(object):
             # ~~ till here follows deepSORT
         else:
             # ~~~~ This is according to SORT
-            self.filter.processNoiseCov = np.eye(2 * self.NDIM-1)
+            self.filter.processNoiseCov = np.eye(2 * self.NDIM)
             # self.filter.processNoiseCov[2, 2] = 1e-2
             self.filter.processNoiseCov[self.NDIM:, self.NDIM:] *= 0.01
-            self.filter.processNoiseCov[-1, -1] *= 0.01
+            # self.filter.processNoiseCov[-1, -1] *= 0.01
+            self.filter.processNoiseCov[-2:, -2:] *= 0.01
             # ~~~~ Till here is according to SORT
 
         # Measurement noise covariance R
@@ -239,7 +244,7 @@ class KalmanTracker(object):
             self.filter.measurementNoiseCov = np.eye(self.NDIM)
             self.filter.measurementNoiseCov[2:, 2:] *= 10.0
             # ~~~~ Till here is according to SORT
-        self.filter.statePost = np.r_[xywh2xysr(*bbox), np.zeros(self.NDIM-1)]
+        self.filter.statePost = np.r_[xywh2xysr(*bbox), np.zeros(self.NDIM)]
         # logging.info(f'kf.P:\n{self.filter.errorCovPost}')
         # logging.info(f'kf.Q:\n{self.filter.processNoiseCov}')
         # logging.info(f'kf.R:\n{self.filter.measurementNoiseCov}')
@@ -257,7 +262,8 @@ class KalmanTracker(object):
                         self._std_weight_pos * self.filter.statePost[3],
                         self._std_weight_vel * self.filter.statePost[3],
                         self._std_weight_vel * self.filter.statePost[3],
-                        1e-5]
+                        1e-5,
+                        self._std_weight_vel * self.filter.statePost[3]]
             self.filter.processNoiseCov = np.diag(np.square(proc_cov))
             # ~~ till here follows deepSORT
         if self.time_since_update > 0:
@@ -372,8 +378,8 @@ class SORTracker(object):
         logging.info(f'-----Unmatched old\n{old_unmatched}')
         for track_id, bbox_id in matched.items():
             self.trackers[track_id].update(bboxes[bbox_id])
-            prior = self.trackers[track_id].filter.statePre.squeeze()
-            posterior = self.trackers[track_id].filter.statePost.squeeze()
+            prior = self.trackers[track_id].filter.statePre.squeeze()[:7]
+            posterior = self.trackers[track_id].filter.statePost.squeeze()[:7]
             debug_data = np.concatenate(([self.frame_count, track_id], prior, posterior, posterior - prior))
             dump = ','.join([str(x) for x in debug_data])
             data_dump.info(dump)
@@ -411,7 +417,7 @@ def test():
     video = cv2.VideoCapture(vfile)
     win = 'Argos'
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
-    tracker = SORTracker(max_age=10, n_init=3, min_dist=0.3, deepsort=True)
+    tracker = SORTracker(max_age=10, n_init=3, min_dist=0.3, deepsort=False)
     tracked = []
     for frameno, dgrp in detections.groupby('frame'):
         v = dgrp.values[:, 1:].copy()
