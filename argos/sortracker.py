@@ -315,6 +315,3 @@ class SORTWidget(qw.QWidget):
     def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
         ret = {ii+1: bboxes[ii] for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(ret, pos)
-
-
-
