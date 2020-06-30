@@ -63,14 +63,7 @@ def rectpoly_points(p0: tuple, p1: tuple) -> tuple:
     w = max(x) - xleft
     ytop = min(y)
     h = max(y) - ytop
-    return rect2points(xleft, ytop, w, h)
-
-
-def rect2points(xleft: int, ytop: int, w: int, h: int):
-    """Convert topleft, width, height format rectangle into four clockwise
-    vertices"""
-    return ((xleft, ytop), (xleft, ytop + h),
-            (xleft + w, ytop + h), (xleft + w, ytop))
+    return rect2points(np.array((xleft, ytop, w, h)))
 
 
 def points2rect(p0: qc.QPointF, p1: qc.QPointF) -> qc.QRectF:
@@ -155,18 +148,26 @@ try:
     import pyximport
     pyximport.install(setup_args={"include_dirs": np.get_include()},
                       reload_support=True)
-    from cutility import (tlwh2xyrh, xyrh2tlwh,
+    from cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
                           rect_intersection,
                           rect_iou,
                           pairwise_distance)
 except:
+    def rect2points(rect: np.ndarray) -> np.ndarray:
+        """Convert topleft, width, height format rectangle into four anti-clockwise
+        vertices"""
+        return np.vstack([rect[:2],
+                     (rect[0], rect[1] + rect[3]),
+                     rect[:2] + rect[2:],
+                     (rect[0] + rect[2], rect[1])])
+
     def tlwh2xyrh(rect):
         """Convert top-left, width, height into center, aspect ratio, height"""
         return np.array((rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0,
                          rect[2] / float(rect[3]), rect[3]))
 
 
-    def xyrh2tlwh(rect):
+    def xyrh2tlwh(rect: np.ndarray) -> np.ndarray:
         """Convert centre, aspect ratio, height into top-left, width, height
         format"""
         w = rect[2] * rect[3]

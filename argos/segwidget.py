@@ -209,6 +209,65 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
     return [points_list[ii] for ii in good]
 
 
+def get_bounding_poly(points_list: List[np.ndarray],
+                      style: ut.OutlineStyle) -> List[np.ndarray]:
+    """This returns a list of bounding-polygons of the list of points
+    in `points_list`.
+
+    Parameters
+    ----------
+    points_list: list
+        List of point arrays masking each object.
+    style: argos.utility.OutlineStyle
+
+    Returns
+    -------
+    list[np.ndarray]
+        If `style` is OutlineStyle.fill - the same list of points without
+        doing anything.
+        If OutlineStyle.contour - the list of points representing the
+        contour of each entry in `points_list`.
+        If OutlineStyle.minrect - the list of vertices of the minimum-rotated
+        rectangles bounding each entry in `points_list`.
+        If OutlineStyle.bbox - the list of vertices of the axis-aligned
+        rectangles bounding each entry in `points_list`.
+
+    This does not strictly extract bounding points, as when `style` is
+    `OutlineStyle.filled`, it just returns the same set of points. Any client
+    using a uniform policy of drawing a polygon with the returned points will be
+    essentially filling it up.
+
+    I had to make a binary image with the specified points set to 1 because
+    that's what cv2.findContours takes.
+    """
+    if style == ut.OutlineStyle.fill:
+        return points_list
+    contours_list = []
+    for points in points_list:
+        # logging.debug('%r, %r', type(points), points)
+        if style == ut.OutlineStyle.minrect:
+            contours_list.append(
+                np.int0(cv2.boxPoints(cv2.minAreaRect(points))))
+            continue
+        rect = np.array(cv2.boundingRect(points))
+        if style == ut.OutlineStyle.bbox:
+            contours_list.append(ut.rect2points(rect))
+        elif style == ut.OutlineStyle.contour:
+            # Create a binary image with the size of the bounding box
+            binary_img = np.zeros((rect[3], rect[2]), dtype=np.uint8)
+            # Turn on the pixels for corresponding points
+            pos = points - rect[:2]
+            binary_img[pos[:, 1], pos[:, 0]] = 1
+            contours, hierarchy = cv2.findContours(binary_img,
+                                                   cv2.RETR_EXTERNAL,
+                                                   cv2.CHAIN_APPROX_SIMPLE)
+            # convert contour pixel positions back to image space
+            contours = [contour.squeeze() + rect[:2] for contour in contours]
+            contours_list += contours
+
+    return contours_list
+
+
 segstep_dict = OrderedDict([
     ('Final', argos.constants.SegStep.final),
     ('Blurred', argos.constants.SegStep.blur),
@@ -239,6 +298,12 @@ class SegWorker(qc.QObject):
 
     Attributes
     ----------
+    mode: argos.utility.OutlineStyle
+        If mode is bbox, the array of bounding boxes of the segmented objects is
+        sent out via ``sigProcessed``. If contour, an array containing the
+        points forming the contour of each object is sent out, each row of the
+        form (x, y, index) where x, y is a point on the contour, and index is
+        the index of the segmented object.
     kernel_width: int
         Width of Gaussian kernel used in blurring the image.
     kernel_sd: float
@@ -286,11 +351,14 @@ class SegWorker(qc.QObject):
     """
     # bboxes of segmented objects and frame no.
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    # outlines of segmented objects and frame no.
+    sigSegPolygons = qc.pyqtSignal(dict, int)
     # intermediate processed image and frame no.
     sigIntermediate = qc.pyqtSignal(np.ndarray, int)
 
-    def __init__(self):
+    def __init__(self, mode=ut.OutlineStyle.bbox):
         super(SegWorker, self).__init__()
+        self.outline_style = mode
         # blurring parameters
         self.kernel_width = 7
         self.kernel_sd = 1.0
@@ -317,6 +385,10 @@ class SegWorker(qc.QObject):
         self.hmax = 200
         self.intermediate = argos.constants.SegStep.final
         self.cmap = cv2.COLORMAP_JET
+
+    @qc.pyqtSlot(ut.OutlineStyle)
+    def setOutlineStyle(self, mode: ut.OutlineStyle) -> None:
+        self.outline_style = mode
 
     @qc.pyqtSlot(argos.constants.SegStep)
     def setIntermediateOutput(self, step: argos.constants.SegStep) -> None:
@@ -461,8 +533,13 @@ class SegWorker(qc.QObject):
             self.sigIntermediate.emit(
                 cv2.applyColorMap(binary, self.cmap),
                 pos)
-        bboxes = [cv2.boundingRect(points) for points in seg]
-        self.sigProcessed.emit(np.array(bboxes), pos)
+        if self.outline_style == ut.OutlineStyle.bbox:
+            bboxes = [cv2.boundingRect(points) for points in seg]
+            self.sigProcessed.emit(np.array(bboxes), pos)
+        elif self.outline_style == ut.OutlineStyle.contour:
+            contours = get_bounding_poly(seg, ut.OutlineStyle.contour)
+            bboxes = {ii: contour for ii, contour in enumerate(contours)}
+            self.sigSegPolygons.emit(bboxes, pos)
 
 
 class SegWidget(qw.QWidget):
@@ -472,8 +549,12 @@ class SegWidget(qw.QWidget):
     """
     # pass on the signal from worker
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    # pass on the signal from worker
+    sigSegPolygons = qc.pyqtSignal(dict, int)
     # pass on the image to worker
     sigProcess = qc.pyqtSignal(np.ndarray, int)
+
+    sigSetOutlineStyle = qc.pyqtSignal(ut.OutlineStyle)
 
     sigThreshMethod = qc.pyqtSignal(int)
     sigSegMethod = qc.pyqtSignal(argos.constants.SegmentationMethod)
@@ -703,7 +784,9 @@ class SegWidget(qw.QWidget):
             self.setIntermediateOutput)
         self.sigIntermediateOutput.connect(self.worker.setIntermediateOutput)
         self.sigProcess.connect(self.worker.process)
+        self.sigSetOutlineStyle.connect(self.worker.setOutlineStyle)
         self.worker.sigProcessed.connect(self.sigProcessed)
+        self.worker.sigSegPolygons.connect(self.sigSegPolygons)
         self.worker.sigIntermediate.connect(self._intermediate_win.setFrame)
         self.sigQuit.connect(self.saveSettings)
         ###################
@@ -711,6 +794,9 @@ class SegWidget(qw.QWidget):
         self.sigQuit.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
+
+    def setOutlineStyle(self, style: ut.OutlineStyle) -> None:
+        self.sigSetOutlineStyle.emit(style)
 
     @qc.pyqtSlot(str)
     def setThresholdMethod(self, text) -> None:

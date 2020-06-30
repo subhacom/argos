@@ -116,6 +116,7 @@ class VideoWidget(qw.QWidget):
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
+            self.sigReset.connect(self.display_widget.resetArenaAction.trigger)
             self.zoomInAction.triggered.connect(self.display_widget.zoomIn)
             self.zoomOutAction.triggered.connect(self.display_widget.zoomOut)
             self.resetArenaAction.triggered.connect(
@@ -145,6 +146,7 @@ class VideoWidget(qw.QWidget):
         self.spinbox.setRange(0, self.video_reader.frame_count-1)
         self.reader_thread.start()
         self.sigGotoFrame.emit(0)
+        self.sigReset.emit()
 
     @qc.pyqtSlot(dict, int)
     def setTracked(self, bboxes: dict, pos: int) -> None:

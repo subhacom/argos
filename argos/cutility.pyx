@@ -7,6 +7,15 @@ cimport numpy as np
 from argos.constants import OutlineStyle, DistanceMetric
 
 
+def rect2points(np.ndarray rect):
+    """Convert topleft, width, height format rectangle into four anti-clockwise
+    vertices"""
+    return np.vstack([rect[:2],
+                 (rect[0], rect[1] + rect[3]),
+                 rect[:2] + rect[2:],
+                 (rect[0] + rect[2], rect[1])])
+
+
 def tlwh2xyrh(np.ndarray rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
     cdef np.ndarray ret = np.asanyarray(rect, dtype=float)

@@ -171,6 +171,7 @@ class SORTracker(qc.QObject):
 
     @qc.pyqtSlot()
     def reset(self):
+        logging.debug('Resetting trackers.')
         self.trackers = {}
         self._next_id = 1
         self.frame_count = 0

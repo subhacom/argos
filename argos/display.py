@@ -8,6 +8,7 @@ import enum
 import logging
 import numpy as np
 import cv2
+from typing import Dict, List
 from PyQt5 import (
     QtCore as qc,
     QtGui as qg,
@@ -25,10 +26,12 @@ class DrawingGeom(enum.Enum):
 
 
 class Scene(qw.QGraphicsScene):
+    sigPolygons = qc.pyqtSignal(dict)
     def __init__(self, *args, **kwargs):
         super(Scene, self).__init__(*args, **kwargs)
         self.arena = None
         self.polygons = {}
+        self.item_dict = {}
         self._frame = None
         self.geom = DrawingGeom.arena
         self.color = qg.QColor(qc.Qt.green)
@@ -38,17 +41,47 @@ class Scene(qw.QGraphicsScene):
         self.snap_dist = 5
         self.incomplete_item = None
         self.points = []
+        self.selected = []
 
     def _clearIncomplete(self):
         if self.incomplete_item is not None:
             self.removeItem(self.incomplete_item)
             self.incomplete_item = None
 
-    def _clear(self):
-        self.polygons = {}
+    def clearItems(self):
         self.points = []
+        self.selected = []
+        self.polygons = {}
+        self.item_dict = {}
         self.incomplete_item = None
         self.clear()
+
+    @qc.pyqtSlot(list)
+    def setSelected(self, selected: List[int]) -> None:
+        """Set list of selected items"""
+        self.selected = selected
+        for key in selected:
+            item = self.item_dict[key]
+            item.setPen(qg.QPen(self.selected_color))
+
+    @qc.pyqtSlot()
+    def keepSelected(self):
+        """Remove all items except the selected ones"""
+        bad = set(self.item_dict.keys()) - set(self.selected)
+        for key in bad:
+            item = self.item_dict.pop(key)
+            self.removeItem(item)
+            self.polygons.pop(key)
+        self.sigPolygons.emit(self.polygons)
+
+    @qc.pyqtSlot()
+    def removeSelected(self):
+        for key in self.selected:
+            item = self.item_dict.pop(key)
+            self.removeItem(item)
+            self.polygons.pop(key)
+        self.selected = []
+        self.sigPolygons.emit(self.polygons)
 
     @qc.pyqtSlot()
     def setArenaMode(self):
@@ -69,9 +102,13 @@ class Scene(qw.QGraphicsScene):
         #self.clear()
         logging.debug(f'Diagonal sum of image: {frame.diagonal().sum()}')
 
-    def _addItem(self, item: qw.QGraphicsItem) -> None:
+    def _addItem(self, item: np.ndarray) -> None:
         index = 0 if len(self.polygons) == 0 else max(self.polygons.keys()) + 1
         self.polygons[index] = item
+        if self.geom == DrawingGeom.rectangle:
+            item = qw.QGraphicsRectItem(item)
+        elif self.geom == DrawingGeom.polygon:
+            item = qw.QGraphicsPolygonItem(item)
         pen = qg.QPen(self.color)
         pen.setWidth(self.linewidth)
         item.setPen(pen)
@@ -98,14 +135,15 @@ class Scene(qw.QGraphicsScene):
         #                     self.arena.y() + rect.y(),
         #                     rect.width(),
         #                     rect.height())
-        self._clear()
+        self.clearItems()
         self.arena = rect
         self.setSceneRect(qc.QRectF(rect))
 
     @qc.pyqtSlot()
     def resetArena(self):
+        logging.debug('Resetting arena')
         self.arena = None
-        self._clear()
+        self.clearItems()
         self.invalidate(self.sceneRect())
 
     def setLineWidth(self, width):
@@ -124,18 +162,40 @@ class Scene(qw.QGraphicsScene):
         self.incomplete_color = color
 
     @qc.pyqtSlot(dict)
-    def setRectangles(self, rects: dict) -> None:
+    def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
         """rects: a dict of id: (x, y, w, h)"""
         logging.debug(f'Received rectangles from {self.sender}')
-        self.polygons = {}
-        self._clear()
+        self.clearItems()
+        self.polygons = rects
         for id_, rect in rects.items():
             item = self.addRect(*rect, qg.QPen(self.color))
+            self.item_dict[id_] = item
             text = self.addText(str(id_))
             text.setDefaultTextColor(self.color)
             text.setPos(rect[0], rect[1])
-            self.polygons[id_] = item
+            self.item_dict[id_] = item
             logging.debug(f'Set {id_}: {rect}')
+
+    @qc.pyqtSlot(dict)
+    def setPolygons(self, polygons: Dict[int, np.ndarray]) -> None:
+        logging.debug(f'Received polygons from {self.sender()}')
+        self.clearItems()
+        for id_, poly in polygons.items():
+            if len(poly.shape) != 2 or poly.shape[0] < 3:
+                continue
+            self.polygons[id_] = poly
+            logging.debug(f'Polygon {id_} poins shape: {poly.shape}')
+            points = [qc.QPoint(point[0], point[1]) for point in poly]
+            polygon = qg.QPolygonF(points)
+            item = self.addPolygon(polygon, qg.QPen(self.color))
+            self.item_dict[id_] = item
+            text = self.addText(str(id_))
+            text.setDefaultTextColor(self.color)
+            pos = np.mean(poly, axis=0)
+            text.setPos(pos[0], pos[1])
+            self.item_dict[id_] = item
+            logging.debug(f'Set {id_}: {poly}')
+        self.sigPolygons.emit(self.polygons)
 
     def keyPressEvent(self, ev: qg.QKeyEvent) -> None:
         if ev.key() == qc.Qt.Key_Escape:
@@ -161,7 +221,7 @@ class Scene(qw.QGraphicsScene):
                     # logging.debug('DDDD %r', len(self.items()))
                     self._clearIncomplete()
                     # logging.debug('EEEE %r', len(self.items()))
-                    self._addItem(qw.QGraphicsRectItem(rect))
+                    self._addItem(rect)
                     # logging.debug('FFFF %r', len(self.items()))
             else:
                 self.points= [pos]
@@ -172,8 +232,7 @@ class Scene(qw.QGraphicsScene):
                 dvec = pos - self.points[0]
                 if dvec.manhattanLength() < self.snap_dist and \
                         len(self.points) > 2:
-                    self._addItem(qw.QGraphicsPolygonItem(
-                        qg.QPolygonF(self.points)))
+                    self._addItem(self.points)
                     self._clearIncomplete()
                     self.points = []
                     logging.debug(f'YYYY Number of items {len(self.items())}')
@@ -221,7 +280,8 @@ class Scene(qw.QGraphicsScene):
 
 class Display(qw.QGraphicsView):
 
-    sigSetRectangles = qc.pyqtSignal(dict, int)
+    sigSetRectangles = qc.pyqtSignal(dict)
+    sigSetPolygons = qc.pyqtSignal(dict)
 
     def __init__(self, *args, **kwargs):
         super(Display, self).__init__(*args, **kwargs)
@@ -229,6 +289,7 @@ class Display(qw.QGraphicsView):
         self._framenum = 0
         self.setScene(scene)
         self.sigSetRectangles.connect(scene.setRectangles)
+        self.sigSetPolygons.connect(scene.setPolygons)
         self.setMouseTracking(True)
         self.resetArenaAction = qw.QAction('Reset arena')
         self.resetArenaAction.triggered.connect(scene.resetArena)
@@ -236,6 +297,9 @@ class Display(qw.QGraphicsView):
         self.zoomInAction.triggered.connect(self.zoomIn)
         self.zoomOutAction = qw.QAction('Zoom out')
         self.zoomOutAction.triggered.connect(self.zoomOut)
+
+    def clearAll(self):
+        self.scene().clearAll()
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int):
@@ -255,7 +319,13 @@ class Display(qw.QGraphicsView):
     @qc.pyqtSlot(dict, int)
     def setRectangles(self, rect: dict, pos: int) -> None:
         logging.debug(f'Received signal from {self.sender()}, frame {pos}')
-        self.sigSetRectangles.emit(rect, pos)
+        self.sigSetRectangles.emit(rect)
+
+    @qc.pyqtSlot(dict, int)
+    def setPolygons(self, poly: dict, pos: int) -> None:
+        logging.debug(f'Received polygons from {self.sender()}, frame {pos}')
+        logging.debug(f'polygons: {poly}')
+        self.sigSetPolygons.emit(poly)
 
     def wheelEvent(self, a0: qg.QWheelEvent) -> None:
         """Zoom in or out when Ctrl+MouseWheel is used.
