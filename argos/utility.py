@@ -66,18 +66,18 @@ def rectpoly_points(p0: tuple, p1: tuple) -> tuple:
     return rect2points(np.array((xleft, ytop, w, h)))
 
 
-def points2rect(p0: qc.QPointF, p1: qc.QPointF) -> qc.QRectF:
+def points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
     """:returns a rectangle with diagonal corners `p0` and `p1`
     after scaling by `scale`. This will work with both top-left - bottom-right
     and bottom-left - top-right diagonals.
     """
-    x = p0.x(), p1.x()
-    y = p0.y(), p1.y()
+    x = p0[0], p1[0]
+    y = p0[1], p1[1]
     xleft = min(x)
     w = max(x) - xleft
     ytop = min(y)
     h = max(y) - ytop
-    return qc.QRectF(xleft, ytop, w, h)
+    return np.array((xleft, ytop, w, h))
 
 
 def poly2xyrh(vtx):

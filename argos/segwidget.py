@@ -536,6 +536,7 @@ class SegWorker(qc.QObject):
         if self.outline_style == ut.OutlineStyle.bbox:
             bboxes = [cv2.boundingRect(points) for points in seg]
             self.sigProcessed.emit(np.array(bboxes), pos)
+            logging.debug(f'Emitted bboxes for frame {pos}: {bboxes}')
         elif self.outline_style == ut.OutlineStyle.contour:
             contours = get_bounding_poly(seg, ut.OutlineStyle.contour)
             bboxes = {ii: contour for ii, contour in enumerate(contours)}

@@ -40,6 +40,7 @@ class YolactWorker(qc.QObject):
     # The even is passed for synchronizing display of image in videowidget
     # with the bounding boxes
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigInitialized = qc.pyqtSignal()
 
     def __init__(self):
         super(YolactWorker, self).__init__()
@@ -93,7 +94,7 @@ class YolactWorker(qc.QObject):
         logging.debug(yaml.dump(self.config))
 
     @qc.pyqtSlot(str)
-    def setWeights(self, filename):
+    def setWeights(self, filename, ):
         if filename == '':
             raise YolactException('Empty filename for network weights')
         self.weights_file = filename
@@ -111,6 +112,7 @@ class YolactWorker(qc.QObject):
                 self.net = self.net.cuda()
         toc = time.perf_counter_ns()
         logging.debug('Time to load weights %f s', 1e-9 * (toc - tic))
+        self.sigInitialized.emit()
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int):
@@ -125,6 +127,7 @@ class YolactWorker(qc.QObject):
         Roughly high score indicates strong belief that the object belongs to
         the identified class.
         """
+        logging.debug(f'Received frame {pos}')
         if self.net is None:
             raise YolactException('Network not initialized')
         # Partly follows yolact eval.py
@@ -166,6 +169,7 @@ class YolactWorker(qc.QObject):
             logging.debug('Time to process single _image: %f s',
                           1e-9 * (toc - tic))
             self.sigProcessed.emit(boxes, pos)
+            logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
 
 
 class YolactWidget(qw.QWidget):
@@ -293,6 +297,10 @@ class YolactWidget(qw.QWidget):
         settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigWeightsFile.emit(filename)
 
+    @qc.pyqtSlot()
+    def setInitialized(self):
+        self.initialized = True
+
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int) -> None:
         """If network has not been instantiated, ask the user to provide
@@ -300,10 +308,12 @@ class YolactWidget(qw.QWidget):
 
         `pos` - for debugging - should be frame no.
         """
+        logging.debug(f'{self.__class__.__name__}: Receivec frame {pos}')
         if self.worker.net is not None:
             self.sigProcess.emit(image, pos)
-        elif self.ignore:  # Failed to load config and weights, don't bother
-            self.sigProcessed.emit(np.array([]), pos)
+        # elif self.ignore:  # Failed to load config and weights, don't bother
+        #     logging.debug('Ignoring input')
+        #     self.sigProcessed.emit(np.array([]), pos)
         else:
             try:
                 self.loadConfig()

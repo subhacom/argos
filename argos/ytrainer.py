@@ -52,6 +52,9 @@ class SegDisplay(Display):
         self.seglist.clear()
         self.seglist.addItems([str(key) for key in segdict.keys()])
 
+    def setRoiMode(self):
+        self.scene().setRoiPolygonMode()
+
 
 class TrainingWidget(qw.QMainWindow):
     sigQuit = qc.pyqtSignal()
@@ -84,6 +87,7 @@ class TrainingWidget(qw.QMainWindow):
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.seg_dock)
         self.seg_dock.setWidget(self.seg_widget)
         self.display_widget = SegDisplay()
+        self.display_widget.setRoiMode()
         self.seg_widget.sigSegPolygons.connect(
             self.display_widget.sigSetPolygons)
         self.display_widget.sigPolygons.connect(self.setSegmented)

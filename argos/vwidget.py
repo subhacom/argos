@@ -65,7 +65,7 @@ class VideoWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def openVideo(self):
-        self.timer.stop()
+        self.pauseVideo()
         directory = settings.value('video/directory', '.')
         fname = qw.QFileDialog.getOpenFileName(self, 'Open video',
                                                directory=directory)
@@ -116,6 +116,7 @@ class VideoWidget(qw.QWidget):
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
+            self.display_widget.sigPolygonsSet.connect(self.startTimer)
             self.sigReset.connect(self.display_widget.resetArenaAction.trigger)
             self.zoomInAction.triggered.connect(self.display_widget.zoomIn)
             self.zoomOutAction.triggered.connect(self.display_widget.zoomOut)
@@ -151,8 +152,11 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot(dict, int)
     def setTracked(self, bboxes: dict, pos: int) -> None:
         self.sigSetTracked.emit(bboxes, pos)
+
+    @qc.pyqtSlot()
+    def startTimer(self):
         if self.playAction.isChecked():
-            logging.debug('Starting timer ...')
+            logging.debug(f'Starting timer for frame')
             self.timer.start(1000.0 / self.video_reader.fps)
 
     @qc.pyqtSlot(np.ndarray, int)
@@ -180,6 +184,8 @@ class VideoWidget(qw.QWidget):
         if play:
             time = 1000.0 / self.video_reader.fps
             self.timer.start(time)
+        else:
+            self.timer.stop()
 
     @qc.pyqtSlot()
     def pauseVideo(self):

@@ -240,11 +240,13 @@ class SORTracker(qc.QObject):
 
     @qc.pyqtSlot(dict, int)
     def track(self, bboxes: dict, pos: int) -> None:
+        logging.debug(f'Received from {self.sender()} bboxes: {bboxes}')
         _ = qc.QMutexLocker(self._mutex)
         if len(bboxes) == 0:
             ret = {}
         else:
             ret = self.update(bboxes)
+        logging.debug(f'SORTracker: frame {pos}, Rectangles: \n{ret}')
         self.sigTracked.emit(ret, pos)
         if self._wait_cond is not None:
             logging.debug(f'Waiting on condition')
@@ -316,3 +318,10 @@ class SORTWidget(qw.QWidget):
     def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
         ret = {ii+1: bboxes[ii] for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(ret, pos)
+
+    @qc.pyqtSlot(np.ndarray, int)
+    def track(self, bboxes: np.ndarray, pos: int) -> None:
+        """Just to intercept signal source for debugging"""
+        logging.debug(f'Received frame {pos} from {self.sender()} bboxes: {bboxes}')
+        self.sigTrack.emit(bboxes, pos)
+
