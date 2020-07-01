@@ -14,7 +14,8 @@ import json
 import yaml
 from PyQt5 import (
     QtCore as qc,
-    QtWidgets as qw)
+    QtWidgets as qw,
+    QtGui as qg)
 
 from argos import utility as ut
 from argos.display import Display
@@ -64,6 +65,7 @@ class TrainingWidget(qw.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
         self._waiting = False
+        self.saved = True
         self.image_dir = settings.value('training/imagedir', '.')
         self.image_files = []
         self.image_index = -1
@@ -222,10 +224,13 @@ class TrainingWidget(qw.QMainWindow):
         image = cv2.imread(fname)
         self.sigImage.emit(image, index)
         if index not in self.seg_dict:
+            self.saved = False
             self.sigSegment.emit(image, index)
             self._waiting = True
         else:
             self.sigSegmented.emit(self.seg_dict[index], index)
+        self.statusBar().showMessage(
+            f'Current image: {os.path.basename(fname)}')
 
     def nextFrame(self):
         self.gotoFrame(self.image_index + 1)
@@ -244,6 +249,22 @@ class TrainingWidget(qw.QMainWindow):
         self.sigQuit.emit()
         settings.sync()
         logging.debug('Saved settings')
+
+    def closeEvent(self, a0: qg.QCloseEvent) -> None:
+        if self.saved:
+            a0.accept()
+        else:
+            ret = qw.QMessageBox.question(self, 'Save segmented data',
+                                          'Data not saved. Are you sure to quit?'
+                                          ' If not, select "No" and use the'
+                                          ' "Export training/validation data"'
+                                          ' button to save the data.',
+                                          qw.QMessageBox.Yes,
+                                          qw.QMessageBox.No)
+            if ret == qw.QMessageBox.Yes:
+                a0.accept()
+            else:
+                a0.ignore()
 
     def clearSegmentation(self):
         self.seg_dict = {}
@@ -301,8 +322,10 @@ class TrainingWidget(qw.QMainWindow):
 
         size_label = qw.QLabel('Maximum image size')
         size_text = qw.QLineEdit(str(self.max_size))
+
         def setMaxSize():
             self.max_size = int(size_text.text())
+
         size_text.editingFinished.connect(setMaxSize)
         layout.addRow(size_label, size_text)
         val_label = qw.QLabel('Use % of images for validation')
@@ -378,6 +401,7 @@ class TrainingWidget(qw.QMainWindow):
                                    f'Training images: {train_dir}\n'
                                    f'Validation images: {val_dir}\n'
                                    f'Yolact configuration: {yolact_file}')
+        self.saved = True
 
     def dumpCocoJson(self, filepaths, directory, ts):
         coco = {
@@ -424,19 +448,21 @@ class TrainingWidget(qw.QMainWindow):
             ylist = [0]
             if img.shape[0] > self.max_size:
                 if img.shape[0] >= self.max_size * 1.5:
-                    ylist = random.sample(range(img.shape[0] - self.max_size), 4)
+                    ylist = random.sample(range(img.shape[0] - self.max_size),
+                                          4)
                 else:
                     ylist = [img.shape[0] - self.max_size]
             if img.shape[1] > self.max_size:
                 if img.shape[1] >= self.max_size * 1.5:
-                    xlist = random.sample(range(img.shape[1] - self.max_size), 4)
+                    xlist = random.sample(range(img.shape[1] - self.max_size),
+                                          4)
                 else:
                     xlist = [img.shape[1] - self.max_size]
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
                 tmp_img = img[y: y + self.max_size, x: x + self.max_size]
                 fname = f'{prefix}_{jj}.png'
                 cv2.imwrite(os.path.join(imdir, fname),
-                        tmp_img)
+                            tmp_img)
                 coco['images'].append({
                     "license": 0,
                     "url": None,
@@ -450,7 +476,8 @@ class TrainingWidget(qw.QMainWindow):
                 for seg in self.seg_dict[findex].values():
                     bbox = [int(xx) for xx in cv2.boundingRect(seg)]
                     if bbox[0] < y or bbox[0] + bbox[2] > y + self.max_size \
-                        or bbox[1] < x or bbox[1] + bbox[3] > x + self.max_size:
+                            or bbox[1] < x or bbox[1] + bbox[
+                        3] > x + self.max_size:
                         continue
                     bbox[0] -= y
                     bbox[1] -= x
