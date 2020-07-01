@@ -94,7 +94,7 @@ class YolactWorker(qc.QObject):
         logging.debug(yaml.dump(self.config))
 
     @qc.pyqtSlot(str)
-    def setWeights(self, filename, ):
+    def setWeights(self, filename: str) -> None:
         if filename == '':
             raise YolactException('Empty filename for network weights')
         self.weights_file = filename
@@ -296,6 +296,10 @@ class YolactWidget(qw.QWidget):
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigWeightsFile.emit(filename)
+        indicator = qw.QProgressDialog('Setting up neural net', 'Cancel', 0, 0, self)
+        indicator.setWindowModality(qc.Qt.WindowModal)
+        self.worker.sigInitialized.connect(indicator.reset)
+        indicator.show()
 
     @qc.pyqtSlot()
     def setInitialized(self):
@@ -309,19 +313,14 @@ class YolactWidget(qw.QWidget):
         `pos` - for debugging - should be frame no.
         """
         logging.debug(f'{self.__class__.__name__}: Receivec frame {pos}')
-        if self.worker.net is not None:
-            self.sigProcess.emit(image, pos)
-        # elif self.ignore:  # Failed to load config and weights, don't bother
-        #     logging.debug('Ignoring input')
-        #     self.sigProcessed.emit(np.array([]), pos)
-        else:
+        if self.worker.net is None:
             try:
                 self.loadConfig()
                 self.loadWeights()
             except YolactException as err:
                 qw.QMessageBox.critical(self, 'Could not open file', str(err))
-            finally:
-                self.ignore = True
+                return
+        self.sigProcess.emit(image, pos)
 
     def __del__(self):
         settings = qc.QSettings()
