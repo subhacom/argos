@@ -20,6 +20,7 @@ from PyQt5 import (
 from argos import utility as ut
 from argos.display import Display
 from argos.segwidget import SegWidget
+from yolact import config as yconfig
 
 settings = ut.init()
 
@@ -75,6 +76,12 @@ class TrainingWidget(qw.QMainWindow):
         self.training_dir = 'training'
         self.validation_dir = 'validation'
         self.out_dir = settings.value('training/outdir', '.')
+        self.baseconfig_name = ''
+        for name in dir(yconfig):
+            if name.startswith('yolact') and name.endswith('config'):
+                self.baseconfig_name = name
+                break
+        self.baseconfig = getattr(yconfig, self.baseconfig_name)
         self.weights_file = ''
         self.config_file = ''
         self.category_name = 'object'
@@ -103,6 +110,7 @@ class TrainingWidget(qw.QMainWindow):
         self.sigSegmented.connect(self.display_widget.setPolygons)
         self.sigQuit.connect(self.seg_widget.sigQuit)
         self.openImageDir()
+        self.statusBar().showMessage('Press `Next image` to start segmenting')
 
     def _makeFileDock(self):
         self.file_dock = qw.QDockWidget('Files/Dirs')
@@ -120,6 +128,7 @@ class TrainingWidget(qw.QMainWindow):
         self.file_model.setFilter(qc.QDir.NoDotAndDotDot | qc.QDir.Files)
         self.file_view.setModel(self.file_model)
         self.file_view.setRootIndex(self.file_model.setRootPath(self.image_dir))
+        self.file_view.selectionModel().selectionChanged.connect(self.handleFileSelectionChanged)
         layout = qw.QVBoxLayout()
         layout.addWidget(self.dir_widget)
         layout.addWidget(self.file_view)
@@ -242,6 +251,14 @@ class TrainingWidget(qw.QMainWindow):
     def prevFrame(self):
         self.gotoFrame(self.image_index - 1)
 
+    def handleFileSelectionChanged(self, selection):
+        indices = selection.indexes()
+        if len(indices) == 0:
+            return
+        fname = self.file_model.data(indices[0])
+        index = self.image_files.index(os.path.join(self.image_dir, fname))
+        self.gotoFrame(index)
+
     @qc.pyqtSlot(dict)
     def setSegmented(self, segdict: Dict[int, np.ndarray]) -> None:
         """Store the list of segmented objects for frame"""
@@ -325,13 +342,22 @@ class TrainingWidget(qw.QMainWindow):
         layout.addRow(cat_label, cat_text)
 
         size_label = qw.QLabel('Maximum image size')
-        size_text = qw.QLineEdit(str(self.max_size))
-
-        def setMaxSize():
-            self.max_size = int(size_text.text())
-
-        size_text.editingFinished.connect(setMaxSize)
+        size_text = qw.QLabel(str(self.max_size))
         layout.addRow(size_label, size_text)
+
+        baseconfig_label = qw.QLabel('Neural-Net base configuration')
+        baseconfig_combo = qw.QComboBox()
+        for name in dir(yconfig):
+            if name.startswith('yolact') and name.endswith('config'):
+                baseconfig_combo.addItem(name)
+        def setBaseconfig(text):
+            self.baseconfig_name = text
+            self.baseconfig = getattr(yconfig, text)
+            size_text.setText(str(self.baseconfig.max_size))
+        baseconfig_combo.currentTextChanged.connect(setBaseconfig)
+        self.baseconfig_name = baseconfig_combo.currentText()
+        layout.addRow(baseconfig_label, baseconfig_combo)
+
         val_label = qw.QLabel('Use % of images for validation')
         val_text = qw.QLineEdit(str(int(self.validation_frac * 100)))
 
@@ -342,9 +368,10 @@ class TrainingWidget(qw.QMainWindow):
         layout.addRow(val_label, val_text)
         ok_button = qw.QPushButton('OK')
         ok_button.setDefault(True)
+        ok_button.clicked.connect(dialog.accept)
         layout.addWidget(ok_button)
         dialog.setLayout(layout)
-        ret = dialog.result()
+        ret = dialog.exec_()
         return ret
 
     def exportSegmentation(self):
@@ -357,6 +384,9 @@ class TrainingWidget(qw.QMainWindow):
                                     f'Directory {train_dir} already exists.'
                                     f' Delete it or specify another output'
                                     f' directory')
+            return
+        except FileNotFoundError as ferr:
+            qw.QMessageBox.critical(self, 'Path does not exist', str(ferr))
             return
         val_dir = f'{self.out_dir}/validation'
         try:
@@ -382,6 +412,7 @@ class TrainingWidget(qw.QMainWindow):
         training_list = random.sample(self.image_files, training_count)
         self.dumpCocoJson(training_list, train_dir, ts)
         yolact_config = {'name': f'{self.category_name}_weights',
+                         'base': self.baseconfig_name,
                          'dataset': {'name': self.description,
                                      'train_info': f'{train_dir}/annotations.json',
                                      'valid_info': f'{val_dir}/annotations.json',
@@ -401,10 +432,18 @@ class TrainingWidget(qw.QMainWindow):
         if validation_count > 0:
             validation_list = random.sample(self.image_files, validation_count)
             self.dumpCocoJson(validation_list, val_dir, ts)
+        command = f'python -m yolact.train --config={yolact_file} --save_folder={self.out_dir}'
         qw.QMessageBox.information(self, 'Data saved',
-                                   f'Training images: {train_dir}\n'
-                                   f'Validation images: {val_dir}\n'
-                                   f'Yolact configuration: {yolact_file}')
+                                   f'Training images: {train_dir}<br>'
+                                   f'Validation images: {val_dir}<br>'
+                                   f'Yolact configuration: {yolact_file}<br>'
+                                   f'Now you can train yolact by running this command (copied to clipboard):<br>'
+                                   f'<b>{command}</b><br>'
+                                   f'But you must copy the initial weights file {self.baseconfig.backbone.path} to {self.out_dir} before starting<br>'
+                                   f'For finer control over training settings see yolact help:'
+                                   f'`python -m yolact.train --help`'
+                                   )
+        qw.qApp.clipboard().setText(command)
         self.saved = True
 
     def dumpCocoJson(self, filepaths, directory, ts):
@@ -463,10 +502,13 @@ class TrainingWidget(qw.QMainWindow):
                 else:
                     xlist = [img.shape[1] - self.max_size]
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
-                tmp_img = img[y: y + self.max_size, x: x + self.max_size]
+                sq_img = np.zeros((self.max_size, self.max_size, 3),
+                                  dtype=np.uint8)
+
+                sq_img[:, :, :] = img[y: y + self.max_size, x: x + self.max_size]
                 fname = f'{prefix}_{jj}.png'
                 cv2.imwrite(os.path.join(imdir, fname),
-                            tmp_img)
+                            sq_img)
                 coco['images'].append({
                     "license": 0,
                     "url": None,
