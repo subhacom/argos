@@ -345,6 +345,7 @@ class TrainingWidget(qw.QMainWindow):
         self.image_index = index
         fname = self.image_files[index]
         image = cv2.imread(fname)
+        self.display_widget.resetArenaAction.trigger()
         self.sigImage.emit(image, index)
         if index not in self.seg_dict:
             self.saved = False
@@ -353,7 +354,7 @@ class TrainingWidget(qw.QMainWindow):
         else:
             self.sigSegmented.emit(self.seg_dict[index], index)
         self.statusBar().showMessage(
-            f'Current image: {os.path.basename(fname)}')
+            f'Current image: {os.path.basename(fname)}. [Image {self.image_index + 1} of {len(self.image_files)}]')
 
     def nextFrame(self):
         self.gotoFrame(self.image_index + 1)
