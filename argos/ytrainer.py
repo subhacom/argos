@@ -156,9 +156,15 @@ class TrainingWidget(qw.QMainWindow):
         self.prev_button = qw.QToolButton()
         self.prev_button.setDefaultAction(self.prevFrameAction)
         layout.addWidget(self.prev_button)
-        self.clear_button = qw.QToolButton()
-        self.clear_button.setDefaultAction(self.clearSegmentationAction)
-        layout.addWidget(self.clear_button)
+        self.resegment_button = qw.QToolButton()
+        self.resegment_button.setDefaultAction(self.resegmentAction)
+        layout.addWidget(self.resegment_button)
+        self.clear_cur_button = qw.QToolButton()
+        self.clear_cur_button.setDefaultAction(self.clearCurrentAction)
+        layout.addWidget(self.clear_cur_button)
+        self.clear_all_button = qw.QToolButton()
+        self.clear_all_button.setDefaultAction(self.clearAllAction)
+        layout.addWidget(self.clear_all_button)
         self.export_button = qw.QToolButton()
         self.export_button.setDefaultAction(self.exportSegmentationAction)
         layout.addWidget(self.export_button)
@@ -179,8 +185,13 @@ class TrainingWidget(qw.QMainWindow):
         self.nextFrameAction.triggered.connect(self.nextFrame)
         self.prevFrameAction = qw.QAction('Previous image')
         self.prevFrameAction.triggered.connect(self.prevFrame)
-        self.clearSegmentationAction = qw.QAction('Reset segmentation')
-        self.clearSegmentationAction.triggered.connect(self.clearSegmentation)
+        self.resegmentAction = qw.QAction('Re-segment current image')
+        self.resegmentAction.triggered.connect(
+            self.resegmentCurrent)
+        self.clearCurrentAction = qw.QAction('Clear current segmentation')
+        self.clearCurrentAction.triggered.connect(self.clearCurrent)
+        self.clearAllAction = qw.QAction('Reset all segmentation')
+        self.clearAllAction.triggered.connect(self.clearAllSegmentation)
         self.exportSegmentationAction = qw.QAction(
             'Export training/validation data')
         self.exportSegmentationAction.triggered.connect(self.exportSegmentation)
@@ -287,8 +298,16 @@ class TrainingWidget(qw.QMainWindow):
             else:
                 a0.ignore()
 
-    def clearSegmentation(self):
+    def clearAllSegmentation(self):
         self.seg_dict = {}
+
+    def resegmentCurrent(self):
+        self.seg_dict.pop(self.image_index, None)
+        self.gotoFrame(self.image_index)
+
+    def clearCurrent(self):
+        self.seg_dict.pop(self.image_index, None)
+        self.display_widget.setPolygons({}, self.image_index)
 
     def _makeCocoDialog(self):
         dialog = qw.QDialog(self)
@@ -481,7 +500,7 @@ class TrainingWidget(qw.QMainWindow):
         img_id = 0
         for fpath in filepaths:
             findex = self.image_files.index(fpath)
-            if findex not in self.seg_dict:
+            if findex not in self.seg_dict or len(self.seg_dict[findex]) == 0:
                 continue
             img = cv2.imread(fpath)
             fname = os.path.basename(fpath)
@@ -505,7 +524,7 @@ class TrainingWidget(qw.QMainWindow):
                 sq_img = np.zeros((self.max_size, self.max_size, 3),
                                   dtype=np.uint8)
 
-                sq_img[:, :, :] = img[y: y + self.max_size, x: x + self.max_size]
+                sq_img[:self.max_size, :self.max_size, :] = img[y: y + self.max_size, x: x + self.max_size, :]
                 fname = f'{prefix}_{jj}.png'
                 cv2.imwrite(os.path.join(imdir, fname),
                             sq_img)

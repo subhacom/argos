@@ -34,6 +34,7 @@ class Scene(qw.QGraphicsScene):
         self.arena = None
         self.polygons = {}
         self.item_dict = {}
+        self.label_dict = {}
         self._frame = None
         self.geom = DrawingGeom.arena
         self.color = qg.QColor(qc.Qt.green)
@@ -62,17 +63,21 @@ class Scene(qw.QGraphicsScene):
     def setSelected(self, selected: List[int]) -> None:
         """Set list of selected items"""
         self.selected = selected
-        for key in selected:
-            item = self.item_dict[key]
-            item.setPen(qg.QPen(self.selected_color))
+        for key in self.item_dict:
+            if key in selected:
+                self.item_dict[key].setPen(qg.QPen(self.selected_color))
+                self.label_dict[key].setDefaultTextColor(self.selected_color)
+            else:
+                self.item_dict[key].setPen(qg.QPen(self.color))
+                self.label_dict[key].setDefaultTextColor(self.color)
 
     @qc.pyqtSlot()
     def keepSelected(self):
         """Remove all items except the selected ones"""
         bad = set(self.item_dict.keys()) - set(self.selected)
         for key in bad:
-            item = self.item_dict.pop(key)
-            self.removeItem(item)
+            self.removeItem(self.item_dict.pop(key))
+            self.removeItem(self.label_dict.pop(key))
             self.polygons.pop(key)
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
@@ -80,8 +85,8 @@ class Scene(qw.QGraphicsScene):
     @qc.pyqtSlot()
     def removeSelected(self):
         for key in self.selected:
-            item = self.item_dict.pop(key)
-            self.removeItem(item)
+            self.removeItem(self.item_dict.pop(key))
+            self.removeItem(self.label_dict.pop(key))
             self.polygons.pop(key)
         self.selected = []
         self.sigPolygons.emit(self.polygons)
@@ -118,8 +123,10 @@ class Scene(qw.QGraphicsScene):
         pen.setWidth(self.linewidth)
         item.setPen(pen)
         self.addItem(item)
+        self.item_dict[index] = item
         bbox = item.sceneBoundingRect()
         text = self.addText(str(index))
+        self.label_dict[index] = text
         text.setDefaultTextColor(self.color)
         logging.debug(f'Scene bounding rect of {index}={bbox}')
         text.setPos(bbox.x(), bbox.y())
@@ -179,6 +186,7 @@ class Scene(qw.QGraphicsScene):
             item = self.addRect(*rect, qg.QPen(self.color))
             self.item_dict[id_] = item
             text = self.addText(str(id_))
+            self.label_dict[id_] = text
             text.setDefaultTextColor(self.color)
             text.setPos(rect[0], rect[1])
             self.item_dict[id_] = item
@@ -200,6 +208,7 @@ class Scene(qw.QGraphicsScene):
             item = self.addPolygon(polygon, qg.QPen(self.color))
             self.item_dict[id_] = item
             text = self.addText(str(id_))
+            self.label_dict[id_] = text
             text.setDefaultTextColor(self.color)
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
