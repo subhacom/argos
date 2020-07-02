@@ -92,6 +92,10 @@ class Scene(qw.QGraphicsScene):
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
+    @qc.pyqtSlot(DrawingGeom)
+    def setMode(self, mode: DrawingGeom) -> None:
+        self.geom = mode
+
     @qc.pyqtSlot()
     def setArenaMode(self):
         self.geom = DrawingGeom.arena
@@ -296,7 +300,7 @@ class Scene(qw.QGraphicsScene):
             self.setSceneRect(arena)
         else:
             arena = qc.QRectF(*self.arena)
-        logging.debug(f'arena: {arena}, {self.arena}, param: {rect}')
+        # logging.debug(f'arena: {arena}, {self.arena}, param: {rect}')
         painter.drawImage(arena, self._frame, arena)
 
 

@@ -6,6 +6,7 @@ import sys
 import logging
 import os
 import random
+import pickle
 from typing import Dict
 from datetime import datetime
 import numpy as np
@@ -18,6 +19,7 @@ from PyQt5 import (
     QtGui as qg)
 
 from argos import utility as ut
+from argos import display
 from argos.display import Display
 from argos.segwidget import SegWidget
 from yolact import config as yconfig
@@ -32,6 +34,7 @@ class SegDisplay(Display):
     def __init__(self, *args, **kwargs):
         super(SegDisplay, self).__init__(*args, **kwargs)
         self.seglist = qw.QListWidget()
+        self.seglist.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
         self.seglist.setSelectionMode(self.seglist.ExtendedSelection)
         self.seglist.itemSelectionChanged.connect(self.sendSelection)
         self.sigItemSelectionChanged.connect(self.scene().setSelected)
@@ -52,9 +55,18 @@ class SegDisplay(Display):
     def updateSegList(self, segdict: Dict[int, np.ndarray]) -> None:
         self.seglist.clear()
         self.seglist.addItems([str(key) for key in segdict.keys()])
+        self.seglist.updateGeometry()
 
     def setRoiMode(self):
         self.scene().setRoiPolygonMode()
+
+    @qc.pyqtSlot(np.ndarray, int)
+    def setBboxes(self, bboxes: Dict[int, np.ndarray], pos: int):
+        """Method for converting x,y,w,h bbox into series of verices compatible
+        with polygon settings"""
+        polygons = {ii: ut.rect2points(bboxes[ii, :])
+                    for ii in range(bboxes.shape[0])}
+        self.setPolygons(polygons, pos)
 
 
 class TrainingWidget(qw.QMainWindow):
@@ -65,6 +77,8 @@ class TrainingWidget(qw.QMainWindow):
     sigImage = qc.pyqtSignal(np.ndarray, int)
     # send refined segmentation data
     sigSegmented = qc.pyqtSignal(dict, int)
+    # set geometry mode of drawing widget
+    sigSetDisplayGeom = qc.pyqtSignal(display.DrawingGeom)
 
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
@@ -87,18 +101,17 @@ class TrainingWidget(qw.QMainWindow):
         self.category_name = 'object'
         self.seg_dict = {}  # dict containing segmentation info for each file
         self.seg_widget = SegWidget()
-        self.seg_widget.setOutlineStyle(ut.OutlineStyle.contour)
+        self.seg_widget.outline_combo.setCurrentText('contour')
+        self.seg_widget.setOutlineStyle('contour')
         self.seg_dock = qw.QDockWidget('Segmentation settings')
         self.seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                       qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.seg_dock)
-        self.seg_dock.setWidget(self.seg_widget)
+        scroll = qw.QScrollArea()
+        scroll.setWidget(self.seg_widget)
+        self.seg_dock.setWidget(scroll)
         self.display_widget = SegDisplay()
         self.display_widget.setRoiMode()
-        self.seg_widget.sigSegPolygons.connect(
-            self.display_widget.sigSetPolygons)
-        self.display_widget.sigPolygons.connect(self.setSegmented)
-        # self.display_widget.scene().setRoiRectMode()
         self.setCentralWidget(self.display_widget)
         self._makeActions()
         self._makeFileDock()
@@ -106,9 +119,27 @@ class TrainingWidget(qw.QMainWindow):
         self._makeMenuBar()
         self.sigImage.connect(self.display_widget.setFrame)
         self.sigSegment.connect(self.seg_widget.sigProcess)
-        self.seg_widget.sigProcessed.connect(self.display_widget.setPolygons)
+        self.seg_widget.sigSegPolygons.connect(
+            self.display_widget.sigSetPolygons)
+        self.display_widget.sigPolygons.connect(self.setSegmented)
+        self.seg_widget.sigProcessed.connect(self.display_widget.setBboxes)
+        # Note the difference between `sigSegment` and `sigSegmented`
+        # - this TrainingWidget's `sigSegment` sends the image to the
+        #   segmentation widget
+        # - segmentation widget's `sigSegPolygons` sends the segmented polygons
+        #   to display widget
+        # - display widget passes the segmented polygon dict to this
+        #   TrainingWidget via `sigPolygons` into `setSegmented` slot
+        # - if seg widget is passing bboxes, then it sends them via
+        #   `sigProcessed` into display widget's `setBboxes` slot
+        #   - display widget's setBboxes slot converts the rects into polygon
+        #       vtx and passes them via `sigPolygons`
+        # - when the frame has been already segmented and is available in
+        #   `seg_dict`, `sigSegmented` sends segmented polygons to
+        #   displaywidget's `setPolygons` slot directly
         self.sigSegmented.connect(self.display_widget.setPolygons)
         self.sigQuit.connect(self.seg_widget.sigQuit)
+        self._makeShortcuts()
         self.openImageDir()
         self.statusBar().showMessage('Press `Next image` to start segmenting')
 
@@ -124,6 +155,7 @@ class TrainingWidget(qw.QMainWindow):
         self.dir_widget = qw.QWidget()
         self.dir_widget.setLayout(layout)
         self.file_view = qw.QListView()
+        self.file_view.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
         self.file_model = qw.QFileSystemModel()
         self.file_model.setFilter(qc.QDir.NoDotAndDotDot | qc.QDir.Files)
         self.file_view.setModel(self.file_model)
@@ -134,40 +166,59 @@ class TrainingWidget(qw.QMainWindow):
         layout.addWidget(self.file_view)
         self.fwidget = qw.QWidget()
         self.fwidget.setLayout(layout)
-        self.file_dock.setWidget(self.fwidget)
+        scroll = qw.QScrollArea()
+        scroll.setWidget(self.fwidget)
+        self.file_dock.setWidget(scroll)
         self.file_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                        qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.file_dock)
 
     def _makeSegDock(self):
-        layout = qw.QVBoxLayout()
-        layout.addWidget(self.display_widget.seglist)
+        self.next_button = qw.QToolButton()
+        self.next_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
+        self.next_button.setDefaultAction(self.nextFrameAction)
+
+        self.prev_button = qw.QToolButton()
+        self.prev_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
+        self.prev_button.setDefaultAction(self.prevFrameAction)
+        self.resegment_button = qw.QToolButton()
+        self.resegment_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
+        self.resegment_button.setDefaultAction(self.resegmentAction)
+        self.clear_cur_button = qw.QToolButton()
+        self.clear_cur_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
+        self.clear_cur_button.setDefaultAction(self.clearCurrentAction)
+        self.clear_all_button = qw.QToolButton()
+        self.clear_all_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
+        self.clear_all_button.setDefaultAction(self.clearAllAction)
+        # self.export_button = qw.QToolButton()
+        # self.export_button.setDefaultAction(self.exportSegmentationAction)
+        # layout.addWidget(self.export_button)
         self.keep_button = qw.QToolButton()
+        self.keep_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
         self.keep_button.setDefaultAction(
             self.display_widget.keepSelectedAction)
-        layout.addWidget(self.keep_button)
         self.remove_button = qw.QToolButton()
+        self.remove_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                         qw.QSizePolicy.MinimumExpanding)
         self.remove_button.setDefaultAction(
             self.display_widget.removeSelectedAction)
+
+        layout = qw.QVBoxLayout()
+        layout.addWidget(self.display_widget.seglist, 1)
+
+        layout.addWidget(self.keep_button)
         layout.addWidget(self.remove_button)
-        self.next_button = qw.QToolButton()
-        self.next_button.setDefaultAction(self.nextFrameAction)
         layout.addWidget(self.next_button)
-        self.prev_button = qw.QToolButton()
-        self.prev_button.setDefaultAction(self.prevFrameAction)
         layout.addWidget(self.prev_button)
-        self.resegment_button = qw.QToolButton()
-        self.resegment_button.setDefaultAction(self.resegmentAction)
         layout.addWidget(self.resegment_button)
-        self.clear_cur_button = qw.QToolButton()
-        self.clear_cur_button.setDefaultAction(self.clearCurrentAction)
         layout.addWidget(self.clear_cur_button)
-        self.clear_all_button = qw.QToolButton()
-        self.clear_all_button.setDefaultAction(self.clearAllAction)
         layout.addWidget(self.clear_all_button)
-        self.export_button = qw.QToolButton()
-        self.export_button.setDefaultAction(self.exportSegmentationAction)
-        layout.addWidget(self.export_button)
         widget = qw.QWidget()
         widget.setLayout(layout)
         self.seg_dock = qw.QDockWidget('Segmented objects')
@@ -195,11 +246,59 @@ class TrainingWidget(qw.QMainWindow):
         self.exportSegmentationAction = qw.QAction(
             'Export training/validation data')
         self.exportSegmentationAction.triggered.connect(self.exportSegmentation)
+        self.saveSegmentationAction = qw.QAction('Save segmentations')
+        self.saveSegmentationAction.triggered.connect(self.saveSegmentation)
+        self.loadSegmentationsAction = qw.QAction('Load segmentations')
+        self.loadSegmentationsAction.triggered.connect(self.loadSegmentation)
+
+    def _makeShortcuts(self):
+        self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
+        self.sc_next.activated.connect(self.nextFrame)
+        self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
+        self.sc_prev.activated.connect(self.prevFrame)
+        self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
+        self.sc_remove.activated.connect(
+            self.display_widget.removeSelectedAction.trigger)
+        self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
+        self.sc_remove_2.activated.connect(
+            self.display_widget.removeSelectedAction.trigger)
+        self.sc_keep = qw.QShortcut(qg.QKeySequence('K'), self)
+        self.sc_keep.activated.connect(
+            self.display_widget.keepSelectedAction.trigger)
+        self.sc_keep_2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
+        self.sc_keep_2.activated.connect(
+            self.display_widget.keepSelectedAction.trigger)
+        self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
+        self.sc_save.activated.connect(
+            self.saveSegmentation)
+        self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
+        self.sc_save.activated.connect(
+            self.loadSegmentation)
+        self.sc_export = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
+        self.sc_export.activated.connect(self.exportSegmentation)
 
     def _makeMenuBar(self):
         self.file_menu = self.menuBar().addMenu('&File')
-        self.file_menu.addAction(self.imagedirAction)
-        self.file_menu.addAction(self.outdirAction)
+        self.file_menu.addActions([self.imagedirAction,
+                                   self.outdirAction,
+                                   self.loadSegmentationsAction,
+                                   self.saveSegmentationAction,
+                                   self.exportSegmentationAction])
+        self.seg_menu = self.menuBar().addMenu('&Segment')
+        self.seg_menu.addActions([self.nextFrameAction,
+                                  self.prevFrameAction,
+                                  self.resegmentAction,
+                                  self.clearCurrentAction,
+                                  self.clearAllAction])
+        self.view_menu = self.menuBar().addMenu('View')
+        self.view_menu.addActions([self.display_widget.zoomInAction,
+                                   self.display_widget.zoomOutAction])
+
+    def outlineStyleToBoundaryMode(self, style):
+        if style == ut.OutlineStyle.bbox:
+            self.sigSetDisplayGeom.emit(display.DrawingGeom.rectangle)
+        else:
+            self.sigSetDisplayGeom.emit(display.DrawingGeom.polygon)
 
     def openImageDir(self):
         directory = settings.value('training/imagedir', '.')
@@ -463,7 +562,6 @@ class TrainingWidget(qw.QMainWindow):
                                    f'`python -m yolact.train --help`'
                                    )
         qw.qApp.clipboard().setText(command)
-        self.saved = True
 
     def dumpCocoJson(self, filepaths, directory, ts):
         coco = {
@@ -520,11 +618,12 @@ class TrainingWidget(qw.QMainWindow):
                                           4)
                 else:
                     xlist = [img.shape[1] - self.max_size]
+            h = min(self.max_size, img.shape[0])
+            w = min(self.max_size, img.shape[1])
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
                 sq_img = np.zeros((self.max_size, self.max_size, 3),
                                   dtype=np.uint8)
-
-                sq_img[:self.max_size, :self.max_size, :] = img[y: y + self.max_size, x: x + self.max_size, :]
+                sq_img[:h, :w, :] = img[y: y + h, x: x + w, :]
                 fname = f'{prefix}_{jj}.png'
                 cv2.imwrite(os.path.join(imdir, fname),
                             sq_img)
@@ -532,8 +631,8 @@ class TrainingWidget(qw.QMainWindow):
                     "license": 0,
                     "url": None,
                     "file_name": f"PNGImages/{fname}",
-                    "height": img.shape[0],
-                    "width": img.shape[1],
+                    "height": self.max_size,
+                    "width": self.max_size,
                     "date_captured": None,
                     "id": img_id
                 })
@@ -562,6 +661,39 @@ class TrainingWidget(qw.QMainWindow):
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
             json.dump(coco, fd)
 
+    def saveSegmentation(self):
+        savedir = settings.value('training/savedir', '.')
+        filename, _ = qw.QFileDialog.getSaveFileName(
+            self,
+            'Save current segmentation data',
+            directory=savedir,
+            filter='Pickle file (*.pkl *.pickle);;All files (*)')
+        if len(filename) == 0:
+            return
+        data = {'image_dir': self.image_dir,
+                'seg_dict': {self.image_files[index]: seg for index, seg in self.seg_dict.items()}}
+        with open(filename, 'wb') as fd:
+            pickle.dump(data, fd)
+        settings.setValue('training/savedir', os.path.dirname(filename))
+        self.saved = True
+
+    def loadSegmentation(self):
+        savedir = settings.value('training/savedir', '.')
+        filename, _ = qw.QFileDialog.getOpenFileName(
+            self, 'Load saved segmentation', directory=savedir,
+            filter='Pickle file (*.pkl *.pickle);;All files (*)')
+        if len(filename) == 0:
+            return
+        with open(filename, 'rb') as fd:
+            data = pickle.load(fd)
+            self.image_dir = data['image_dir']
+            seg_dict = data['seg_dict']
+            self.image_files = [entry.path for entry in os.scandir(self.image_dir)]
+            for key in list(seg_dict.keys()):
+                if key not in self.image_files:
+                    seg_dict.pop(key)
+            self.seg_dict = {self.image_files.index(key): seg for key, seg in seg_dict.items()}
+        settings.setValue('training/savedir', os.path.dirname(filename))
 
 if __name__ == '__main__':
     app = qw.QApplication(sys.argv)

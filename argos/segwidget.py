@@ -282,6 +282,13 @@ segmethod_dict = OrderedDict([
     ('DBSCAN', argos.constants.SegmentationMethod.dbscan)
 ])
 
+outline_dict = OrderedDict([
+    ('bbox', ut.OutlineStyle.bbox),
+    ('minrect', ut.OutlineStyle.minrect),
+    ('contour', ut.OutlineStyle.contour),
+    ('fill', ut.OutlineStyle.fill)
+])
+
 
 class SegWorker(qc.QObject):
     """Worker class for carrying out segmentation.
@@ -541,6 +548,13 @@ class SegWorker(qc.QObject):
             contours = get_bounding_poly(seg, ut.OutlineStyle.contour)
             bboxes = {ii: contour for ii, contour in enumerate(contours)}
             self.sigSegPolygons.emit(bboxes, pos)
+        elif self.outline_style == ut.OutlineStyle.minrect:
+            minrects = [cv2.boxPoints(cv2.minAreaRect(points)) for points in seg]
+            minrects = {ii: box for ii, box in enumerate(minrects)}
+            self.sigSegPolygons.emit(minrects, pos)
+        elif self.outline_style == ut.OutlineStyle.fill:
+            bboxes = {ii: points for ii, points in enumerate(seg)}
+            self.sigSegPolygons.emit(bboxes, pos)
 
 
 class SegWidget(qw.QWidget):
@@ -736,6 +750,13 @@ class SegWidget(qw.QWidget):
         self._intermediate_combo = qw.QComboBox()
         self._intermediate_combo.addItems(segstep_dict.keys())
         layout.addRow(self._intermediate_label, self._intermediate_combo)
+
+        self._outline_label = qw.QLabel('Boundary style')
+        self.outline_combo = qw.QComboBox()
+        self.outline_combo.addItems(list(outline_dict.keys()))
+        self.outline_combo.currentTextChanged.connect(self.setOutlineStyle)
+        layout.addRow(self._outline_label, self.outline_combo)
+
         self.setLayout(layout)
 
         self._intermediate_win = Display()
@@ -796,8 +817,8 @@ class SegWidget(qw.QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
-    def setOutlineStyle(self, style: ut.OutlineStyle) -> None:
-        self.sigSetOutlineStyle.emit(style)
+    def setOutlineStyle(self, style: str) -> None:
+        self.sigSetOutlineStyle.emit(outline_dict[style])
 
     @qc.pyqtSlot(str)
     def setThresholdMethod(self, text) -> None:
