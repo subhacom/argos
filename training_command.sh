@@ -11,16 +11,23 @@
 # Worked after node was acquired with enough RAM
 #    sinteractive --gres=gpu:k80:1 --mem=64g
 # 
+# For batch mode, run it like
+# sbatch --partition=gpu --gres=gpu:v100x:4 -c56 --mem=64g --time=72:00:00 training_command.sh
 
 module load CUDA/10.1
 module load cuDNN/7.6.5/CUDA-10.1
 module load gcc
 
+. /data/rays3/conda/etc/profile.d/conda.sh
+
+echo "$SHELL"
+
 conda activate deeplearn
 pushd /data/rays3/locust_tracking/argos
 export PYTHONPATH=.:$PYTHONPATH
 # Start training with resnet101_reducedfc.pth (550x550 images). A copy of this file must be present in the save_folder.
-python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config /data/rays3/locust_tracking/yolact_train/yolact_config.yaml
+# python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config /data/rays3/locust_tracking/yolact_train/yolact_config.yaml --resume=interrupt
+python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config=/data/rays3/locust_tracking/yolact_train/yolact_config.yaml --resume=/data/rays3/locust_tracking/yolact_train/babylocust_weights_230_9000.pth --batch_size=32
 echo "Finished training"
 popd
 

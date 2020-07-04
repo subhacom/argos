@@ -26,16 +26,6 @@ from argos.sortracker import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
 
-# from argos.drawingtools import DrawingTools, ArenaFilter
-# from argos.conversions import cv2qimage
-# from argos import (
-#     segwidgets,
-#     frameprocessor,
-#     batchprocessor,
-#     yolactwidget,
-#     tracking,
-#     trackwidgets,
-#     utility)
 
 # Set up logging for multithreading/multiprocessing
 settings = util.init()
