@@ -11,7 +11,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    Anaconda prompt):
    
    ```
-   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas ffmpeg
+   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg
    ```
    
    This will create a virtual Python environment called `track`
@@ -147,3 +147,13 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    enter `python argos/capture.py -h` to find the command line arguments.
 
 - `plot_tracks.py` : a python script with functions to display the tracks.
+
+## Known-issues
+- I get the error message when switching to CSRT:
+  `AttributeError: module 'cv2.cv2' has no attribute 'TrackerCSRT_create'`
+  - You have installed the standard opecv / python-opencv /opencv-python package.
+    For CSRT you need opencv with contribute modules. Try:
+    ```
+    conda remove opencv-python
+    pip install opencv-contrib-python
+    ```

@@ -234,7 +234,7 @@ class Scene(qw.QGraphicsScene):
             self._clearIncomplete()
             return
         pos = event.scenePos().toPoint()
-        pos = np.array((pos.x(), pos.y()))
+        pos = np.array((pos.x(), pos.y()), dtype=int)
         if self.geom == DrawingGeom.rectangle or \
                 self.geom == DrawingGeom.arena:
             if len(self.points) > 0:
@@ -249,8 +249,9 @@ class Scene(qw.QGraphicsScene):
                     self._addItem(rect)
                     # logging.debug('FFFF %r', len(self.items()))
             else:
-                self.points= [np.array((pos.x(), pos.y()))]
-                logging.debug(f'XXXX Number of items {len(self.items())}')
+                self.points = [pos]
+                logging.debug(f'XXXX Number of items {len(self.items())}\n'
+                              f'pos: {pos}')
                 return
         elif self.geom == DrawingGeom.polygon:
             if len(self.points) > 0:
@@ -274,6 +275,7 @@ class Scene(qw.QGraphicsScene):
 
     def mouseMoveEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
         pos = event.scenePos()
+        pos = np.array((pos.x(), pos.y()), dtype=int)
         if len(self.points) > 0:
             pen = qg.QPen(self.incomplete_color)
             pen.setWidth(self.linewidth)
@@ -282,6 +284,7 @@ class Scene(qw.QGraphicsScene):
                     # logging.debug('AAAAA %r', len(self.items()))
                     self._clearIncomplete()
                     # logging.debug('BBBBB %r', len(self.items()))
+                logging.debug(f'BBBB points: {self.points}, pos: {pos}')
                 rect = util.points2rect(self.points[-1], pos)
                 self.incomplete_item = self.addRect(*rect, pen)
                 # logging.debug('CCCC %r', len(self.items()))
@@ -387,7 +390,7 @@ def test_display():
     image = cv2.imread(
         'C:/Users/raysu/analysis/animal_tracking/bugtracking/training_images/'
         'prefix_1500.png')
-    view.setFrame(image)
+    view.setFrame(image, 0)
     win = qw.QMainWindow()
     toolbar = win.addToolBar('Zoom')
     zi = qw.QAction('Zoom in')

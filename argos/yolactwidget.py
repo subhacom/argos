@@ -17,7 +17,7 @@ from PyQt5 import (
     QtWidgets as qw
 )
 
-from yolact.yolact import Yolact
+from yolact import Yolact
 from yolact.data import config as yconfig
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
@@ -281,7 +281,7 @@ class YolactWidget(qw.QWidget):
         filename, _ = qw.QFileDialog.getOpenFileName(
             self,
             'Open YOLACT configuration file',
-            directory=directory)
+            directory=directory, filter='YAML file (*.yml *.yaml)')
         if len(filename) == 0:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
@@ -291,7 +291,8 @@ class YolactWidget(qw.QWidget):
     def loadWeights(self):
         directory = settings.value('yolact/configdir', '.')
         filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open trained model',
-                                                     directory=directory)
+                                                     directory=directory,
+                                                     filter='Weights file (*.pth)')
         if len(filename) == 0:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))

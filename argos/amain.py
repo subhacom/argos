@@ -26,16 +26,6 @@ from argos.sortracker import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
 
-# from argos.drawingtools import DrawingTools, ArenaFilter
-# from argos.conversions import cv2qimage
-# from argos import (
-#     segwidgets,
-#     frameprocessor,
-#     batchprocessor,
-#     yolactwidget,
-#     tracking,
-#     trackwidgets,
-#     utility)
 
 # Set up logging for multithreading/multiprocessing
 settings = util.init()
@@ -66,12 +56,16 @@ class ArgosMain(qw.QMainWindow):
         self._seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                          qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._seg_dock)
-        self._seg_dock.setWidget(self._seg_widget)
+        scroll = qw.QScrollArea()
+        scroll.setWidget(self._seg_widget)
+        self._seg_dock.setWidget(scroll)
 
         self._sort_dock = qw.QDockWidget('SORTracker settings')
         self._sort_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                         qc.Qt.RightDockWidgetArea)
-        self._sort_dock.setWidget(self._sort_widget)
+        scroll = qw.QScrollArea()
+        scroll.setWidget(self._sort_widget)
+        self._sort_dock.setWidget(scroll)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._sort_dock)
 
         self._csrt_dock = qw.QDockWidget('CSRTracker settings')

@@ -164,9 +164,6 @@ class VideoWidget(qw.QWidget):
         """Handle the incoming signal from VideoReader. The `event` is for
         synchronizing with the reader so it does not swamp us with too
         many frames
-
-        TODO move this to a helper class to send frame to Tracker and
-        synchronize tracked bboxes to be overlayed with frame on Display
         """
         self.sigSetFrame.emit(frame, pos)
         self.slider.blockSignals(True)
@@ -194,6 +191,7 @@ class VideoWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def resetVideo(self):
+        self.pauseVideo()
         self.sigReset.emit()
         self.sigGotoFrame.emit(0)
 
