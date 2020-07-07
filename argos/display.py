@@ -290,9 +290,9 @@ class Scene(qw.QGraphicsScene):
                 # logging.debug('CCCC %r', len(self.items()))
             else:
                 self._clearIncomplete()
-                path = qg.QPainterPath(qc.QPointF(*self.points[0]))
-                [path.lineTo(qc.QPointF(*p)) for p in self.points[1:]]
-                path.lineTo(qc.QPointF(pos))
+                path = qg.QPainterPath(qc.QPointF(self.points[0][0], self.points[0][1]))
+                [path.lineTo(qc.QPointF(p[0], p[1])) for p in self.points[1:]]
+                path.lineTo(qc.QPointF(pos[0], pos[1]))
                 self.addIncompletePath(path)
 
     def drawBackground(self, painter: qg.QPainter, rect: qc.QRectF) -> None:

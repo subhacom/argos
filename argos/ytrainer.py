@@ -5,6 +5,7 @@
 import sys
 import logging
 import os
+from collections import OrderedDict
 import random
 import pickle
 from typing import Dict
@@ -83,6 +84,8 @@ class TrainingWidget(qw.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
         self._waiting = False
+        self.boundary_type = 'contour'
+        self.num_crops = 4  # number of random crops to generate if input image is bigger than training image size
         self.saved = True
         self.image_dir = settings.value('training/imagedir', '.')
         self.image_files = []
@@ -485,6 +488,14 @@ class TrainingWidget(qw.QMainWindow):
 
         val_text.editingFinished.connect(setValFrac)
         layout.addRow(val_label, val_text)
+
+        bbox_label = qw.QLabel('Export boundaries as')
+        bbox_combo = qw.QComboBox()
+        bbox_combo.addItems(['contour', 'bbox', 'minrect'])
+        def setBoundaryType(text):
+            self.boundary_type = text
+        bbox_combo.currentTextChanged.connect(setBoundaryType)
+        layout.addRow(bbox_label, bbox_combo)
         ok_button = qw.QPushButton('OK')
         ok_button.setDefault(True)
         ok_button.clicked.connect(dialog.accept)
@@ -609,22 +620,23 @@ class TrainingWidget(qw.QMainWindow):
             ylist = [0]
             if img.shape[0] > self.max_size:
                 if img.shape[0] >= self.max_size * 1.5:
-                    ylist = random.sample(range(img.shape[0] - self.max_size),
-                                          4)
+                    ylist += random.sample(range(img.shape[0] - self.max_size),
+                                          self.num_crops)
                 else:
-                    ylist = [img.shape[0] - self.max_size]
+                    ylist += [img.shape[0] - self.max_size]
             if img.shape[1] > self.max_size:
                 if img.shape[1] >= self.max_size * 1.5:
-                    xlist = random.sample(range(img.shape[1] - self.max_size),
-                                          4)
+                    xlist += random.sample(range(img.shape[1] - self.max_size),
+                                          self.num_crops)
                 else:
-                    xlist = [img.shape[1] - self.max_size]
+                    xlist += [img.shape[1] - self.max_size]
             h = min(self.max_size, img.shape[0])
             w = min(self.max_size, img.shape[1])
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
                 sq_img = np.zeros((self.max_size, self.max_size, 3),
                                   dtype=np.uint8)
                 sq_img[:h, :w, :] = img[y: y + h, x: x + w, :]
+                logging.debug(f'Processing: {prefix}: span ({x}, {y}, {x+h}, {y+h}')
                 fname = f'{prefix}_{jj}.png'
                 cv2.imwrite(os.path.join(imdir, fname),
                             sq_img)
@@ -639,25 +651,42 @@ class TrainingWidget(qw.QMainWindow):
                 })
 
                 for seg in self.seg_dict[findex].values():
-                    bbox = [int(xx) for xx in cv2.boundingRect(seg)]
-                    if bbox[0] < y or bbox[0] + bbox[2] > y + self.max_size \
-                            or bbox[1] < x or bbox[1] + bbox[
-                        3] > x + self.max_size:
-                        continue
-                    bbox[0] -= y
-                    bbox[1] -= x
                     tmp_seg = seg - [x, y]
+                    tmp_seg = tmp_seg[np.all(tmp_seg >= 0, axis=1)]
+                    bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
+                    if self.boundary_type == 'contour':
+                        segmentation = [int(xx) for xx in tmp_seg.flatten()]
+                    elif self.boundary_type == 'bbox':
+                        segmentation = [bbox[0], bbox[1],
+                                        bbox[0], bbox[1] + bbox[3],
+                                        bbox[0] + bbox[2], bbox[1] + bbox[3],
+                                        bbox[0] + bbox[2], bbox[1]]
+                    elif self.boundary_type == 'minrect':
+                        mr = cv2.minAreaRect(tmp_seg)
+                        segmentation = [int(xx) for xx in cv2.boxPoints(mr)]
+                    _seg = np.array(segmentation).reshape(-1, 2)
+                    logging.debug(f'Segmentation: \n{_seg} \nafter translating \n{seg}\nto {x}, {y}')
+                    if len(_seg) == 0:
+                        logging.debug(f'Segmentation empty for ({x},{y}): {seg}')
+                        continue
+                    cv2.drawContours(sq_img, [_seg], -1, (0, 0, 255))
                     annotation = {
                         "id": seg_id,
                         "image_id": img_id,
                         "category_id": 1,
-                        "segmentation": [[int(xx) for xx in tmp_seg.flatten()]],
+                        "segmentation": [segmentation],
                         "area": cv2.contourArea(tmp_seg),
                         "bbox": bbox,
                         "iscrowd": 0
                     }
                     coco['annotations'].append(annotation)
                     seg_id += 1
+                cv2.putText(sq_img, f'{fname}',(20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                cv2.imshow('COCO export', sq_img)
+                cv2.imwrite(fname, sq_img)
+                key = cv2.waitKey(30000)
+                # if key == ord('q') or key == 27:
+                #     pass
                 img_id += 1
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
             json.dump(coco, fd)
@@ -695,6 +724,7 @@ class TrainingWidget(qw.QMainWindow):
                     seg_dict.pop(key)
             self.seg_dict = {self.image_files.index(key): seg for key, seg in seg_dict.items()}
         settings.setValue('training/savedir', os.path.dirname(filename))
+        self.gotoFrame(0)
 
 if __name__ == '__main__':
     app = qw.QApplication(sys.argv)
