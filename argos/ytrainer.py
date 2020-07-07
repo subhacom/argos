@@ -561,10 +561,8 @@ class TrainingWidget(qw.QMainWindow):
                                      'class_names': [self.category_name]},
                          'num_classes': 2,
                          'max_size': self.max_size,
-                         'lr_steps': [28000, 60000, 70000, 80000, 100000,
-                                      160000,
-                                      200000],
-                         'max_iter': 240000}
+                         'lr_steps': [100000, 150000, 175000, 190000],
+                         'max_iter': 200000}
         yolact_file = f'{self.out_dir}/yolact_config.yaml'
         with open(yolact_file, 'w') as yolact_fd:
             yaml.dump(yolact_config, yolact_fd)
