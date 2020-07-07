@@ -662,6 +662,8 @@ class TrainingWidget(qw.QMainWindow):
                     tmp_seg = tmp_seg[np.all((tmp_seg >= 0) &
                                              (tmp_seg < self.max_size),
                                              axis=1)]
+                    if tmp_seg.shape[0] < 3:
+                        continue
                     bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
                     if self.boundary_type == 'contour':
                         segmentation = [int(xx) for xx in tmp_seg.flatten()]
