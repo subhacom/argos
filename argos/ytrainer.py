@@ -3,6 +3,7 @@
 # Created: 2020-06-29 4:52 PM
 """Widget to generate training data for YOLACT"""
 import sys
+import time
 import logging
 import os
 from collections import OrderedDict
@@ -85,6 +86,7 @@ class TrainingWidget(qw.QMainWindow):
         super(TrainingWidget, self).__init__(*args, **kwargs)
         self._waiting = False
         self.boundary_type = 'contour'
+        self.display_coco = True
         self.num_crops = 4  # number of random crops to generate if input image is bigger than training image size
         self.saved = True
         self.image_dir = settings.value('training/imagedir', '.')
@@ -496,6 +498,12 @@ class TrainingWidget(qw.QMainWindow):
             self.boundary_type = text
         bbox_combo.currentTextChanged.connect(setBoundaryType)
         layout.addRow(bbox_label, bbox_combo)
+        display_seg_button = qw.QCheckBox('Display segmentation (for debugging)')
+        display_seg_button.setChecked(self.display_coco)
+        def setDisplayCocoSeg(state):
+            self.display_coco = state
+        display_seg_button.clicked.connect(setDisplayCocoSeg)
+        layout.addWidget(display_seg_button)
         ok_button = qw.QPushButton('OK')
         ok_button.setDefault(True)
         ok_button.clicked.connect(dialog.accept)
@@ -503,6 +511,7 @@ class TrainingWidget(qw.QMainWindow):
         dialog.setLayout(layout)
         ret = dialog.exec_()
         return ret
+
 
     def exportSegmentation(self):
         self.setOutputDir()
@@ -652,7 +661,9 @@ class TrainingWidget(qw.QMainWindow):
 
                 for seg in self.seg_dict[findex].values():
                     tmp_seg = seg - [x, y]
-                    tmp_seg = tmp_seg[np.all(tmp_seg >= 0, axis=1)]
+                    tmp_seg = tmp_seg[np.all((tmp_seg >= 0) &
+                                             (tmp_seg < self.max_size),
+                                             axis=1)]
                     bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
                     if self.boundary_type == 'contour':
                         segmentation = [int(xx) for xx in tmp_seg.flatten()]
@@ -669,7 +680,11 @@ class TrainingWidget(qw.QMainWindow):
                     if len(_seg) == 0:
                         logging.debug(f'Segmentation empty for ({x},{y}): {seg}')
                         continue
-                    cv2.drawContours(sq_img, [_seg], -1, (0, 0, 255))
+                    if self.display_coco:
+                        cv2.drawContours(sq_img, [_seg], -1, (0, 0, 255))
+                        cv2.rectangle(sq_img, (bbox[0], bbox[1]),
+                                      (bbox[0] + bbox[2], bbox[1] + bbox[3]),
+                                      (0, 255, 255))
                     annotation = {
                         "id": seg_id,
                         "image_id": img_id,
@@ -681,12 +696,14 @@ class TrainingWidget(qw.QMainWindow):
                     }
                     coco['annotations'].append(annotation)
                     seg_id += 1
-                cv2.putText(sq_img, f'{fname}',(20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                cv2.imshow('COCO export', sq_img)
-                cv2.imwrite(fname, sq_img)
-                key = cv2.waitKey(30000)
-                # if key == ord('q') or key == 27:
-                #     pass
+                if self.display_coco:
+                    label = f'COCO export {fname}'
+                    cv2.imshow(label, sq_img)
+                    key = cv2.waitKey(1000)
+                    if key == 27 or key == ord('q'):
+                        self.display_coco = False
+                    cv2.destroyAllWindows()
+
                 img_id += 1
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
             json.dump(coco, fd)
