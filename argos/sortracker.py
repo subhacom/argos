@@ -287,6 +287,7 @@ class SORTWidget(qw.QWidget):
         self._disable_check.setToolTip('Just show the identified objects. Can '
                                        'be useful for troubleshooting.')
         layout = qw.QFormLayout()
+        self.setLayout(layout)
         layout.addRow(self._min_dist_label, self._min_dist_spin)
         layout.addRow(self._conf_age_label, self._conf_age_spin)
         layout.addRow(self._max_age_label, self._max_age_spin)
@@ -306,7 +307,6 @@ class SORTWidget(qw.QWidget):
         self.sigReset.connect(self.tracker.reset)
         self.sigQuit.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.setLayout(layout)
         self.thread.start()
 
     @qc.pyqtSlot(int)
@@ -328,3 +328,18 @@ class SORTWidget(qw.QWidget):
         logging.debug(f'Received frame {pos} from {self.sender()} bboxes: {bboxes}')
         self.sigTrack.emit(bboxes, pos)
 
+
+
+def test():
+    import sys
+    app = qw.QApplication(sys.argv)
+    win = SORTWidget()
+    win.setMinimumSize(800, 600)
+    # win.setWindowTitle('Argos - track animals in video')
+    # win.showMaximized()
+    # app.aboutToQuit.connect(win.cleanup)
+    win.show()
+    sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    test()
