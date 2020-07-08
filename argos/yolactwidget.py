@@ -164,7 +164,8 @@ class YolactWorker(qc.QObject):
             # logging.debug('Bounding boxes: %r', boxes)
             # Convert from top-left bottom-right format to
             # top-left, width, height format
-            boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
+            if len(boxes) > 0:
+                boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
             toc = time.perf_counter_ns()
             logging.debug('Time to process single _image: %f s',
                           1e-9 * (toc - tic))

@@ -26,8 +26,15 @@ conda activate deeplearn
 pushd /data/rays3/locust_tracking/argos
 export PYTHONPATH=.:$PYTHONPATH
 # Start training with resnet101_reducedfc.pth (550x550 images). A copy of this file must be present in the save_folder.
+# This is for fresh start with resnet 101
+python -m yolact.train --save_folder /data/rays3/locust_tracking/yolact_train --save_interval 1000 --keep_latest --config /data/rays3/locust_tracking/yolact_train/yolact_config.yaml
+
+# Uncomment this and comment above to resume interrupted training
 # python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config /data/rays3/locust_tracking/yolact_train/yolact_config.yaml --resume=interrupt
-python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config=/data/rays3/locust_tracking/yolact_train/yolact_config.yaml --resume=/data/rays3/locust_tracking/yolact_train/babylocust_weights_230_9000.pth --batch_size=32
+
+# Uncomment this and comment above to resume training from specified weights file
+# python -m yolact.train --save_folder=/data/rays3/locust_tracking/yolact_train --save_interval=1000 --keep_latest --config=/data/rays3/locust_tracking/yolact_train/yolact_config.yaml --resume=/data/rays3/locust_tracking/yolact_train/babylocust_weights_5555_50000.pth --batch_size=32
+
 echo "Finished training"
 popd
 
