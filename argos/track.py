@@ -96,10 +96,15 @@ class ArgosMain(qw.QMainWindow):
         self._track_grp.addAction(self._sort_action)
         self._track_grp.addAction(self._csrt_action)
         self._sort_action.setChecked(True)
+        self._debug_action = qw.QAction('Debug')
+        self._debug_action.setCheckable(
+            settings.value('debug', logging.ERROR) == logging.ERROR)
+        self._debug_action.triggered.connect(self.setDebug)
         self._csrt_dock.hide()
         self._menubar = self.menuBar()
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
+        self._file_menu.addAction(self._video_widget.openCamAction)
         self._seg_menu = self._menubar.addMenu('&Segmentation method')
         self._seg_menu.addActions(self._seg_grp.actions())
         self._track_menu = self._menubar.addMenu('&Tracking method')
@@ -108,6 +113,8 @@ class ArgosMain(qw.QMainWindow):
         self._zoom_menu.addActions([self._video_widget.zoomInAction,
                                     self._video_widget.zoomOutAction,
                                     self._video_widget.resetArenaAction])
+        self._debug_menu = self.menuBar().addMenu('Advanced')
+        self._debug_menu.addAction(self._debug_action)
 
 
         ##########################
@@ -130,6 +137,12 @@ class ArgosMain(qw.QMainWindow):
         self.sigQuit.connect(self._seg_widget.sigQuit)
         self.sigQuit.connect(self._sort_widget.sigQuit)
         self.sigQuit.connect(self._csrt_widget.sigQuit)
+
+    @qc.pyqtSlot(bool)
+    def setDebug(self, state):
+        level = logging.DEBUG if state else logging.ERROR
+        settings.setValue('debug', level)
+        logging.getLogger().setLevel(level)
 
     def cleanup(self):
         self.sigQuit.emit()

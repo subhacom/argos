@@ -14,12 +14,10 @@ from argos.display import Display
 from argos.vreader import VideoReader
 from argos import writer
 
-
 settings = utility.init()
 
 
 class VideoWidget(qw.QWidget):
-
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
     sigSetTracked = qc.pyqtSignal(dict, int)
     sigSetSegmented = qc.pyqtSignal(np.ndarray, int)
@@ -46,6 +44,7 @@ class VideoWidget(qw.QWidget):
         self.timer = qc.QTimer(self)
         self.timer.setSingleShot(True)
         self.openAction = qw.QAction('Open video')
+        self.openCamAction = qw.QAction('Open camera')
         self.playAction = qw.QAction('Play/Pause')
         self.playAction.setCheckable(True)
         self.resetAction = qw.QAction('Reset')
@@ -57,6 +56,7 @@ class VideoWidget(qw.QWidget):
         self.zoomOutAction = qw.QAction('Zoom out')
         self.resetArenaAction = qw.QAction('Reset arena')
         self.openAction.triggered.connect(self.openVideo)
+        self.openCamAction.triggered.connect(self.openCamera)
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
         self.reader_thread = qc.QThread()
@@ -64,22 +64,51 @@ class VideoWidget(qw.QWidget):
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
     @qc.pyqtSlot()
+    def openCamera(self):
+        self.pauseVideo()
+        cam_idx, accept = qw.QInputDialog.getInt(self, 'Open webcam input',
+                                         'Webcam no.', 0)
+        if not accept:
+            return
+        self.video_filename = str(cam_idx)
+        directory = settings.value('video/directory', '.')
+        fourcc, accept = qw.QInputDialog.getText(
+            self, 'Enter video format',
+            'FOURCC code (see http://www.fourcc.org/codecs.php)',
+            text='MJPG')
+        if not accept:
+            return
+        fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save video as',
+                                                  directory,
+                                                  filter='AVI (*.avi)')
+        self._initIO(fname, fourcc)
+
+    @qc.pyqtSlot()
     def openVideo(self):
         self.pauseVideo()
         directory = settings.value('video/directory', '.')
-        fname = qw.QFileDialog.getOpenFileName(self, 'Open video',
+        fname, filter = qw.QFileDialog.getOpenFileName(self, 'Open video',
                                                directory=directory)
         logging.debug(f'Opening file "{fname}"')
-        if len(fname[0]) == 0:
+        if len(fname) == 0:
             return
+        self.video_filename = fname
+        self._initIO()
+
+    def _initIO(self, outfpath=None, codec=None):
+        # Open input
         try:
-            self.video_reader = VideoReader(fname[0])
-            logging.debug(f'Opened {fname[0]} with {self.video_reader.frame_count} frames')
-            settings.setValue('video/directory', os.path.dirname(fname[0]))
+            self.video_reader = VideoReader(self.video_filename)
+            if self.video_reader.is_webcam and \
+                    outfpath is not None and codec is not None:
+                self.video_reader.setVideoOutFile(outfpath, codec)
+            logging.debug(
+                f'Opened {self.video_filename} with {self.video_reader.frame_count} frames')
+            settings.setValue('video/directory',
+                              os.path.dirname(self.video_filename))
         except IOError as err:
             qw.QMessageBox.critical(self, 'Video open failed', str(err))
             return
-        self.video_filename = fname[0]
         ## Set-up for saving data
         directory = settings.value('data/directory', '.')
         filename = writer.makepath(directory, self.video_filename)
@@ -143,8 +172,8 @@ class VideoWidget(qw.QWidget):
             layout.addWidget(self.display_widget)
             layout.addLayout(ctrl_layout)
             self.setLayout(layout)
-        self.slider.setRange(0, self.video_reader.frame_count-1)
-        self.spinbox.setRange(0, self.video_reader.frame_count-1)
+        self.slider.setRange(0, self.video_reader.frame_count - 1)
+        self.spinbox.setRange(0, self.video_reader.frame_count - 1)
         self.reader_thread.start()
         self.sigGotoFrame.emit(0)
         self.sigReset.emit()

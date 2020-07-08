@@ -22,7 +22,7 @@ def init():
                                't=%(threadName)s[%(thread)d] '
                                '%(filename)s#%(lineno)d:%(funcName)s: '
                                '%(message)s',
-                        level=logging.DEBUG)
+                        level=logging.ERROR)
 
     qc.QCoreApplication.setOrganizationName('NIH')
     qc.QCoreApplication.setOrganizationDomain('nih.gov')

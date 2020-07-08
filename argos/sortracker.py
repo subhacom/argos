@@ -206,11 +206,11 @@ class SORTracker(qc.QObject):
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
             prior = tracker.predict()
-            if np.any(np.isnan(prior)):
-                logging.info(f'Found nan in prior of {id_}')
+            if np.any(np.isnan(prior)) or np.any(prior[:KalmanTracker.NDIM] < 0):
+                logging.info(f'Found nan or negative in prior of {id_}')
                 continue
             predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
-        self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes if np.all(predicted_bboxes[id_] > 0)}
+        self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
         for id_, bbox in predicted_bboxes.items():
             if np.any(bbox < 0):
                 logging.debug(f'EEEE prediced bbox negative: {id_}: {bbox}')
