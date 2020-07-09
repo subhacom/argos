@@ -112,7 +112,7 @@ class Scene(qw.QGraphicsScene):
         if self.arena is None:
             self.setArena(np.array((0, 0, frame.shape[1], frame.shape[0])))
         self._frame = cv2qimage(frame)
-        #self.clear()
+        # self.clear()
         logging.debug(f'Diagonal sum of image: {frame.diagonal().sum()}')
 
     def _addItem(self, item: np.ndarray) -> None:
@@ -290,7 +290,8 @@ class Scene(qw.QGraphicsScene):
                 # logging.debug('CCCC %r', len(self.items()))
             else:
                 self._clearIncomplete()
-                path = qg.QPainterPath(qc.QPointF(self.points[0][0], self.points[0][1]))
+                path = qg.QPainterPath(
+                    qc.QPointF(self.points[0][0], self.points[0][1]))
                 [path.lineTo(qc.QPointF(p[0], p[1])) for p in self.points[1:]]
                 path.lineTo(qc.QPointF(pos[0], pos[1]))
                 self.addIncompletePath(path)
@@ -308,11 +309,11 @@ class Scene(qw.QGraphicsScene):
 
 
 class Display(qw.QGraphicsView):
-
     sigSetRectangles = qc.pyqtSignal(dict)
     sigSetPolygons = qc.pyqtSignal(dict)
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
+    sigViewportAreaChanged = qc.pyqtSignal(qc.QRectF)
 
     def __init__(self, *args, **kwargs):
         super(Display, self).__init__(*args, **kwargs)
@@ -345,10 +346,16 @@ class Display(qw.QGraphicsView):
     @qc.pyqtSlot()
     def zoomIn(self):
         self.scale(1.2, 1.2)
+        rect = self.mapToScene(self.viewport().rect())
+        rect = rect.boundingRect()
+        self.sigViewportAreaChanged.emit(rect)
 
     @qc.pyqtSlot()
     def zoomOut(self):
-        self.scale(1/1.2, 1/1.2)
+        self.scale(1 / 1.2, 1 / 1.2)
+        rect = self.mapToScene(self.viewport().rect())
+        rect = rect.boundingRect()
+        self.sigViewportAreaChanged.emit(rect)
 
     @qc.pyqtSlot(dict, int)
     def setRectangles(self, rect: dict, pos: int) -> None:
@@ -418,4 +425,3 @@ def test_display():
 
 if __name__ == '__main__':
     test_display()
-
