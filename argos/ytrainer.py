@@ -251,9 +251,9 @@ class TrainingWidget(qw.QMainWindow):
         self.exportSegmentationAction = qw.QAction(
             'Export training/validation data')
         self.exportSegmentationAction.triggered.connect(self.exportSegmentation)
-        self.saveSegmentationAction = qw.QAction('Save segmentations')
+        self.saveSegmentationAction = qw.QAction('&Save segmentations')
         self.saveSegmentationAction.triggered.connect(self.saveSegmentation)
-        self.loadSegmentationsAction = qw.QAction('Load segmentations')
+        self.loadSegmentationsAction = qw.QAction('&Open saved segmentations')
         self.loadSegmentationsAction.triggered.connect(self.loadSegmentation)
 
     def _makeShortcuts(self):
@@ -277,7 +277,7 @@ class TrainingWidget(qw.QMainWindow):
         self.sc_save.activated.connect(
             self.saveSegmentation)
         self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
-        self.sc_save.activated.connect(
+        self.sc_open.activated.connect(
             self.loadSegmentation)
         self.sc_export = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
         self.sc_export.activated.connect(self.exportSegmentation)
@@ -391,7 +391,7 @@ class TrainingWidget(qw.QMainWindow):
         if self.saved:
             a0.accept()
         else:
-            ret = qw.QMessageBox.question(self, 'Save segmented data',
+            ret = qw.QMessageBox.question(self, 'Quit without saving?',
                                           'Data not saved. Are you sure to quit?'
                                           ' If not, select "No" and use the'
                                           ' "Export training/validation data"'
@@ -549,7 +549,8 @@ class TrainingWidget(qw.QMainWindow):
         validation_count = int(len(self.image_files) * self.validation_frac)
         training_count = len(self.image_files) - validation_count
         training_list = random.sample(self.image_files, training_count)
-        self.dumpCocoJson(training_list, train_dir, ts)
+        self.dumpCocoJson(training_list, train_dir, ts,
+                          message='Exporting training set in COCO format')
         yolact_config = {'name': f'{self.category_name}_weights',
                          'base': self.baseconfig_name,
                          'dataset': {'name': self.description,
@@ -568,7 +569,8 @@ class TrainingWidget(qw.QMainWindow):
             yaml.dump(yolact_config, yolact_fd)
         if validation_count > 0:
             validation_list = random.sample(self.image_files, validation_count)
-            self.dumpCocoJson(validation_list, val_dir, ts)
+            self.dumpCocoJson(validation_list, val_dir, ts,
+                              message='Exporting validation set in COCO format')
         command = f'python -m yolact.train --config={yolact_file} --save_folder={self.out_dir}'
         qw.QMessageBox.information(self, 'Data saved',
                                    f'Training images: {train_dir}<br>'
@@ -582,7 +584,8 @@ class TrainingWidget(qw.QMainWindow):
                                    )
         qw.qApp.clipboard().setText(command)
 
-    def dumpCocoJson(self, filepaths, directory, ts):
+    def dumpCocoJson(self, filepaths, directory, ts,
+                     message='Exporting COCO JSON'):
         coco = {
             "info": {
                 "description": self.description,
@@ -615,7 +618,16 @@ class TrainingWidget(qw.QMainWindow):
         os.mkdir(imdir)
         seg_id = 0
         img_id = 0
-        for fpath in filepaths:
+
+        indicator = qw.QProgressDialog(message, None,
+                                       0, len(filepaths),
+                                       self)
+
+        indicator.setWindowModality(qc.Qt.WindowModal)
+        indicator.show()
+
+        for ii, fpath in enumerate(filepaths):
+            indicator.setValue(ii)
             findex = self.image_files.index(fpath)
             if findex not in self.seg_dict or len(self.seg_dict[findex]) == 0:
                 continue
@@ -697,16 +709,21 @@ class TrainingWidget(qw.QMainWindow):
                     coco['annotations'].append(annotation)
                     seg_id += 1
                 if self.display_coco:
-                    label = f'COCO export {fname}'
-                    cv2.imshow(label, sq_img)
+                    winname = 'cvwin'
+                    title = f'{fname}. Press `Esc` or `q` to hide. Any other key to fast forward.'
+                    cv2.namedWindow(winname, cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow(winname, 800, 600)
+                    cv2.imshow(winname, sq_img)
+                    cv2.setWindowTitle(winname, title)
                     key = cv2.waitKey(1000)
                     if key == 27 or key == ord('q'):
                         self.display_coco = False
-                    cv2.destroyAllWindows()
-
+                        cv2.destroyAllWindows()
                 img_id += 1
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
             json.dump(coco, fd)
+        cv2.destroyAllWindows()
+        indicator.setValue(len(filepaths))
 
     def saveSegmentation(self):
         savedir = settings.value('training/savedir', '.')
