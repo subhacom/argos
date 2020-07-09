@@ -40,8 +40,8 @@ class SegDisplay(Display):
         self.seglist.setSelectionMode(self.seglist.ExtendedSelection)
         self.seglist.itemSelectionChanged.connect(self.sendSelection)
         self.sigItemSelectionChanged.connect(self.scene().setSelected)
-        self.keepSelectedAction = qw.QAction('Keep selected objects')
-        self.removeSelectedAction = qw.QAction('Remove selected objects')
+        self.keepSelectedAction = qw.QAction('Keep selected objects (K)')
+        self.removeSelectedAction = qw.QAction('Remove selected objects (X)')
         self.keepSelectedAction.triggered.connect(self.scene().keepSelected)
         self.removeSelectedAction.triggered.connect(self.scene().removeSelected)
         self.scene().sigPolygons.connect(self.sigPolygons)
@@ -237,30 +237,36 @@ class TrainingWidget(qw.QMainWindow):
         self.imagedirAction.triggered.connect(self.openImageDir)
         self.outdirAction = qw.QAction('Open output directory')
         self.outdirAction.triggered.connect(self.setOutputDir)
-        self.nextFrameAction = qw.QAction('Next image')
+        self.nextFrameAction = qw.QAction('&Next image (PgDn)')
         self.nextFrameAction.triggered.connect(self.nextFrame)
-        self.prevFrameAction = qw.QAction('Previous image')
+        self.prevFrameAction = qw.QAction('&Previous image (PgUp)')
         self.prevFrameAction.triggered.connect(self.prevFrame)
-        self.resegmentAction = qw.QAction('Re-segment current image')
+        self.resegmentAction = qw.QAction('Re-segment current image (R)')
         self.resegmentAction.triggered.connect(
             self.resegmentCurrent)
-        self.clearCurrentAction = qw.QAction('Clear current segmentation')
+        self.clearCurrentAction = qw.QAction('&Clear current segmentation (Ctrl+C)')
         self.clearCurrentAction.triggered.connect(self.clearCurrent)
         self.clearAllAction = qw.QAction('Reset all segmentation')
         self.clearAllAction.triggered.connect(self.clearAllSegmentation)
         self.exportSegmentationAction = qw.QAction(
-            'Export training/validation data')
+            '&Export training and validation data (Ctrl+E)')
         self.exportSegmentationAction.triggered.connect(self.exportSegmentation)
-        self.saveSegmentationAction = qw.QAction('&Save segmentations')
+        self.saveSegmentationAction = qw.QAction('&Save segmentations (Ctrl+S)')
         self.saveSegmentationAction.triggered.connect(self.saveSegmentation)
-        self.loadSegmentationsAction = qw.QAction('&Open saved segmentations')
+        self.loadSegmentationsAction = qw.QAction('&Open saved segmentations (Ctrl_O)')
         self.loadSegmentationsAction.triggered.connect(self.loadSegmentation)
 
     def _makeShortcuts(self):
+        self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
+        self.sc_zoom_in.activated.connect(self.display_widget.zoomIn)
+        self.sc_zoom_out = qw.QShortcut(qg.QKeySequence('-'), self)
+        self.sc_zoom_out.activated.connect(self.display_widget.zoomOut)
+
         self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
         self.sc_next.activated.connect(self.nextFrame)
         self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
         self.sc_prev.activated.connect(self.prevFrame)
+
         self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
         self.sc_remove.activated.connect(
             self.display_widget.removeSelectedAction.trigger)
@@ -273,12 +279,19 @@ class TrainingWidget(qw.QMainWindow):
         self.sc_keep_2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
         self.sc_keep_2.activated.connect(
             self.display_widget.keepSelectedAction.trigger)
+
+        self.sc_clear_current = qw.QShortcut(qg.QKeySequence('Ctrl+C'), self)
+        self.sc_clear_current.activated.connect(self.clearCurrent)
+        self.sc_reseg_current = qw.QShortcut(qg.QKeySequence('R'), self)
+        self.sc_reseg_current.activated.connect(self.resegmentCurrent)
+
         self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
         self.sc_save.activated.connect(
             self.saveSegmentation)
         self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
         self.sc_open.activated.connect(
             self.loadSegmentation)
+
         self.sc_export = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
         self.sc_export.activated.connect(self.exportSegmentation)
 
