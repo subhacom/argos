@@ -23,7 +23,7 @@ class VideoReader(qc.QObject):
     sigFrameRead = qc.pyqtSignal(np.ndarray, int)
     sigVideoEnd = qc.pyqtSignal()
 
-    def __init__(self, path, waitCond=None):
+    def __init__(self, path: str, waitCond: threading.Event=None):
         super(VideoReader, self).__init__()
         # TODO check if I really need the mutex just for reading
         self.mutex = qc.QMutex()

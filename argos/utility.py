@@ -11,6 +11,7 @@ import logging
 # Data type for rotated rectangle array
 from PyQt5 import QtCore as qc, QtGui as qg
 from scipy import optimize
+from sklearn.utils.murmurhash import murmurhash3_32
 
 from argos.constants import OutlineStyle, DistanceMetric
 
@@ -355,3 +356,26 @@ def reconnect(signal, newhandler=None, oldhandler=None):
             break
     if newhandler is not None:
         signal.connect(newhandler)
+
+
+def make_color(num: int) -> Tuple[int]:
+    """Create a random color based on number.
+
+    The provided number is passed through the murmur hash function in order
+    to generate bytes which are somewhat apart from each other. The three least
+    significant byte values are taken as r, g, and b.
+
+    Parameters
+    ----------
+    num: int
+        number to use as hash key
+
+    Returns
+    -------
+    bytes[3]
+        (r, g, b) values
+
+    """
+    val = murmurhash3_32(num, positive=True).to_bytes(8, 'little')
+    color = qg.QColor(val[0], val[1], val[2])
+    return val[:3]

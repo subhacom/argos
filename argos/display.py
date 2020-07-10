@@ -16,7 +16,7 @@ from PyQt5 import (
 )
 
 import argos.utility as util
-from argos.utility import cv2qimage
+from argos.utility import cv2qimage, make_color
 
 
 class DrawingGeom(enum.Enum):
@@ -37,6 +37,7 @@ class Scene(qw.QGraphicsScene):
         self.label_dict = {}
         self._frame = None
         self.geom = DrawingGeom.arena
+        self.autocolor = False
         self.color = qg.QColor(qc.Qt.green)
         self.selected_color = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
@@ -65,11 +66,23 @@ class Scene(qw.QGraphicsScene):
         self.selected = selected
         for key in self.item_dict:
             if key in selected:
-                self.item_dict[key].setPen(qg.QPen(self.selected_color))
-                self.label_dict[key].setDefaultTextColor(self.selected_color)
+                if self.autocolor:
+                    color = qg.QColor(*make_color(key))
+                    pen = qg.QPen(color, qc.Qt.DotLine)
+                else:
+                    color = self.selected_color
+                    pen = qg.QPen(color)
+                self.item_dict[key].setPen(pen)
+                self.label_dict[key].setDefaultTextColor(color)
             else:
-                self.item_dict[key].setPen(qg.QPen(self.color))
-                self.label_dict[key].setDefaultTextColor(self.color)
+                if self.autocolor:
+                    color = qg.QColor(*make_color(key))
+                    pen = qg.QPen(color)
+                else:
+                    color = self.color
+                    pen = qg.QPen(color)
+                self.item_dict[key].setPen(pen)
+                self.label_dict[key].setDefaultTextColor(color)
 
     @qc.pyqtSlot()
     def keepSelected(self):
@@ -85,6 +98,8 @@ class Scene(qw.QGraphicsScene):
     @qc.pyqtSlot()
     def removeSelected(self):
         for key in self.selected:
+            if key not in self.polygons:
+                continue
             self.removeItem(self.item_dict.pop(key))
             self.removeItem(self.label_dict.pop(key))
             self.polygons.pop(key)
@@ -123,7 +138,10 @@ class Scene(qw.QGraphicsScene):
         elif self.geom == DrawingGeom.polygon:
             poly = qg.QPolygonF([qc.QPointF(*p) for p in item])
             item = qw.QGraphicsPolygonItem(poly)
-        pen = qg.QPen(self.color)
+        if self.autocolor:
+            pen = qg.QPen(qg.QColor(*make_color(index)))
+        else:
+            pen = qg.QPen(self.color)
         pen.setWidth(self.linewidth)
         item.setPen(pen)
         self.addItem(item)
@@ -175,6 +193,10 @@ class Scene(qw.QGraphicsScene):
         """Color of selected rectangle"""
         self.selected_color = color
 
+    @qc.pyqtSlot(bool)
+    def setAutoColor(self, auto: bool):
+        self.autocolor = auto
+
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
         self.incomplete_color = color
@@ -187,11 +209,15 @@ class Scene(qw.QGraphicsScene):
         self.clearItems()
         self.polygons = rects
         for id_, rect in rects.items():
-            item = self.addRect(*rect, qg.QPen(self.color))
+            if self.autocolor:
+                color = qg.QColor(*make_color(id_))
+            else:
+                color = self.color
+            item = self.addRect(*rect, qg.QPen(color))
             self.item_dict[id_] = item
             text = self.addText(str(id_))
             self.label_dict[id_] = text
-            text.setDefaultTextColor(self.color)
+            text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1])
             self.item_dict[id_] = item
             logging.debug(f'Set {id_}: {rect}')
@@ -205,15 +231,19 @@ class Scene(qw.QGraphicsScene):
         for id_, poly in polygons.items():
             if len(poly.shape) != 2 or poly.shape[0] < 3:
                 continue
+            if self.autocolor:
+                color = qg.QColor(*make_color(id_))
+            else:
+                color = self.color
             self.polygons[id_] = poly
             logging.debug(f'Polygon {id_} poins shape: {poly.shape}')
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
-            item = self.addPolygon(polygon, qg.QPen(self.color))
+            item = self.addPolygon(polygon, qg.QPen(color))
             self.item_dict[id_] = item
             text = self.addText(str(id_))
             self.label_dict[id_] = text
-            text.setDefaultTextColor(self.color)
+            text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
             self.item_dict[id_] = item
@@ -299,7 +329,8 @@ class Scene(qw.QGraphicsScene):
     def drawBackground(self, painter: qg.QPainter, rect: qc.QRectF) -> None:
         if self._frame is None:
             return
-        if self.arena is None or len(self.arena) == 0: # When we have reset the arena - and going to open another video
+        if self.arena is None or len(
+                self.arena) == 0:  # When we have reset the arena - and going to open another video
             arena = qc.QRectF(0, 0, self._frame.width(), self._frame.height())
             self.setSceneRect(arena)
         else:
@@ -332,6 +363,9 @@ class Display(qw.QGraphicsView):
         self.zoomInAction.triggered.connect(self.zoomIn)
         self.zoomOutAction = qw.QAction('Zoom out')
         self.zoomOutAction.triggered.connect(self.zoomOut)
+        self.autoColorAction = qw.QAction('Autocolor')
+        self.autoColorAction.setCheckable(True)
+        self.autoColorAction.triggered.connect(scene.setAutoColor)
 
     def clearAll(self):
         self.scene().clearAll()
