@@ -310,7 +310,8 @@ class TrainingWidget(qw.QMainWindow):
                                   self.clearAllAction])
         self.view_menu = self.menuBar().addMenu('View')
         self.view_menu.addActions([self.display_widget.zoomInAction,
-                                   self.display_widget.zoomOutAction])
+                                   self.display_widget.zoomOutAction,
+                                   self.display_widget.autoColorAction])
 
     def outlineStyleToBoundaryMode(self, style):
         if style == ut.OutlineStyle.bbox:

@@ -109,10 +109,11 @@ class ArgosMain(qw.QMainWindow):
         self._seg_menu.addActions(self._seg_grp.actions())
         self._track_menu = self._menubar.addMenu('&Tracking method')
         self._track_menu.addActions(self._track_grp.actions())
-        self._zoom_menu = self._menubar.addMenu('Zoom')
+        self._zoom_menu = self._menubar.addMenu('View')
         self._zoom_menu.addActions([self._video_widget.zoomInAction,
                                     self._video_widget.zoomOutAction,
-                                    self._video_widget.resetArenaAction])
+                                    self._video_widget.resetArenaAction,
+                                    self._video_widget.autoColorAction])
         self._debug_menu = self.menuBar().addMenu('Advanced')
         self._debug_menu.addAction(self._debug_action)
 

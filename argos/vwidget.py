@@ -59,6 +59,8 @@ class VideoWidget(qw.QWidget):
         self.openCamAction.triggered.connect(self.openCamera)
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
+        self.autoColorAction = qw.QAction('Automatic color')
+        self.autoColorAction.setCheckable(True)
         self.reader_thread = qc.QThread()
         self.sigQuit.connect(self.reader_thread.quit)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
@@ -67,7 +69,7 @@ class VideoWidget(qw.QWidget):
     def openCamera(self):
         self.pauseVideo()
         cam_idx, accept = qw.QInputDialog.getInt(self, 'Open webcam input',
-                                         'Webcam no.', 0)
+                                                 'Webcam no.', 0)
         if not accept:
             return
         self.video_filename = str(cam_idx)
@@ -88,7 +90,7 @@ class VideoWidget(qw.QWidget):
         self.pauseVideo()
         directory = settings.value('video/directory', '.')
         fname, filter = qw.QFileDialog.getOpenFileName(self, 'Open video',
-                                               directory=directory)
+                                                       directory=directory)
         logging.debug(f'Opening file "{fname}"')
         if len(fname) == 0:
             return
@@ -142,6 +144,8 @@ class VideoWidget(qw.QWidget):
 
         if self.display_widget is None:
             self.display_widget = Display()
+            self.autoColorAction.triggered.connect(
+                self.display_widget.autoColorAction.trigger)
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
