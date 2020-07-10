@@ -7,6 +7,8 @@ import sys
 import cv2
 import numpy as np
 import logging
+from matplotlib import cm
+from math import floor
 
 # Data type for rotated rectangle array
 from PyQt5 import QtCore as qc, QtGui as qg
@@ -147,6 +149,7 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
 # pure python
 try:
     import pyximport
+
     pyximport.install(setup_args={"include_dirs": np.get_include()},
                       reload_support=True)
     from cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
@@ -158,9 +161,10 @@ except:
         """Convert topleft, width, height format rectangle into four anti-clockwise
         vertices"""
         return np.vstack([rect[:2],
-                     (rect[0], rect[1] + rect[3]),
-                     rect[:2] + rect[2:],
-                     (rect[0] + rect[2], rect[1])])
+                          (rect[0], rect[1] + rect[3]),
+                          rect[:2] + rect[2:],
+                          (rect[0] + rect[2], rect[1])])
+
 
     def tlwh2xyrh(rect):
         """Convert top-left, width, height into center, aspect ratio, height"""
@@ -379,3 +383,11 @@ def make_color(num: int) -> Tuple[int]:
     val = murmurhash3_32(num, positive=True).to_bytes(8, 'little')
     color = qg.QColor(val[0], val[1], val[2])
     return val[:3]
+
+
+def get_cmap_color(num, maxnum, cmap):
+    """Get rgb based on specified colormap `cmap` for index `num` where the
+    total range of values is (0, maxnum]"""
+    rgba = cm.get_cmap(cmap)(float(num) / maxnum)
+    int_rgb = [max(0, min(255, floor(v * 256))) for v in rgba[:3]]
+    return int_rgb

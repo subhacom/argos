@@ -37,3 +37,9 @@ class TrackState(enum.Enum):
     tentative = enum.auto()
     confirmed = enum.auto()
     deleted = enum.auto()
+
+
+class DrawingGeom(enum.Enum):
+    rectangle = enum.auto()
+    polygon = enum.auto()
+    arena = enum.auto()

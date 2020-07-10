@@ -4,11 +4,11 @@
 
 
 import sys
-import enum
 import logging
 import numpy as np
 import cv2
 from typing import Dict, List
+from matplotlib import cm
 from PyQt5 import (
     QtCore as qc,
     QtGui as qg,
@@ -16,13 +16,8 @@ from PyQt5 import (
 )
 
 import argos.utility as util
-from argos.utility import cv2qimage, make_color
-
-
-class DrawingGeom(enum.Enum):
-    rectangle = enum.auto()
-    polygon = enum.auto()
-    arena = enum.auto()
+from argos.constants import DrawingGeom
+from argos.utility import cv2qimage, make_color, get_cmap_color
 
 
 class Scene(qw.QGraphicsScene):
@@ -38,6 +33,8 @@ class Scene(qw.QGraphicsScene):
         self._frame = None
         self.geom = DrawingGeom.arena
         self.autocolor = False
+        self.colormap = None
+        self.max_colors = 100
         self.color = qg.QColor(qc.Qt.green)
         self.selected_color = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
@@ -69,6 +66,10 @@ class Scene(qw.QGraphicsScene):
                 if self.autocolor:
                     color = qg.QColor(*make_color(key))
                     pen = qg.QPen(color, qc.Qt.DotLine)
+                elif self.colormap is not None:
+                    color = qg.QColor(
+                        *get_cmap_color(key % self.max_colors, self.max_colors, self.colormap))
+                    pen = qg.QPen(color, qc.Qt.DotLine)
                 else:
                     color = self.selected_color
                     pen = qg.QPen(color)
@@ -77,10 +78,12 @@ class Scene(qw.QGraphicsScene):
             else:
                 if self.autocolor:
                     color = qg.QColor(*make_color(key))
-                    pen = qg.QPen(color)
+                elif self.colormap is not None:
+                    color = qg.QColor(
+                        *get_cmap_color(key % self.max_colors, self.max_colors, self.colormap))
                 else:
                     color = self.color
-                    pen = qg.QPen(color)
+                pen = qg.QPen(color)
                 self.item_dict[key].setPen(pen)
                 self.label_dict[key].setDefaultTextColor(color)
 
@@ -140,6 +143,9 @@ class Scene(qw.QGraphicsScene):
             item = qw.QGraphicsPolygonItem(poly)
         if self.autocolor:
             pen = qg.QPen(qg.QColor(*make_color(index)))
+        elif self.colormap is not None:
+            pen = qg.QPen(
+                qg.QColor(get_cmap_color(index % self.max_colors, self.max_colors, self.colormap)))
         else:
             pen = qg.QPen(self.color)
         pen.setWidth(self.linewidth)
@@ -197,6 +203,23 @@ class Scene(qw.QGraphicsScene):
     def setAutoColor(self, auto: bool):
         self.autocolor = auto
 
+    @qc.pyqtSlot(str, int)
+    def setColormap(self, cmap, max_items):
+        """Set a colormap `cmap` to use for getting unique color for each
+        item where maximum number of items is `max_colors`"""
+        if max_items < 1:
+            self.colormap = None
+            self.max_colors = -1
+            return
+        try:
+            get_cmap_color(0, max_items, cmap)
+            self.colormap = cmap
+            self.max_colors = max_items
+            self.autocolor = False
+        except ValueError:
+            self.colormap = None
+            self.max_colors = -1
+
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
         self.incomplete_color = color
@@ -204,13 +227,16 @@ class Scene(qw.QGraphicsScene):
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
         """rects: a dict of id: (x, y, w, h)"""
-        logging.debug(f'Received rectangles from {self.sender}')
+        logging.debug(f'Received rectangles from {self.sender()}')
         logging.debug(f'Rectangles:\n{rects}')
         self.clearItems()
         self.polygons = rects
         for id_, rect in rects.items():
             if self.autocolor:
                 color = qg.QColor(*make_color(id_))
+            elif self.colormap is not None:
+                color = qg.QColor(
+                    *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color))
@@ -233,6 +259,9 @@ class Scene(qw.QGraphicsScene):
                 continue
             if self.autocolor:
                 color = qg.QColor(*make_color(id_))
+            elif self.colormap is not None:
+                color = qg.QColor(
+                    *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
             else:
                 color = self.color
             self.polygons[id_] = poly

@@ -20,6 +20,8 @@ from PyQt5 import (
     QtWidgets as qw,
     QtGui as qg)
 
+import argos.constants
+from argos.constants import OutlineStyle
 from argos import utility as ut
 from argos import display
 from argos.display import Display
@@ -80,7 +82,7 @@ class TrainingWidget(qw.QMainWindow):
     # send refined segmentation data
     sigSegmented = qc.pyqtSignal(dict, int)
     # set geometry mode of drawing widget
-    sigSetDisplayGeom = qc.pyqtSignal(display.DrawingGeom)
+    sigSetDisplayGeom = qc.pyqtSignal(argos.constants.DrawingGeom)
 
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
@@ -314,10 +316,10 @@ class TrainingWidget(qw.QMainWindow):
                                    self.display_widget.autoColorAction])
 
     def outlineStyleToBoundaryMode(self, style):
-        if style == ut.OutlineStyle.bbox:
-            self.sigSetDisplayGeom.emit(display.DrawingGeom.rectangle)
+        if style == OutlineStyle.bbox:
+            self.sigSetDisplayGeom.emit(argos.constants.DrawingGeom.rectangle)
         else:
-            self.sigSetDisplayGeom.emit(display.DrawingGeom.polygon)
+            self.sigSetDisplayGeom.emit(argos.constants.DrawingGeom.polygon)
 
     def openImageDir(self):
         directory = settings.value('training/imagedir', '.')
