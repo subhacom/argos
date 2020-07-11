@@ -4,6 +4,7 @@
 """Review and correct tracks"""
 
 import sys
+import os
 from typing import List, Tuple, Union, Dict
 import logging
 import threading
@@ -53,10 +54,10 @@ class TrackReader(qc.QObject):
     """Class to read the tracking data"""
     sigEnd = qc.pyqtSignal()
 
-    def __init__(self, data_file, filetype):
+    def __init__(self, data_file):
         super(TrackReader, self).__init__()
         self.data_path = data_file
-        if filetype == 'csv':
+        if data_file.endswith('csv'):
             self.track_data = pd.read_csv(self.data_path)
         else:
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
@@ -136,7 +137,10 @@ class TrackReader(qc.QObject):
                              'h': row.h
                              })
         data = pd.DataFrame(data=data)
-        data.to_csv(filepath)
+        if filepath.endswith('csv'):
+            data.to_csv(filepath)
+        else:
+            data.to_hdf(filepath, 'tracked', mode='w')
         self.track_data = data
         self._undo_dict = defaultdict(dict)
 
@@ -209,6 +213,7 @@ class ReviewWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
         # Keep track of all the tracks seen so far
+        self.to_save = False
         self.all_tracks = OrderedDict()
         self.all_tracks_by_frame = OrderedDict()
         self.left_frame = None
@@ -228,37 +233,51 @@ class ReviewWidget(qw.QWidget):
         panes_layout = qw.QHBoxLayout()
         self.left_view = TrackView()
         self.left_view.setObjectName('Left')
-        panes_layout.addWidget(self.left_view)
-
-        self.right_view = TrackView()
-        self.right_view.setObjectName('Right')
+        # self.left_view.setSizePolicy(qw.QSizePolicy.MinimumExpanding, qw.QSizePolicy.MinimumExpanding)
         self.left_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
         self.left_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        self.right_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        self.right_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        panes_layout.addWidget(self.left_view, 1)
 
+        max_list_width = 100
         self.left_list = TrackList()
         self.left_list.setObjectName('LeftList')
+        self.left_list.setMaximumWidth(max_list_width)
+        # self.left_list.setSizePolicy(qw.QSizePolicy.Minimum, qw.QSizePolicy.Expanding)
         self.left_list.setDragEnabled(True)
         list_layout = qw.QVBoxLayout()
-        list_layout.addWidget(qw.QLabel('Left tracks'))
+        list_layout.setSizeConstraint(qw.QLayout.SetMinimumSize)
+        label = qw.QLabel('Left tracks')
+        label.setSizePolicy(qw.QSizePolicy.Minimum, qw.QSizePolicy.Minimum)
+        label.setMaximumWidth(max_list_width)
+        list_layout.addWidget(label)
         list_layout.addWidget(self.left_list)
         panes_layout.addLayout(list_layout)
         self.all_list = TrackList()
+        self.all_list.setMaximumWidth(max_list_width)
         self.all_list.setDragEnabled(True)
         self.all_list.setObjectName('AllList')
         list_layout = qw.QVBoxLayout()
+        # list_layout.setSizeConstraint(qw.QLayout.SetMinimumSize)
         list_layout.addWidget(qw.QLabel('All tracks'))
         list_layout.addWidget(self.all_list)
         panes_layout.addLayout(list_layout)
         self.right_list = TrackList()
         self.right_list.setObjectName('RightList')
         self.right_list.setAcceptDrops(True)
+        self.right_list.setMaximumWidth(max_list_width)
         list_layout = qw.QVBoxLayout()
+        list_layout.setSizeConstraint(qw.QLayout.SetMinimumSize)
         list_layout.addWidget(qw.QLabel('Right tracks'))
         list_layout.addWidget(self.right_list)
         panes_layout.addLayout(list_layout)
-        panes_layout.addWidget(self.right_view)
+
+        self.right_view = TrackView()
+        self.right_view.setObjectName('Right')
+        # self.right_view.setSizePolicy(qw.QSizePolicy.Expanding,
+        #                              qw.QSizePolicy.Expanding)
+        self.right_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        self.right_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        panes_layout.addWidget(self.right_view, 1)
         layout.addLayout(panes_layout)
         self.play_button = qw.QPushButton('Play')
         self.slider = qw.QSlider(qc.Qt.Horizontal)
@@ -325,6 +344,8 @@ class ReviewWidget(qw.QWidget):
         self.colormapAction.setCheckable(True)
         self.openAction = qw.QAction('Open tracked data')
         self.openAction.triggered.connect(self.openTrackedData)
+        self.saveAction = qw.QAction('Save reviewed data')
+        self.saveAction.triggered.connect(self.saveReviewedTracks)
         self.speedUpAction = qw.QAction('Double speed')
         self.speedUpAction.triggered.connect(self.speedUp)
         self.slowDownAction = qw.QAction('Half speed')
@@ -340,8 +361,14 @@ class ReviewWidget(qw.QWidget):
         self.showAllTracksAction = qw.QAction('Show all tracks seen so far')
         self.showAllTracksAction.setCheckable(True)
         # self.showAllTracksAction.triggered.connect(self.all_list.setEnabled)
+        self.playAction = qw.QAction('Play')
+        self.playAction.triggered.connect(self.playVideo)
+        self.resetAction = qw.QAction('Reset')
+        self.resetAction.triggered.connect(self.reset)
 
     def makeShortcuts(self):
+        self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
+        self.sc_play.activated.connect(self.startVideo)
         self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
         self.sc_zoom_in.activated.connect(self.left_view.zoomIn)
         self.sc_zoom_in.activated.connect(self.right_view.zoomIn)
@@ -364,6 +391,12 @@ class ReviewWidget(qw.QWidget):
         self.sc_speedup.activated.connect(self.speedUp)
         self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Down), self)
         self.sc_slowdown.activated.connect(self.slowDown)
+        self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
+        self.sc_save.activated.connect(
+            self.saveReviewedTracks)
+        self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
+        self.sc_open.activated.connect(
+            self.openTrackedData)
 
     def deleteSelected(self):
         if qw.QApplication.focusWidget() == self.left_list:
@@ -385,22 +418,13 @@ class ReviewWidget(qw.QWidget):
                                                     qc.Qt.MatchExactly)
             for item in right_items:
                 self.right_list.takeItem(self.right_list.row(item))
-
-    def setupReading(self, video_path, data_path, dftype):
-        self._wait_cond = threading.Event()
-        self.video_reader = VideoReader(video_path, self._wait_cond)
-        self.track_reader = TrackReader(data_path, dftype)
-        self.sigGotoFrame.connect(self.video_reader.gotoFrame)
-        self.video_reader.sigFrameRead.connect(self.setFrame)
-        self.frame_interval = 1000.0 / self.video_reader.fps
-        self.pos_spin.setRange(0, self.track_reader.last_frame)
-        self.slider.setRange(0, self.track_reader.last_frame)
-        self.sigChangeTrack.connect(self.track_reader.changeTrack)
+        self.to_save = True
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
-        if frame_no >= self.track_reader.last_frame or \
-                self.video_reader is None:
+        if self.track_reader is None or \
+                self.video_reader is None or \
+                frame_no >= self.track_reader.last_frame :
             return
         self.frame_no = frame_no
         logging.debug(f'Frame no set: {frame_no}')
@@ -479,20 +503,78 @@ class ReviewWidget(qw.QWidget):
         vid_filename, vfilter = qw.QFileDialog.getOpenFileName(
             self, 'Open video', viddir)
         logging.debug(f'filename:{vid_filename}\nselected filter:{vfilter}')
-        self.setupReading(vid_filename, track_filename, filter)
+        fmt = 'csv' if filter.startswith('Text') else 'hdf'
+        self.setupReading(vid_filename, track_filename)
+        self.video_filename = vid_filename
+        self.track_filename = track_filename
+        settings.setValue('data/directory', os.path.dirname(track_filename))
+        settings.setValue('video/directory', os.path.dirname(vid_filename))
+        self.gotoFrame(0)
+        self.updateGeometry()
+
+    def setupReading(self, video_path, data_path):
+        self._wait_cond = threading.Event()
+        try:
+            self.video_reader = VideoReader(video_path, self._wait_cond)
+        except IOError:
+            return
+        self.track_reader = TrackReader(data_path)
+        self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+        self.video_reader.sigFrameRead.connect(self.setFrame)
+        self.frame_interval = 1000.0 / self.video_reader.fps
+        self.pos_spin.setRange(0, self.track_reader.last_frame)
+        self.slider.setRange(0, self.track_reader.last_frame)
+        self.sigChangeTrack.connect(self.track_reader.changeTrack)
+
+    qc.pyqtSlot()
+    def saveReviewedTracks(self):
+        datadir = settings.value('data/directory', '.')
+        track_filename, filter = qw.QFileDialog.getSaveFileName(
+            self,
+            'Save reviewed data',
+            datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
+        logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
+        if len(track_filename) > 0:
+            self.track_reader.saveChanges(track_filename)
+            self.to_save = False
+
+    qc.pyqtSlot()
+    def doQuit(self):
+        if self.to_save:
+            self.saveReviewedTracks()
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
         if play:
             self.play_button.setText('Pause')
+            self.playAction.setText('Pause')
             self.timer.start(self.frame_interval / self.speed)
         else:
             self.play_button.setText('Play')
+            self.playAction.setText('Play')
             self.timer.stop()
+
+    @qc.pyqtSlot()
+    def startVideo(self):
+        self.play_button.setChecked(True)
+        self.playVideo(True)
+
+    @qc.pyqtSlot()
+    def reset(self):
+        """Reset video: reopen video and track file"""
+        if self.video_reader is None:
+            # Not initialized - do nothing
+            return
+        self.playVideo(False)
+        self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int)
     def mapTracks(self, cur: int, tgt: int):
-        self.sigChangeTrack.emit(self.frame_no, tgt, cur)
+        self.track_reader.changeTrack(self.frame_no, tgt, cur)
+        tracks = self.track_reader.getTracks(self.frame_no + 1)
+        self.sigRightTrackList.emit(list(tracks.keys()))
+        self.sigRightTracks.emit(tracks)
+        self.to_save = True
 
     @qc.pyqtSlot(bool)
     def setColormap(self, checked):
@@ -500,8 +582,7 @@ class ReviewWidget(qw.QWidget):
             return
         input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
                                                 'Colormap',
-                                                ['None',
-                                                 'jet',
+                                                ['jet',
                                                  'viridis',
                                                  'rainbow',
                                                  'autumn',
@@ -509,7 +590,8 @@ class ReviewWidget(qw.QWidget):
                                                  'winter',
                                                  'spring',
                                                  'cool',
-                                                 'hot'])
+                                                 'hot',
+                                                 'None'])
         logging.debug(f'Setting colormap to {input}')
         if input == 'None':
             self.colormapAction.setChecked(False)
@@ -532,13 +614,14 @@ class ReviewWidget(qw.QWidget):
 
 
 class ReviewerMain(qw.QMainWindow):
-    def __init__(self):
-        super(ReviewerMain, self)
-        self.review_widget = ReviewWidget()
-        self.setCentralWidget(self.review_widget)
+    sigQuit = qc.pyqtSignal()
 
+    def __init__(self):
+        super(ReviewerMain, self).__init__()
+        self.review_widget = ReviewWidget()
         file_menu = self.menuBar().addMenu('&File')
         file_menu.addAction(self.review_widget.openAction)
+        file_menu.addAction(self.review_widget.saveAction)
         view_menu = self.menuBar().addMenu('&View')
         view_menu.addAction(self.review_widget.zoomInLeftAction)
         view_menu.addAction(self.review_widget.zoomInRightAction)
@@ -547,6 +630,22 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.tieViewsAction)
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
+        view_menu.addAction(self.review_widget.showAllTracksAction)
+        play_menu = self.menuBar().addMenu('Play')
+        play_menu.addAction(self.review_widget.playAction)
+        play_menu.addAction(self.review_widget.speedUpAction)
+        play_menu.addAction(self.review_widget.slowDownAction)
+        play_menu.addAction(self.review_widget.resetAction)
+        toolbar = self.addToolBar('View')
+        toolbar.addActions(view_menu.actions())
+        self.setCentralWidget(self.review_widget)
+        self.sigQuit.connect(self.review_widget.doQuit)
+
+    @qc.pyqtSlot()
+    def cleanup(self):
+        self.sigQuit.emit()
+        settings.sync()
+        logging.debug('Saved settings')
 
 
 def test_reviewwidget():
@@ -578,10 +677,9 @@ def test_review():
     #     'prefix_1500.png')
     video_path = 'C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi'
     track_path = 'C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi.track.csv'
-    reviewer.setupReading(video_path, track_path, 'csv')
+    reviewer.setupReading(video_path, track_path)
     reviewer.gotoFrame(0)
     win = qw.QMainWindow()
-    toolbar = win.addToolBar('Zoom')
     toolbar = win.addToolBar('Zoom')
     zi = qw.QAction('Zoom in')
     zi.triggered.connect(reviewer.left_view.zoomIn)
@@ -613,4 +711,13 @@ def test_review():
 
 if __name__ == '__main__':
     # test_reviewwidget()
-    test_review()
+    # test_review()
+    logging.getLogger().setLevel(logging.DEBUG)
+    app = qw.QApplication(sys.argv)
+    win = ReviewerMain()
+    win.setMinimumSize(800, 600)
+    win.setWindowTitle('Argos - review tracks')
+    win.showMaximized()
+    app.aboutToQuit.connect(win.cleanup)
+    win.show()
+    sys.exit(app.exec_())
