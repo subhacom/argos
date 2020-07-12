@@ -412,12 +412,13 @@ class FrameView(qw.QGraphicsView):
         self.setScene(self.frame_scene)
 
     def clearAll(self):
-        self.scene().clearAll()
+        self.frame_scene.clearItems()
+        self.viewport().update()
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int):
         logging.debug(f'Frame set {pos}')
-        self.scene().setFrame(frame)
+        self.frame_scene.setFrame(frame)
         self._framenum = pos
         self.viewport().update()
 
@@ -448,7 +449,7 @@ class FrameView(qw.QGraphicsView):
 
     @qc.pyqtSlot()
     def polygonsSet(self):
-        self.update()
+        self.viewport().update()
         self.sigPolygonsSet.emit()
 
     def wheelEvent(self, a0: qg.QWheelEvent) -> None:

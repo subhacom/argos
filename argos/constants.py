@@ -2,6 +2,7 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-17 2:24 PM
 import enum
+from collections import namedtuple
 
 
 class OutlineStyle(enum.Enum):
@@ -43,3 +44,6 @@ class DrawingGeom(enum.Enum):
     rectangle = enum.auto()
     polygon = enum.auto()
     arena = enum.auto()
+
+
+Change = namedtuple('Change', ['frame', 'change', 'orig', 'new'])

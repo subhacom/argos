@@ -18,7 +18,7 @@ from PyQt5 import (
     QtGui as qg
 )
 
-import argos.constants
+from argos.constants import Change
 from argos import utility as ut
 from argos.utility import make_color, get_cmap_color
 from argos.frameview import FrameScene, FrameView
@@ -27,83 +27,13 @@ from argos.vreader import VideoReader
 settings = ut.init()
 
 
-class ReviewScene(FrameScene):
-    def __init__(self, *args, **kwargs):
-        super(ReviewScene, self).__init__(*args, **kwargs)
-        self.historic_track_ls = qc.Qt.DashLine
-
-    @qc.pyqtSlot(dict)
-    def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
-        """rects: a dict of id: (x, y, w, h, flag)
-
-        This overrides the same slot in FrameScene where each rectangle has
-        a fifth entry indicating if this bbox/track is present in the current
-        frame (1) or was scene in an earlier frame (0).
-
-        The ones from earlier frame that are not present in the current frame
-        are displayed with a special line style (default: dashes)
-        """
-        logging.debug(f'Received rectangles from {self.sender()}')
-        logging.debug(f'Rectangles:\n{rects}')
-        self.clearItems()
-        for id_, tdata in rects.items():
-            if tdata.shape[0] != 5:
-                raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
-            if self.autocolor:
-                color = qg.QColor(*make_color(id_))
-            elif self.colormap is not None:
-                color = qg.QColor(
-                    *get_cmap_color(id_ % self.max_colors, self.max_colors,
-                                    self.colormap))
-            else:
-                color = self.color
-            pen = qg.QPen(color, self.linewidth)
-            if tdata[4] == 0:
-                pen.setStyle(self.historic_track_ls)
-            rect = tdata[:4].copy()
-            item = self.addRect(*rect, pen)
-            self.item_dict[id_] = item
-            text = self.addText(str(id_), self.font)
-            self.label_dict[id_] = text
-            text.setDefaultTextColor(color)
-            text.setPos(rect[0], rect[1])
-            self.polygons[id_] = rect
-            logging.debug(f'Set {id_}: {rect}')
-        self.sigPolygons.emit(self.polygons)
-        self.sigPolygonsSet.emit()
-
-
-class TrackView(FrameView):
-    """Visualization of bboxes of objects on video frame with facility to set
-    visible area of scene"""
-    sigSelected = qc.pyqtSignal(list)
-
-    def __init__(self, *args, **kwargs):
-        super(TrackView, self).__init__(*args, **kwargs)
-        self.sigSelected.connect(self.scene().setSelected)
-
-    def setViewportRect(self, rect: qc.QRectF) -> None:
-        self.fitInView(rect.x(), rect.y(),
-                       rect.width(),
-                       rect.height(),
-                       qc.Qt.KeepAspectRatio)
-
-    @qc.pyqtSlot(str)
-    def setSelected(self, id_: str) -> None:
-        try:
-            id_ = int(id_)
-            self.sigSelected.emit([id_])
-        except ValueError:
-            pass
-
-    def _makeScene(self):
-        self.frame_scene = ReviewScene()
-        self.setScene(self.frame_scene)
-
 
 class TrackReader(qc.QObject):
     """Class to read the tracking data"""
     sigEnd = qc.pyqtSignal()
+
+    op_assign = 0
+    op_swap = 1
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
@@ -113,11 +43,8 @@ class TrackReader(qc.QObject):
         else:
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
         self.last_frame = int(self.track_data.frame.max())
-        self._undo_dict = defaultdict(dict)
-        self._swap_dict = defaultdict(dict)
+        self.change_list = []
         self.to_delete = set()
-        self.assignments = {}
-        self.swaps = {}
 
     @property
     def max_id(self):
@@ -129,40 +56,45 @@ class TrackReader(qc.QObject):
             return
         self.frame_pos = frame_no
         tracks = self.track_data[self.track_data.frame == frame_no]
-        tracks = {self.assignments.get(int(row.trackid), int(row.trackid)):
+        tracks = {int(row.trackid):
                       row[['x', 'y', 'w', 'h']].values
                   for index, row in tracks.iterrows()
                   if int(row.trackid) not in self.to_delete}
-        for orig, new in self.swaps.items():
-            orig_trk = tracks.pop(orig, None)
-            new_trk = tracks.pop(new, None)
-            if orig_trk is not None:
-                tracks[new] = orig_trk
-            if new_trk is not None:
-                tracks[orig] = new_trk
+        for change in self.change_list:
+            orig_trk = tracks.pop(change.orig, None)
+            new_trk = tracks.pop(change.new, None)
+            if change.change == self.op_swap:
+                if orig_trk is not None:
+                    tracks[change.new] = orig_trk
+                if new_trk is not None:
+                    tracks[change.orig] = new_trk
+            elif change.change == self.op_assign and orig_trk is not None:
+                tracks[change.new] = orig_trk
         return tracks
 
     @qc.pyqtSlot(int, int, int)
     def changeTrack(self, frame_no, orig_id, new_id):
         """When user assigns `new_id` to `orig_id` keep it in undo buffer"""
-        self._undo_dict[frame_no][orig_id] = new_id
-        self.assignments[orig_id] = new_id
+        self.change_list.append(Change(frame=frame_no, change=self.op_assign,
+                                       orig=orig_id, new=new_id))
         logging.debug(
             f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
     @qc.pyqtSlot(int, int, int)
     def swapTrack(self, frame_no, orig_id, new_id):
         """When user swaps `new_id` with `orig_id` keep it in swap buffer"""
-        self._swap_dict[frame_no][orig_id] = new_id
-        self.swaps[orig_id] = new_id
+        self.change_list.append(Change(frame=frame_no, change=self.op_swap,
+                                       orig=orig_id, new=new_id))
         logging.debug(
             f'Swap track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
     def undoChangeTrack(self, frame_no):
-        tracks = self._undo_dict.pop(frame_no, None)
-        if tracks is not None:
-            for key in tracks:
-                self.assignments.pop(key, None)
+        for ii in range(len(self.change_list) - 1, 0, -1):
+            if self.change_list[ii][0] < frame_no:
+                break
+        if ii == len(self.change_list):
+            return
+        self.change_list = self.change_list[:ii+1]
 
     def consolidateChanges(self):
         assignments = {}
@@ -216,12 +148,82 @@ class TrackReader(qc.QObject):
         self.to_delete.add(track_id)
 
 
+class ReviewScene(FrameScene):
+    def __init__(self, *args, **kwargs):
+        super(ReviewScene, self).__init__(*args, **kwargs)
+        self.historic_track_ls = qc.Qt.DashLine
+
+    @qc.pyqtSlot(dict)
+    def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
+        """rects: a dict of id: (x, y, w, h, flag)
+
+        This overrides the same slot in FrameScene where each rectangle has
+        a fifth entry indicating if this bbox/track is present in the current
+        frame (1) or was scene in an earlier frame (0).
+
+        The ones from earlier frame that are not present in the current frame
+        are displayed with a special line style (default: dashes)
+        """
+        logging.debug(f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
+        logging.debug(f'{self.objectName()} Rectangles:\n{rects}')
+        self.clearItems()
+        for id_, tdata in rects.items():
+            if tdata.shape[0] != 5:
+                raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
+            if self.autocolor:
+                color = qg.QColor(*make_color(id_))
+            elif self.colormap is not None:
+                color = qg.QColor(
+                    *get_cmap_color(id_ % self.max_colors, self.max_colors,
+                                    self.colormap))
+            else:
+                color = self.color
+            pen = qg.QPen(color, self.linewidth)
+            if tdata[4] == 0:
+                pen.setStyle(self.historic_track_ls)
+                logging.debug(f'{self.objectName()}: old track : {id_}')
+            rect = tdata[:4].copy()
+            item = self.addRect(*rect, pen)
+            self.item_dict[id_] = item
+            text = self.addText(str(id_), self.font)
+            self.label_dict[id_] = text
+            text.setDefaultTextColor(color)
+            text.setPos(rect[0], rect[1])
+            self.polygons[id_] = rect
+            logging.debug(f'Set {id_}: {rect}')
+        self.sigPolygons.emit(self.polygons)
+        self.sigPolygonsSet.emit()
+
+
+class TrackView(FrameView):
+    """Visualization of bboxes of objects on video frame with facility to set
+    visible area of scene"""
+    sigSelected = qc.pyqtSignal(list)
+
+    def __init__(self, *args, **kwargs):
+        super(TrackView, self).__init__(*args, **kwargs)
+        self.sigSelected.connect(self.scene().setSelected)
+
+    def setViewportRect(self, rect: qc.QRectF) -> None:
+        self.fitInView(rect.x(), rect.y(),
+                       rect.width(),
+                       rect.height(),
+                       qc.Qt.KeepAspectRatio)
+
+    def _makeScene(self):
+        self.frame_scene = ReviewScene()
+        self.setScene(self.frame_scene)
+
+
 class TrackList(qw.QListWidget):
     sigMapTracks = qc.pyqtSignal(int, int, bool)
+    sigSelected = qc.pyqtSignal(list)
 
     def __init__(self, *args, **kwargs):
         super(TrackList, self).__init__(*args, **kwargs)
         self._drag_button = qc.Qt.NoButton
+        self.setSelectionMode(qw.QAbstractItemView.SingleSelection)
+        self.itemSelectionChanged.connect(self.sendSelected)
 
     def decode_item_data(self, mime_data: qc.QMimeData) -> List[
         Dict[qc.Qt.ItemDataRole, qc.QVariant]]:
@@ -272,6 +274,11 @@ class TrackList(qw.QListWidget):
         self.clear()
         self.addItems([str(x) for x in sorted(track_list)])
 
+    @qc.pyqtSlot()
+    def sendSelected(self):
+        items = [int(item.text()) for item in self.selectedItems()]
+        self.sigSelected.emit(items)
+
 
 class ReviewWidget(qw.QWidget):
     """A widget with two panes for reviewing track mislabelings"""
@@ -290,6 +297,7 @@ class ReviewWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
         # Keep track of all the tracks seen so far
+        self.setObjectName('ReviewWidget')
         self.to_save = False
         self.all_tracks = OrderedDict()
         self.all_tracks_by_frame = OrderedDict()
@@ -309,7 +317,8 @@ class ReviewWidget(qw.QWidget):
         layout = qw.QVBoxLayout()
         panes_layout = qw.QHBoxLayout()
         self.left_view = TrackView()
-        self.left_view.setObjectName('Left')
+        self.left_view.setObjectName('LeftView')
+        self.left_view.frame_scene.setObjectName('LeftScene')
         # self.left_view.setSizePolicy(qw.QSizePolicy.MinimumExpanding, qw.QSizePolicy.MinimumExpanding)
         self.left_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
         self.left_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
@@ -349,7 +358,8 @@ class ReviewWidget(qw.QWidget):
         panes_layout.addLayout(list_layout)
 
         self.right_view = TrackView()
-        self.right_view.setObjectName('Right')
+        self.right_view.setObjectName('RightView')
+        self.right_view.frame_scene.setObjectName('RightScene')
         # self.right_view.setSizePolicy(qw.QSizePolicy.Expanding,
         #                              qw.QSizePolicy.Expanding)
         self.right_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
@@ -379,9 +389,9 @@ class ReviewWidget(qw.QWidget):
         self.sigRightTracks.connect(self.right_view.sigSetRectangles)
         self.sigRightTrackList.connect(self.right_list.replaceAll)
         self.sigAllTracksList.connect(self.all_list.replaceAll)
-        self.left_list.currentTextChanged.connect(self.left_view.setSelected)
-        self.all_list.currentTextChanged.connect(self.left_view.setSelected)
-        self.right_list.currentTextChanged.connect(self.right_view.setSelected)
+        self.left_list.sigSelected.connect(self.left_view.sigSelected)
+        self.all_list.sigSelected.connect(self.left_view.sigSelected)
+        self.right_list.sigSelected.connect(self.right_view.sigSelected)
         self.right_list.sigMapTracks.connect(self.mapTracks)
         self.play_button.clicked.connect(self.playVideo)
         self.play_button.setCheckable(True)
@@ -451,7 +461,7 @@ class ReviewWidget(qw.QWidget):
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
-        self.sc_play.activated.connect(self.startVideo)
+        self.sc_play.activated.connect(self.togglePlay)
         self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
         self.sc_zoom_in.activated.connect(self.left_view.zoomIn)
         self.sc_zoom_in.activated.connect(self.right_view.zoomIn)
@@ -482,10 +492,11 @@ class ReviewWidget(qw.QWidget):
             self.openTrackedData)
 
     def deleteSelected(self):
-        if qw.QApplication.focusWidget() == self.left_list:
-            items = self.left_list.selectedItems()
-        elif qw.QApplication.focusWidget() == self.right_list:
-            items = self.right_list.selectedItems()
+        widget = qw.QApplication.focusWidget()
+        if isinstance(widget, TrackList):
+            items = widget.selectedItems()
+        else:
+            return
         selected = [int(item.text()) for item in items]
         self.left_view.scene().setSelected(selected)
         self.right_view.scene().setSelected(selected)
@@ -654,9 +665,13 @@ class ReviewWidget(qw.QWidget):
             self.timer.stop()
 
     @qc.pyqtSlot()
-    def startVideo(self):
-        self.play_button.setChecked(True)
-        self.playVideo(True)
+    def togglePlay(self):
+        if self.play_button.isChecked():
+            self.play_button.setChecked(False)
+            self.playVideo(False)
+        else:
+            self.play_button.setChecked(True)
+            self.playVideo(True)
 
     @qc.pyqtSlot()
     def reset(self):
@@ -665,6 +680,8 @@ class ReviewWidget(qw.QWidget):
             # Not initialized - do nothing
             return
         self.playVideo(False)
+        self.left_view.clearAll()
+        self.right_view.clearAll()
         self.setupReading(self.video_filename, self.track_filename)
         self.gotoFrame(0)
 
