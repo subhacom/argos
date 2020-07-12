@@ -34,6 +34,7 @@ class TrackReader(qc.QObject):
 
     op_assign = 0
     op_swap = 1
+    op_delete = 2
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
@@ -42,13 +43,13 @@ class TrackReader(qc.QObject):
             self.track_data = pd.read_csv(self.data_path)
         else:
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
-        self.last_frame = int(self.track_data.frame.max())
+        self.track_data = self.track_data.astype({'frame': int, 'trackid': int})
+        self.last_frame = self.track_data.frame.max()
         self.change_list = []
-        self.to_delete = set()
 
     @property
     def max_id(self):
-        return int(self.track_data.trackid.max())
+        return self.track_data.trackid.max()
 
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
@@ -56,20 +57,7 @@ class TrackReader(qc.QObject):
             return
         self.frame_pos = frame_no
         tracks = self.track_data[self.track_data.frame == frame_no]
-        tracks = {int(row.trackid):
-                      row[['x', 'y', 'w', 'h']].values
-                  for index, row in tracks.iterrows()
-                  if int(row.trackid) not in self.to_delete}
-        for change in self.change_list:
-            orig_trk = tracks.pop(change.orig, None)
-            new_trk = tracks.pop(change.new, None)
-            if change.change == self.op_swap:
-                if orig_trk is not None:
-                    tracks[change.new] = orig_trk
-                if new_trk is not None:
-                    tracks[change.orig] = new_trk
-            elif change.change == self.op_assign and orig_trk is not None:
-                tracks[change.new] = orig_trk
+        tracks = self.applyChanges(tracks)
         return tracks
 
     @qc.pyqtSlot(int, int, int)
@@ -88,6 +76,10 @@ class TrackReader(qc.QObject):
         logging.debug(
             f'Swap track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
+    def deleteTrack(self, frame_no, orig_id):
+        self.change_list.append(Change(frame=frame_no, change=self.op_delete,
+                                       orig=orig_id, new=None))
+
     def undoChangeTrack(self, frame_no):
         for ii in range(len(self.change_list) - 1, 0, -1):
             if self.change_list[ii][0] < frame_no:
@@ -96,22 +88,32 @@ class TrackReader(qc.QObject):
             return
         self.change_list = self.change_list[:ii+1]
 
-    def consolidateChanges(self):
-        assignments = {}
-        frame_list = sorted(self._undo_dict.keys())
-        if len(frame_list) == 0:
-            return
-        assignments = self._undo_dict[frame_list[0]]
-        for frame_no in frame_list[1:]:
-            next = self._undo_dict[frame_no]
-            for key, value in next.items():
-                if key in assignments:
-                    raise Exception('Key already present in assignments ...')
-                while value in assignments:
-                    value = assignments[value]
-                assignments[key] = value
-                next[key] = value
-        return assignments
+    def applyChanges(self, tdata):
+        """Apply the changes in `change_list` to traks in `trackdf`
+        `trackdf` should have a single `frame` value - changes  only
+        upto and including this frame are applied.
+        """
+        tracks = {row.trackid: [row.x, row.y, row.w, row.h]
+                  for row in tdata.itertuples()}
+        frameno = tdata.frame.values[0]
+        for change in self.change_list:
+            if change.frame > frameno:
+                break
+            orig_trk = tracks.pop(change.orig, None)
+            if change.change == self.op_swap:
+                new_trk = tracks.pop(change.new, None)
+                if orig_trk is not None:
+                    tracks[change.new] = orig_trk
+                if new_trk is not None:
+                    tracks[change.orig] = new_trk
+            elif change.change == self.op_assign:
+                if orig_trk is not None:
+                    tracks[change.new] = orig_trk
+            elif change.change != self.op_delete:  # it must be delete, so leave the orig_trk popped
+                raise ValueError(
+                    f'Frame: {frameno}: Only alternative operation is '
+                    f'`delete`({self.op_delete}) but found {change.change}')
+        return tracks
 
     def saveChanges(self, filepath):
         """Consolidate all the changes made in track id assignment.
@@ -121,31 +123,20 @@ class TrackReader(qc.QObject):
 
         track ids can be swapped.
         """
-        assignments = self.consolidateChanges()
+        # assignments = self.consolidateChanges()
         data = []
         for frame_no, tdata in self.track_data.groupby('frame'):
-            mapping = self._undo_dict.pop(frame_no, {})
-            for index, row in tdata.iterrows():
-                trackid = int(row.trackid)
-                if trackid in self.to_delete:
-                    continue
-                data.append({'frame': frame_no,
-                             'trackid': mapping.get(trackid, trackid),
-                             'x': row.x,
-                             'y': row.y,
-                             'w': row.w,
-                             'h': row.h
-                             })
-        data = pd.DataFrame(data=data)
-        if filepath.endswith('csv'):
+            tracks = self.applyChanges(tdata)
+            for tid, tdata in tracks.items():
+                data.append([frame_no, tid] + tdata)
+        data = pd.DataFrame(data=data,
+                            columns=['frame', 'trackid', 'x', 'y', 'w', 'h'])
+        if filepath.endswith('.csv'):
             data.to_csv(filepath)
         else:
             data.to_hdf(filepath, 'tracked', mode='w')
         self.track_data = data
         self._undo_dict = defaultdict(dict)
-
-    def markForDeletion(self, track_id):
-        self.to_delete.add(track_id)
 
 
 class ReviewScene(FrameScene):
@@ -498,16 +489,10 @@ class ReviewWidget(qw.QWidget):
         else:
             return
         selected = [int(item.text()) for item in items]
-        self.left_view.scene().setSelected(selected)
         self.right_view.scene().setSelected(selected)
-        self.left_view.scene().removeSelected()
         self.right_view.scene().removeSelected()
         for sel in selected:
-            self.track_reader.markForDeletion(sel)
-            left_items = self.left_list.findItems(items[0].text(),
-                                                  qc.Qt.MatchExactly)
-            for item in left_items:
-                self.left_list.takeItem(self.left_list.row(item))
+            self.track_reader.deleteTrack(self.frame_no + 1, sel)
             right_items = self.right_list.findItems(items[0].text(),
                                                     qc.Qt.MatchExactly)
             for item in right_items:
