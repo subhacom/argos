@@ -20,12 +20,12 @@ from argos.constants import DrawingGeom
 from argos.utility import cv2qimage, make_color, get_cmap_color
 
 
-class Scene(qw.QGraphicsScene):
+class FrameScene(qw.QGraphicsScene):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
-        super(Scene, self).__init__(*args, **kwargs)
+        super(FrameScene, self).__init__(*args, **kwargs)
         self.arena = None
         self.polygons = {}
         self.item_dict = {}
@@ -39,10 +39,13 @@ class Scene(qw.QGraphicsScene):
         self.selected_color = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
         self.linewidth = 2
+        self.linestyle_selected = qc.Qt.DotLine
         self.snap_dist = 5
         self.incomplete_item = None
         self.points = []
         self.selected = []
+        self.font = qw.QApplication.font()
+        self.font.setBold(True)
 
     def _clearIncomplete(self):
         if self.incomplete_item is not None:
@@ -65,14 +68,14 @@ class Scene(qw.QGraphicsScene):
             if key in selected:
                 if self.autocolor:
                     color = qg.QColor(*make_color(key))
-                    pen = qg.QPen(color, qc.Qt.DotLine)
                 elif self.colormap is not None:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.max_colors, self.max_colors, self.colormap))
-                    pen = qg.QPen(color, qc.Qt.DotLine)
+                        *get_cmap_color(key % self.max_colors, self.max_colors,
+                                        self.colormap))
                 else:
                     color = self.selected_color
-                    pen = qg.QPen(color)
+                pen = qg.QPen(color, self.linewidth,
+                              style=self.linestyle_selected)
                 self.item_dict[key].setPen(pen)
                 self.label_dict[key].setDefaultTextColor(color)
             else:
@@ -80,10 +83,11 @@ class Scene(qw.QGraphicsScene):
                     color = qg.QColor(*make_color(key))
                 elif self.colormap is not None:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.max_colors, self.max_colors, self.colormap))
+                        *get_cmap_color(key % self.max_colors, self.max_colors,
+                                        self.colormap))
                 else:
                     color = self.color
-                pen = qg.QPen(color)
+                pen = qg.QPen(color, self.linewidth)
                 self.item_dict[key].setPen(pen)
                 self.label_dict[key].setDefaultTextColor(color)
 
@@ -153,7 +157,7 @@ class Scene(qw.QGraphicsScene):
         self.addItem(item)
         self.item_dict[index] = item
         bbox = item.sceneBoundingRect()
-        text = self.addText(str(index))
+        text = self.addText(str(index), self.font)
         self.label_dict[index] = text
         text.setDefaultTextColor(self.color)
         logging.debug(f'Scene bounding rect of {index}={bbox}')
@@ -202,6 +206,10 @@ class Scene(qw.QGraphicsScene):
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
         self.autocolor = auto
+        if auto:
+            self.linestyle_selected = qc.Qt.DotLine
+        else:
+            self.linestyle_selected = qc.Qt.SolidLine
 
     @qc.pyqtSlot(str, int)
     def setColormap(self, cmap, max_items):
@@ -210,15 +218,18 @@ class Scene(qw.QGraphicsScene):
         if max_items < 1:
             self.colormap = None
             self.max_colors = -1
+            self.linestyle_selected = qc.Qt.SolidLine
             return
         try:
             get_cmap_color(0, max_items, cmap)
             self.colormap = cmap
             self.max_colors = max_items
             self.autocolor = False
+            self.linestyle_selected = qc.Qt.DotLine
         except ValueError:
             self.colormap = None
             self.max_colors = -1
+            self.linestyle_selected = qc.Qt.SolidLine
 
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
@@ -239,9 +250,9 @@ class Scene(qw.QGraphicsScene):
                     *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
             else:
                 color = self.color
-            item = self.addRect(*rect, qg.QPen(color))
+            item = self.addRect(*rect, qg.QPen(color, self.linewidth))
             self.item_dict[id_] = item
-            text = self.addText(str(id_))
+            text = self.addText(str(id_), self.font)
             self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1])
@@ -268,9 +279,9 @@ class Scene(qw.QGraphicsScene):
             logging.debug(f'Polygon {id_} poins shape: {poly.shape}')
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
-            item = self.addPolygon(polygon, qg.QPen(color))
+            item = self.addPolygon(polygon, qg.QPen(color, self.width()))
             self.item_dict[id_] = item
-            text = self.addText(str(id_))
+            text = self.addText(str(id_), self.font)
             self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
@@ -283,7 +294,7 @@ class Scene(qw.QGraphicsScene):
     def keyPressEvent(self, ev: qg.QKeyEvent) -> None:
         if ev.key() == qc.Qt.Key_Escape:
             self.points = []
-        super(Scene, self).keyPressEvent(ev)
+        super(FrameScene, self).keyPressEvent(ev)
 
     def mouseReleaseEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
         """Start drawing arena"""
@@ -336,8 +347,7 @@ class Scene(qw.QGraphicsScene):
         pos = event.scenePos()
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if len(self.points) > 0:
-            pen = qg.QPen(self.incomplete_color)
-            pen.setWidth(self.linewidth)
+            pen = qg.QPen(self.incomplete_color, self.linewidth)
             if self.geom == DrawingGeom.rectangle or self.geom == DrawingGeom.arena:
                 if self.incomplete_item is not None:
                     # logging.debug('AAAAA %r', len(self.items()))
@@ -368,7 +378,7 @@ class Scene(qw.QGraphicsScene):
         painter.drawImage(arena, self._frame, arena)
 
 
-class Display(qw.QGraphicsView):
+class FrameView(qw.QGraphicsView):
     sigSetRectangles = qc.pyqtSignal(dict)
     sigSetPolygons = qc.pyqtSignal(dict)
     sigPolygons = qc.pyqtSignal(dict)
@@ -376,25 +386,30 @@ class Display(qw.QGraphicsView):
     sigViewportAreaChanged = qc.pyqtSignal(qc.QRectF)
 
     def __init__(self, *args, **kwargs):
-        super(Display, self).__init__(*args, **kwargs)
-        scene = Scene()
+        super(FrameView, self).__init__(*args, **kwargs)
         self._framenum = 0
-        self.setScene(scene)
-        self.sigSetRectangles.connect(scene.setRectangles)
-        self.sigSetPolygons.connect(scene.setPolygons)
-        scene.sigPolygons.connect(self.sigPolygons)
+        self._makeScene()
+        self.sigSetRectangles.connect(self.frame_scene.setRectangles)
+        self.sigSetPolygons.connect(self.frame_scene.setPolygons)
+        self.frame_scene.sigPolygons.connect(self.sigPolygons)
         # scene.sigPolygonsSet.connect(self.sigPolygonsSet)
-        scene.sigPolygonsSet.connect(self.polygonsSet)
+        self.frame_scene.sigPolygonsSet.connect(self.polygonsSet)
         self.setMouseTracking(True)
         self.resetArenaAction = qw.QAction('Reset arena')
-        self.resetArenaAction.triggered.connect(scene.resetArena)
+        self.resetArenaAction.triggered.connect(self.frame_scene.resetArena)
         self.zoomInAction = qw.QAction('Zoom in')
         self.zoomInAction.triggered.connect(self.zoomIn)
         self.zoomOutAction = qw.QAction('Zoom out')
         self.zoomOutAction.triggered.connect(self.zoomOut)
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
-        self.autoColorAction.triggered.connect(scene.setAutoColor)
+        self.autoColorAction.triggered.connect(self.frame_scene.setAutoColor)
+
+    def _makeScene(self):
+        """Keep this separate so that subclasses can override frame_scene with s
+        ubclass of FrameScene"""
+        self.frame_scene = FrameScene()
+        self.setScene(self.frame_scene)
 
     def clearAll(self):
         self.scene().clearAll()
@@ -450,13 +465,13 @@ class Display(qw.QGraphicsView):
                 [self.zoomOut() for ii in range(int(-ndegrees / 15))]
             # logging.debug('Angle %f degrees', a0.angleDelta().y() / 8)
         else:
-            super(Display, self).wheelEvent(a0)
+            super(FrameView, self).wheelEvent(a0)
 
 
 def test_display():
     util.init()
     app = qw.QApplication(sys.argv)
-    view = Display()
+    view = FrameView()
     image = cv2.imread(
         'C:/Users/raysu/analysis/animal_tracking/bugtracking/training_images/'
         'prefix_1500.png')

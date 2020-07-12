@@ -10,7 +10,7 @@ import os
 from PyQt5 import QtWidgets as qw, QtCore as qc
 
 from argos import utility
-from argos.display import Display
+from argos.frameview import FrameView
 from argos.vreader import VideoReader
 from argos import writer
 
@@ -143,7 +143,7 @@ class VideoWidget(qw.QWidget):
         self.sigSetTracked.connect(self.writer.appendTracked)
 
         if self.display_widget is None:
-            self.display_widget = Display()
+            self.display_widget = FrameView()
             self.autoColorAction.triggered.connect(
                 self.display_widget.autoColorAction.trigger)
             self.sigSetFrame.connect(self.display_widget.setFrame)

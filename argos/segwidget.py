@@ -17,7 +17,7 @@ from PyQt5 import (
 
 import argos.constants
 from argos import utility as ut
-from argos.display import Display
+from argos.frameview import FrameView
 
 
 settings = ut.init()
@@ -759,7 +759,7 @@ class SegWidget(qw.QWidget):
 
         self.setLayout(layout)
 
-        self._intermediate_win = Display()
+        self._intermediate_win = FrameView()
         self._intermediate_win.setWindowFlag(qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
         self._intermediate_win.hide()
         # Housekeeping - widgets to be shown or hidden based on choice of method

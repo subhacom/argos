@@ -23,15 +23,15 @@ from PyQt5 import (
 import argos.constants
 from argos.constants import OutlineStyle
 from argos import utility as ut
-from argos import display
-from argos.display import Display
+from argos import frameview
+from argos.frameview import FrameView
 from argos.segwidget import SegWidget
 from yolact import config as yconfig
 
 settings = ut.init()
 
 
-class SegDisplay(Display):
+class SegDisplay(FrameView):
     sigItemSelectionChanged = qc.pyqtSignal(list)
     sigPolygons = qc.pyqtSignal(dict)
 
