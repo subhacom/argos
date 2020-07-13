@@ -31,6 +31,7 @@ settings = ut.init()
 class TrackReader(qc.QObject):
     """Class to read the tracking data"""
     sigEnd = qc.pyqtSignal()
+    sigSavedFrames = qc.pyqtSignal(int)
 
     op_assign = 0
     op_swap = 1
@@ -125,18 +126,21 @@ class TrackReader(qc.QObject):
         """
         # assignments = self.consolidateChanges()
         data = []
+
         for frame_no, tdata in self.track_data.groupby('frame'):
             tracks = self.applyChanges(tdata)
             for tid, tdata in tracks.items():
                 data.append([frame_no, tid] + tdata)
+                self.sigSavedFrames.emit(frame_no)
         data = pd.DataFrame(data=data,
                             columns=['frame', 'trackid', 'x', 'y', 'w', 'h'])
         if filepath.endswith('.csv'):
-            data.to_csv(filepath)
+            data.to_csv(filepath, index=False)
         else:
             data.to_hdf(filepath, 'tracked', mode='w')
         self.track_data = data
-        self._undo_dict = defaultdict(dict)
+        self.change_list = []
+
 
 
 class ReviewScene(FrameScene):
@@ -284,6 +288,7 @@ class ReviewWidget(qw.QWidget):
     sigAllTracksList = qc.pyqtSignal(list)
     sigChangeTrack = qc.pyqtSignal(int, int, int)
     sigSetColormap = qc.pyqtSignal(str, int)
+    sigDiffMessage = qc.pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
@@ -369,7 +374,7 @@ class ReviewWidget(qw.QWidget):
         ctrl_layout.addWidget(self.reset_button)
         layout.addLayout(ctrl_layout)
         self.setLayout(layout)
-        self.make_actions()
+        self.makeActions()
         self.makeShortcuts()
 
         self.timer.timeout.connect(self.nextFrame)
@@ -388,19 +393,22 @@ class ReviewWidget(qw.QWidget):
         self.play_button.setCheckable(True)
         self.slider.valueChanged.connect(self.gotoFrame)
         self.pos_spin.valueChanged.connect(self.gotoFrame)
+        self.pos_spin.lineEdit().setEnabled(False)
         self.sigSetColormap.connect(self.left_view.scene().setColormap)
         self.sigSetColormap.connect(self.right_view.scene().setColormap)
 
+    @qc.pyqtSlot()
     def speedUp(self):
         self.speed *= 1.25
         logging.debug(f'Speed: {self.speed}')
 
+    @qc.pyqtSlot()
     def slowDown(self):
         self.speed /= 1.25
         logging.debug(f'Speed: {self.speed}')
 
-
-    def tieViews(self, tie):
+    @qc.pyqtSlot(bool)
+    def tieViews(self, tie: bool) -> None:
         if tie:
             logging.debug(f'Before {self.left_view.viewport().size()}')
             logging.debug(f'After {self.right_view.viewport().size()}')
@@ -409,10 +417,16 @@ class ReviewWidget(qw.QWidget):
             self.right_view.sigViewportAreaChanged.connect(
                 self.left_view.setViewportRect)
         else:
-            self.left_view.disconnect(self.left_view.sigViewportAreaChanged)
-            self.right_view.disconnect(self.right_view.sigViewportAreaChanged)
+            try:
+                self.left_view.sigViewportAreaChanged.disconnect()
+            except TypeError:
+                pass
+            try:
+                self.right_view.sigViewportAreaChanged.disconnect()
+            except TypeError:
+                pass
 
-    def make_actions(self):
+    def makeActions(self):
         self.tieViewsAction = qw.QAction('Scroll views together')
         self.tieViewsAction.setCheckable(True)
         self.tieViewsAction.triggered.connect(self.tieViews)
@@ -449,6 +463,16 @@ class ReviewWidget(qw.QWidget):
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
         self.resetAction.triggered.connect(self.reset)
+        self.showDifferenceAction = qw.QAction('Show popup window for left/right mismatch')
+        self.showDifferenceAction.setCheckable(True)
+        show_difference = settings.value('review/showdiff', 1)
+        self.showDifferenceAction.setChecked(show_difference)
+        self.swapTracksAction = qw.QAction('Swap tracks')
+        self.swapTracksAction.triggered.connect(self.swapTracks)
+        self.replaceTrackAction = qw.QAction('Replace track')
+        self.replaceTrackAction.triggered.connect(self.replaceTrack)
+        self.deleteTrackAction = qw.QAction('Delete track')
+        self.deleteTrackAction.triggered.connect(self.deleteSelected)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -482,6 +506,7 @@ class ReviewWidget(qw.QWidget):
         self.sc_open.activated.connect(
             self.openTrackedData)
 
+    @qc.pyqtSlot()
     def deleteSelected(self):
         widget = qw.QApplication.focusWidget()
         if isinstance(widget, TrackList):
@@ -499,6 +524,23 @@ class ReviewWidget(qw.QWidget):
                 self.right_list.takeItem(self.right_list.row(item))
         self.to_save = True
 
+    @qc.pyqtSlot()
+    def swapTracks(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                               True)
+
+    @qc.pyqtSlot()
+    def replaceTrack(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()), False)
+
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
         if self.track_reader is None or \
@@ -509,6 +551,11 @@ class ReviewWidget(qw.QWidget):
         logging.debug(f'Frame no set: {frame_no}')
         self.sigGotoFrame.emit(self.frame_no)
         self.sigGotoFrame.emit(self.frame_no + 1)
+
+    @qc.pyqtSlot()
+    def gotoEditedPos(self):
+        frame_no = int(self.pos_spin.text())
+        self.gotoFrame(frame_no)
 
     @qc.pyqtSlot()
     def nextFrame(self):
@@ -564,25 +611,34 @@ class ReviewWidget(qw.QWidget):
                 self.sigRightTracks.emit(self.right_tracks)
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
             # Pause if there is a mismatch with the earlier tracks
-            left_keys = set(self.left_tracks.keys())
-            right_keys = set(self.right_tracks.keys())
-            if left_keys != right_keys:
-                self.play_button.setChecked(False)
-                self.playVideo(False)
-                logging.info(f'Tracks don\'t match in frame {pos}: '
-                             f'{left_keys.symmetric_difference(right_keys)}')
-                left_only = left_keys - right_keys
-                left_message = f'Tracks only on left: \n{left_only}' \
-                    if len(left_only) > 0 else ''
-                right_only = right_keys - left_keys
-                right_message = f'Tracks only on right: \n{right_only}' \
-                    if len(right_only) > 0 else ''
-                qw.QMessageBox.information(
-                    self, 'Track mismatch', f'{left_message}\n{right_message}')
+            message = self._get_diff()
+            if len(message) > 0:
+                if self.showDifferenceAction.isChecked():
+                    qw.QMessageBox.information(self, 'Track mismatch', message)
+                self.sigDiffMessage.emit(message)
         else:
             raise Exception('This should not be reached')
         self._wait_cond.set()
         logging.debug('End wait ...')
+
+    def _get_diff(self):
+        left_keys = set(self.left_tracks.keys())
+        right_keys = set(self.right_tracks.keys())
+        if left_keys != right_keys:
+            self.play_button.setChecked(False)
+            self.playVideo(False)
+            logging.info(f'Tracks don\'t match between frames {self.frame_no} '
+                         f'and {self.frame_no + 1}: '
+                         f'{left_keys.symmetric_difference(right_keys)}')
+            left_only = left_keys - right_keys
+            left_message = f'Tracks only on left: {left_only}.' \
+                if len(left_only) > 0 else ''
+            right_only = right_keys - left_keys
+            right_message = f'Tracks only on right: {right_only}.' \
+                if len(right_only) > 0 else ''
+            return f'Frame {self.frame_no}-{self.frame_no+1}: {left_message} {right_message}'
+        else:
+            return ''
 
     @qc.pyqtSlot()
     def openTrackedData(self):
@@ -602,6 +658,9 @@ class ReviewWidget(qw.QWidget):
         self.track_filename = track_filename
         settings.setValue('data/directory', os.path.dirname(track_filename))
         settings.setValue('video/directory', os.path.dirname(vid_filename))
+        self.all_tracks.clear()
+        self.left_list.clear()
+        self.right_list.clear()
         self.gotoFrame(0)
         self.updateGeometry()
 
@@ -619,8 +678,7 @@ class ReviewWidget(qw.QWidget):
         self.slider.setRange(0, self.track_reader.last_frame)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
 
-    qc.pyqtSlot()
-
+    @qc.pyqtSlot()
     def saveReviewedTracks(self):
         datadir = settings.value('data/directory', '.')
         track_filename, filter = qw.QFileDialog.getSaveFileName(
@@ -629,14 +687,28 @@ class ReviewWidget(qw.QWidget):
             datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) > 0:
-            self.track_reader.saveChanges(track_filename)
-            self.to_save = False
+            try:
+                indicator = qw.QProgressDialog('Saving track data', None,
+                                               0,
+                                               self.track_reader.last_frame + 1,
+                                               self)
 
-    qc.pyqtSlot()
+                indicator.setWindowModality(qc.Qt.WindowModal)
+                indicator.show()
+                self.track_reader.sigSavedFrames.connect(indicator.setValue)
+                self.track_reader.saveChanges(track_filename)
+                indicator.setValue(self.track_reader.last_frame + 1)
+                self.to_save = False
+            except OSError as err:
+                qw.QMessageBox.critical(
+                    self, 'Error opening file for writing',
+                    f'File {track_filename} could not be opened.\n{err}')
 
+    @qc.pyqtSlot()
     def doQuit(self):
         if self.to_save:
             self.saveReviewedTracks()
+        settings.setValue('review/showdiff', int(self.showDifferenceAction.isChecked()))
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
@@ -737,21 +809,31 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.showAllTracksAction)
+        view_menu.addAction(self.review_widget.showDifferenceAction)
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.playAction)
         play_menu.addAction(self.review_widget.speedUpAction)
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
+        action_menu = self.menuBar().addMenu('Action')
+        action_menu.addActions([self.review_widget.swapTracksAction,
+                                self.review_widget.replaceTrackAction,
+                                self.review_widget.deleteTrackAction])
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
+        toolbar.addActions(action_menu.actions())
         self.setCentralWidget(self.review_widget)
         self.sigQuit.connect(self.review_widget.doQuit)
+        self.status_label = qw.QLabel()
+        self.review_widget.sigDiffMessage.connect(self.status_label.setText)
+        self.statusBar().addWidget(self.status_label)
 
     @qc.pyqtSlot()
     def cleanup(self):
         self.sigQuit.emit()
         settings.sync()
         logging.debug('Saved settings')
+
 
 
 def test_reviewwidget():

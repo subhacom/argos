@@ -19,19 +19,21 @@ from argos.constants import OutlineStyle, DistanceMetric
 
 
 def init():
-    logging.basicConfig(stream=sys.stdout,
-                        format='%(asctime)s '
-                               'p=%(processName)s[%(process)d] '
-                               't=%(threadName)s[%(thread)d] '
-                               '%(filename)s#%(lineno)d:%(funcName)s: '
-                               '%(message)s',
-                        level=logging.ERROR)
+
 
     qc.QCoreApplication.setOrganizationName('NIH')
     qc.QCoreApplication.setOrganizationDomain('nih.gov')
     qc.QCoreApplication.setApplicationName('Argos')
 
     settings = qc.QSettings()
+    debug = settings.value('debug', logging.ERROR)
+    logging.basicConfig(stream=sys.stdout,
+                        format='%(asctime)s '
+                               'p=%(processName)s[%(process)d] '
+                               't=%(threadName)s[%(thread)d] '
+                               '%(filename)s#%(lineno)d:%(funcName)s: '
+                               '%(message)s',
+                        level=debug)
     return settings
 
 

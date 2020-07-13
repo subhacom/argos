@@ -113,7 +113,8 @@ class ArgosMain(qw.QMainWindow):
         self._zoom_menu.addActions([self._video_widget.zoomInAction,
                                     self._video_widget.zoomOutAction,
                                     self._video_widget.resetArenaAction,
-                                    self._video_widget.autoColorAction])
+                                    self._video_widget.autoColorAction,
+                                    self._video_widget.colormapAction])
         self._debug_menu = self.menuBar().addMenu('Advanced')
         self._debug_menu.addAction(self._debug_action)
 

@@ -25,6 +25,7 @@ class VideoWidget(qw.QWidget):
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
+    sigSetColormap = qc.pyqtSignal(str, int)
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
@@ -61,6 +62,9 @@ class VideoWidget(qw.QWidget):
         self.resetAction.triggered.connect(self.resetVideo)
         self.autoColorAction = qw.QAction('Automatic color')
         self.autoColorAction.setCheckable(True)
+        self.colormapAction = qw.QAction('Use colormap')
+        self.colormapAction.setCheckable(True)
+        self.colormapAction.triggered.connect(self.setColormap)
         self.reader_thread = qc.QThread()
         self.sigQuit.connect(self.reader_thread.quit)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
@@ -96,6 +100,36 @@ class VideoWidget(qw.QWidget):
             return
         self.video_filename = fname
         self._initIO()
+
+    @qc.pyqtSlot(bool)
+    def setColormap(self, check):
+        if not check:
+            return
+        input, accept = qw.QInputDialog.getItem(self, 'Colormap for track display',
+                                           'Colormap',
+                                           ['jet',
+                                            'viridis',
+                                            'rainbow',
+                                            'autumn',
+                                            'summer',
+                                            'winter',
+                                            'spring',
+                                            'cool',
+                                            'hot',
+                                            'None'])
+        if input == 'None':
+            self.colormapAction.setChecked(False)
+            return
+        if not accept:
+            return
+        max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
+                                                    'Number of colors', 10, 1,
+                                                    20)
+        if not accept:
+            return
+        self.autoColorAction.setChecked(False)
+        self.colormapAction.setChecked(True)
+        self.sigSetColormap.emit(input, max_colors)
 
     def _initIO(self, outfpath=None, codec=None):
         # Open input
@@ -146,6 +180,8 @@ class VideoWidget(qw.QWidget):
             self.display_widget = FrameView()
             self.autoColorAction.triggered.connect(
                 self.display_widget.autoColorAction.trigger)
+            self.sigSetColormap.connect(
+                self.display_widget.frame_scene.setColormap)
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
