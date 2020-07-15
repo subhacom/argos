@@ -24,8 +24,8 @@ from argos.utility import make_color, get_cmap_color
 from argos.frameview import FrameScene, FrameView
 from argos.vreader import VideoReader
 
-settings = ut.init()
 
+settings = ut.init()
 
 
 class TrackReader(qc.QObject):

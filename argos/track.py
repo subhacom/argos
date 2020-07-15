@@ -18,14 +18,12 @@ from PyQt5 import (
     QtGui as qg
 )
 
-
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
 from argos.sortracker import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
-
 
 # Set up logging for multithreading/multiprocessing
 settings = util.init()
@@ -48,13 +46,13 @@ class ArgosMain(qw.QMainWindow):
 
         self._yolact_dock = qw.QDockWidget('Yolact settings')
         self._yolact_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                         qc.Qt.RightDockWidgetArea)
+                                          qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._yolact_dock)
         self._yolact_dock.setWidget(self._yolact_widget)
 
         self._seg_dock = qw.QDockWidget('Segmentation settings')
         self._seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                         qc.Qt.RightDockWidgetArea)
+                                       qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._seg_dock)
         self._seg_scroll = qw.QScrollArea()
         self._seg_scroll.setWidgetResizable(True)
@@ -100,6 +98,8 @@ class ArgosMain(qw.QMainWindow):
         self._debug_action.setCheckable(
             settings.value('debug', logging.ERROR) == logging.ERROR)
         self._debug_action.triggered.connect(self.setDebug)
+        self._clear_settings_action = qw.QAction('Reset to default settings')
+        self._clear_settings_action.triggered.connect(self.clearSettings)
         self._csrt_dock.hide()
         self._menubar = self.menuBar()
         self._file_menu = self._menubar.addMenu('&File')
@@ -115,21 +115,24 @@ class ArgosMain(qw.QMainWindow):
                                     self._video_widget.resetArenaAction,
                                     self._video_widget.autoColorAction,
                                     self._video_widget.colormapAction])
-        self._debug_menu = self.menuBar().addMenu('Advanced')
-        self._debug_menu.addAction(self._debug_action)
-
+        self._advanced_menu = self.menuBar().addMenu('Advanced')
+        self._advanced_menu.addAction(self._debug_action)
+        self._advanced_menu.addAction(self._clear_settings_action)
 
         ##########################
         # Connections
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
         # self._yolact_widget.sigProcessed.connect(self._sort_widget.sigTrack)
         self._yolact_widget.sigProcessed.connect(self._sort_widget.track)
-        self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
+        self._yolact_widget.sigProcessed.connect(
+            self._video_widget.sigSetSegmented)
         self._seg_widget.sigProcessed.connect(self._sort_widget.sigTrack)
-        self._seg_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
+        self._seg_widget.sigProcessed.connect(
+            self._video_widget.sigSetSegmented)
         self._sort_widget.sigTracked.connect(self._video_widget.setTracked)
         self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
-        self._video_widget.openAction.triggered.connect(self._sort_widget.sigReset)
+        self._video_widget.openAction.triggered.connect(
+            self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._seg_grp.triggered.connect(self.switchSegmentation)
@@ -150,6 +153,16 @@ class ArgosMain(qw.QMainWindow):
         self.sigQuit.emit()
         settings.sync()
         logging.debug('Saved settings')
+
+    @qc.pyqtSlot()
+    def clearSettings(self):
+        button = qw.QMessageBox.question(self,
+                                         'Reset settings to default',
+                                         'Are you sure to clear all saved settings?')
+        if button == qw.QMessageBox.NoButton:
+            return
+        settings.clear()
+        settings.sync()
 
     @qc.pyqtSlot(qw.QAction)
     def switchSegmentation(self, action):
@@ -193,6 +206,7 @@ class ArgosMain(qw.QMainWindow):
         else:
             sig = self._seg_widget.sigProcessed
         util.reconnect(sig, newhandler, oldhandler)
+
 
 if __name__ == '__main__':
     app = qw.QApplication(sys.argv)
