@@ -215,6 +215,9 @@ class BatchTrack(object):
                         break
                     else:
                         frames.append((frame_no, frame))
+                t_1 = time.perf_counter_ns()
+                logging.info(f'Read {len(frames)} frames in '
+                             f'{1e-9 * (t_1 - t_0)} seconds')
                 if len(frames) == 0:
                     break
                 result = pool.map(process_partial, frames,
@@ -226,9 +229,9 @@ class BatchTrack(object):
                                  'h': ret[1][ii, 3]} for ii in
                                 range(ret[1].shape[0])]
                 frame_count += len(frames)
-                t_1 = time.perf_counter_ns()
-                logging.info(f'Processed {frame_count} frames in '
-                             f'{1e-9 * (t_1 - t_0)} seconds using '
+                t_2 = time.perf_counter_ns()
+                logging.info(f'Processed {len(frames)} frames in '
+                             f'{1e-9 * (t_2 - t_1)} seconds using '
                              f'{self.processes} processes.')
             toc = time.perf_counter_ns()
             logging.info(
@@ -251,10 +254,12 @@ class BatchTrack(object):
 
 if __name__ == '__main__':
     # logging.getLogger().setLevel(logging.INFO)
+    # 2 proc 40 / 124 fps
+    # 5 proc 25 / 50 fps
     track = BatchTrack(
         video_filename='C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi',
         output_filename='C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi.parallel.track.csv',
         config_filename='C:/Users/raysu/Documents/src/argos_data/yolact_annotations/yolact_config.yaml',
         weights_filename='C:/Users/raysu/Documents/src/argos_data/yolact_annotations/babylocust_resnet101_119999_240000.pth',
-        score_threshold=0.15, top_k=10, cuda=False, processes=5, batch_size=5)
+        score_threshold=0.15, top_k=10, cuda=False, processes=4, batch_size=20)
     track.start()
