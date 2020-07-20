@@ -226,8 +226,9 @@ def capture(params):
     tswriter = None
     timestamp_file = None
     prev_frame = None
+    duration = 0
     if isinstance(input_, int):
-        tstart = None
+        tstart = datetime.now()
         if params['width'] > 0:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, params['width'])
         if params['height'] > 0:
@@ -271,7 +272,6 @@ def capture(params):
                 ts = tstart + timedelta(days=0,
                                         seconds=read_frames / params['fps'])
             read_frames += 1
-
             if writ_frames == 0:
                 fname, _, ext = params['output'].rpartition('.')
                 output_file = f'{fname}_{file_count}.{ext}' \
@@ -281,15 +281,15 @@ def capture(params):
                 print('Creating output file', output_file)
                 t_prev = ts
                 prev_frame = frame.copy()
-                if isinstance(input_, int):
-                    tstart = ts
+                # if isinstance(input_, int):
+                #     tstart = ts
                 print(f'Original frame shape: '
                       f'Width: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)} '
                       f'Height: {cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}\n'
                       f'ROI width: {width}, height: {height}')
 
                 fourcc = cv2.VideoWriter_fourcc(*params['format'])
-                out = cv2.VideoWriter(params['output'], fourcc, params['fps'],
+                out = cv2.VideoWriter(output_file, fourcc, params['fps'],
                                       (width, height))
                 tsout = open(timestamp_file, 'w', newline='')
                 tswriter = csv.writer(tsout)
@@ -304,6 +304,7 @@ def capture(params):
                 time_from_start.microseconds * 1e-6
             time_delta = ts - t_prev
             time_delta = time_delta.seconds + time_delta.microseconds * 1e-6
+            # print(f'Time from start {time_from_start}, specified duration {params["duration"]} s')
             if (params['duration'] > 0) and (time_from_start > params['duration']):
                 break
 
@@ -405,10 +406,11 @@ def check_params(args):
         params['output'] = f'video_{ts}.avi'
     duration = params['duration']
     if len(duration) > 0:
-        duration = datetime.strptime('%H:%M:%S')
-        params['duration'] = duration.seconds + duration.microseconds * 1e-6
+        duration = datetime.strptime(duration, '%H:%M:%S')
+        params['duration'] = duration.hour * 3600 + duration.minute * 60 + duration.second
     else:
         params['duration'] = -1
+    print(f'Duration {duration}, {params["duration"]}')
     r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tc'])]
     params['tc'] = (b, g, r)
     if len(params['tb']) > 0:
