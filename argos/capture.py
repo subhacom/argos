@@ -140,7 +140,7 @@ def make_parser():
     timestamp_group.add_argument('--fs', type=float, default=1.0,
                                  help='Font scale for timestamp text '
                                  '(this is not font size).')
-    parser.add_argument('--interval', type=float, default=0.033,  # 30 FPS
+    parser.add_argument('--interval', type=float, default=-1,  # 
                         help='Interval in seconds between acquiring frames.')
     parser.add_argument('--duration', type=str, default='',
                         help='Duration of recordings in HH:MM:SS format.'
@@ -233,6 +233,9 @@ def capture(params):
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, params['width'])
         if params['height'] > 0:
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, params['height'])
+        print(f'Suggested size: {params["width"]}x{params["height"]}')
+        print(f'Actual size: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x'
+              f'{cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}')
     else:
         tstart = datetime.fromtimestamp(time.mktime(time.localtime(
             os.path.getmtime(input_))))
@@ -358,13 +361,17 @@ def capture(params):
         cv2.destroyAllWindows()
 
 
-def get_camera_fps(devid, nframes=120):
+def get_camera_fps(devid, width, height, nframes=120):
     if sys.platform == 'win32':
         cap = cv2.VideoCapture(devid, cv2.CAP_DSHOW)
     else:
         cap = cv2.VideoCapture(devid)
     start = datetime.now()
     assert cap.isOpened(), 'Could not open camera'
+    if width > 0:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    if height > 0:
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     for ii in range(nframes):
         ret, frame = cap.read()
     cap.release()
@@ -396,7 +403,8 @@ def check_params(args):
     camera = isinstance(input_, int)  # recording from camera
     if params['fps'] <= 0:
         if camera:
-            params['fps'] = get_camera_fps(input_)
+            params['fps'] = get_camera_fps(input_, params['width'], 
+                                           params['height'], 100)
         else:
             params['fps'] = get_video_fps(input_)
         print(f'Found FPS = {params["fps"]}')
