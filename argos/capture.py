@@ -44,6 +44,7 @@ import sys
 import os
 import argparse
 import time
+import re
 from datetime import datetime, timedelta
 import csv
 import cv2
@@ -74,6 +75,25 @@ CV2_MINOR = int(CV2_MINOR)
 #         logger.addHandler(mem_handler)
 #     else:
 #         logger.addHandler(file_handler)
+
+
+def parse_interval(tstr):
+    h = 0
+    m = 0
+    s = 0
+    values = tstr.split(':')
+    if len(values) < 1:
+        raise ValueError('At least the number of seconds must be specified')
+    elif len(values) == 1:
+        s = int(values[0])
+    elif len(values) == 2:
+        m, s = [int(v) for v in values]
+    elif len(values) == 3:
+        h, m, s = [int(v) for v in values]
+    else:
+        raise ValueError('Expected duration in hours:minutes:seconds format')
+    t = timedelta(hours=h, minutes=m, seconds=s)
+    return t
 
 
 def make_parser():
@@ -279,6 +299,9 @@ def capture(params):
                 fname, _, ext = params['output'].rpartition('.')
                 output_file = f'{fname}_{file_count}.{ext}' \
                     if params['max_frames'] > 0 else params['output']
+                while os.path.exists(output_file):
+                    file_count += 1
+                    output_file = f'{fname}_{file_count}.{ext}'
                 file_count += 1
                 timestamp_file = f'{output_file}.csv'
                 print('Creating output file', output_file)
@@ -404,7 +427,7 @@ def check_params(args):
     if params['fps'] <= 0:
         if camera:
             params['fps'] = get_camera_fps(input_, params['width'], 
-                                           params['height'], 100)
+                                           params['height'], 33)
         else:
             params['fps'] = get_video_fps(input_)
         print(f'Found FPS = {params["fps"]}')
@@ -414,8 +437,8 @@ def check_params(args):
         params['output'] = f'video_{ts}.avi'
     duration = params['duration']
     if len(duration) > 0:
-        duration = datetime.strptime(duration, '%H:%M:%S')
-        params['duration'] = duration.hour * 3600 + duration.minute * 60 + duration.second
+        duration = parse_interval(duration)
+        params['duration'] = duration.total_seconds()
     else:
         params['duration'] = -1
     print(f'Duration {duration}, {params["duration"]}')
