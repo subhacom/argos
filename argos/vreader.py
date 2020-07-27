@@ -34,6 +34,7 @@ class VideoReader(qc.QObject):
         self._outfile = None
         self._ts_file = None
         self._waitCond = waitCond
+        self._frame_no = -1
         if self.is_webcam:
             # Camera FPS opens a temporary VideoCapture with the camera
             # - so do that before initializing current VideoCapture
@@ -71,16 +72,44 @@ class VideoReader(qc.QObject):
         # QMutexLocker is a convenience class to keep mutex locked until the
         # locker is deleted
         self.mutex.lock()
-        self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+        # OpenCV uses ffmpeg which results in a nasty bug: https://github.com/opencv/opencv/issues/9053
+        # In short, jumping to a specific frame no is completely unreliable and depends on the video format and codec
+        if self._waitCond is not None:
+            self._waitCond.clear()
+        self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no) 
+        pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
+        if pos != frame_no:
+            raise RuntimeError('This video format does not allow correct seek')
+        self._frame_no = pos
+        ret, frame = self._vid.read()
         self.mutex.unlock()
-        self.read()
+        if not ret:
+            logging.debug('Video at end')
+            self.sigVideoEnd.emit()
+            return
+        if frame is None:
+            logging.info(f'Empty frame at position {frame_no}')
+            self.sigVideoEnd.emit()
+            return
+        if self.is_webcam and self._outfile is not None:
+            self._frame_no += 1
+            pos = self._frame_no
+            self._outfile.write(frame)
+            ts = datetime.now()
+            self._ts_writer.writerow([self._frame_no, ts])
+            logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
+        self.sigFrameRead.emit(frame.copy(), pos)
+        logging.debug(f'Read frame {pos}')
+        if self._waitCond is not None:
+            self._waitCond.wait()
+        # event.wait()
+        logging.debug('Finished waiting')
 
     @qc.pyqtSlot()
     def read(self):
         """Read a single frame"""
         logging.debug(f'Starting read, triggered by {self.sender()}')
         self.mutex.lock()
-        pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
         ret, frame = self._vid.read()
         if self._waitCond is not None:
             self._waitCond.clear()
@@ -89,26 +118,23 @@ class VideoReader(qc.QObject):
             logging.debug('Video at end')
             self.sigVideoEnd.emit()
             return
-
-        if frame is not None:
-            self.mutex.lock()
-            # event = threading.Event()
-            if self.is_webcam and self._outfile is not None:
-                self._frame_no += 1
-                pos = self._frame_no
-                self._outfile.write(frame)
-                ts = datetime.now()
-                self._ts_writer.writerow([self._frame_no, ts])
-                logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
-            self.sigFrameRead.emit(frame.copy(), pos)
-            logging.debug(f'Read frame {pos}')
-            if self._waitCond is not None:
-                self._waitCond.wait()
-            self.mutex.unlock()
-
-            # event.wait()
-            logging.debug('Finished waiting')
-
+        if frame is None:
+            logging.info(f'Empty frame at position {self._frame_no}')
+            self.sigVideoEnd.emit()
+            return
+        # event = threading.Event()
+        self._frame_no += 1
+        if self.is_webcam and self._outfile is not None:
+            self._outfile.write(frame)
+            ts = datetime.now()
+            self._ts_writer.writerow([self._frame_no, ts])
+            logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
+        self.sigFrameRead.emit(frame.copy(), self._frame_no)
+        logging.debug(f'Read frame {self._frame_no}')
+        if self._waitCond is not None:
+            self._waitCond.wait()
+        # event.wait()
+        logging.debug('Finished waiting')
 
     def __del__(self):
         if self._vid.isOpened():
