@@ -277,6 +277,7 @@ class TrackList(qw.QListWidget):
 
 class ReviewWidget(qw.QWidget):
     """A widget with two panes for reviewing track mislabelings"""
+    sigNextFrame = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigLeftFrame = qc.pyqtSignal(np.ndarray, int)
     sigRightFrame = qc.pyqtSignal(np.ndarray, int)
@@ -309,7 +310,9 @@ class ReviewWidget(qw.QWidget):
         self.track_reader = None
         self.left_tracks = {}
         self.right_tracks = {}
-
+        # Since video seek is buggy, we have to do continuous reading
+        self.left_frame = None
+        self.right_frame = None
         layout = qw.QVBoxLayout()
         panes_layout = qw.QHBoxLayout()
         self.left_view = TrackView()
@@ -427,9 +430,14 @@ class ReviewWidget(qw.QWidget):
                 pass
 
     def makeActions(self):
+        self.disableSeekAction = qw.QAction('Disable seek')
+        self.disableSeekAction.setCheckable(True)
+        self.disableSeekAction.triggered.connect(self.disableSeek)
         self.tieViewsAction = qw.QAction('Scroll views together')
         self.tieViewsAction.setCheckable(True)
         self.tieViewsAction.triggered.connect(self.tieViews)
+        self.tieViewsAction.setChecked(True)
+        self.tieViews(True)
         self.autoColorAction = qw.QAction('Automatic color')
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(
@@ -465,7 +473,7 @@ class ReviewWidget(qw.QWidget):
         self.resetAction.triggered.connect(self.reset)
         self.showDifferenceAction = qw.QAction('Show popup window for left/right mismatch')
         self.showDifferenceAction.setCheckable(True)
-        show_difference = settings.value('review/showdiff', 1)
+        show_difference = settings.value('review/showdiff', 1, type=int)
         self.showDifferenceAction.setChecked(show_difference)
         self.swapTracksAction = qw.QAction('Swap tracks')
         self.swapTracksAction.triggered.connect(self.swapTracks)
@@ -506,8 +514,19 @@ class ReviewWidget(qw.QWidget):
         self.sc_open.activated.connect(
             self.openTrackedData)
 
+    @qc.pyqtSlot(bool)
+    def disableSeek(self, checked: bool) -> None:
+        if checked:
+            try:
+                self.sigGotoFrame.disconnect()
+            except TypeError:
+                pass
+        else:
+            if self.video_reader is not None:
+                self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+
     @qc.pyqtSlot()
-    def deleteSelected(self):
+    def deleteSelected(self) -> None:
         widget = qw.QApplication.focusWidget()
         if isinstance(widget, TrackList):
             items = widget.selectedItems()
@@ -517,7 +536,8 @@ class ReviewWidget(qw.QWidget):
         self.right_view.scene().setSelected(selected)
         self.right_view.scene().removeSelected()
         for sel in selected:
-            self.track_reader.deleteTrack(self.frame_no + 1, sel)
+            self.track_reader.deleteTrack(self.frame_no, sel)
+            self.right_tracks.pop(sel)
             right_items = self.right_list.findItems(items[0].text(),
                                                     qc.Qt.MatchExactly)
             for item in right_items:
@@ -547,10 +567,14 @@ class ReviewWidget(qw.QWidget):
                 self.video_reader is None or \
                 frame_no >= self.track_reader.last_frame:
             return
-        self.frame_no = frame_no
-        logging.debug(f'Frame no set: {frame_no}')
-        self.sigGotoFrame.emit(self.frame_no)
-        self.sigGotoFrame.emit(self.frame_no + 1)
+        if self.disableSeekAction.isChecked():
+            self.sigNextFrame.emit()
+        else:
+            self.frame_no = frame_no
+            logging.debug(f'Frame no set: {frame_no}')
+            if self.frame_no > 0:
+                self.sigGotoFrame.emit(self.frame_no - 1)
+            self.sigGotoFrame.emit(self.frame_no)
 
     @qc.pyqtSlot()
     def gotoEditedPos(self):
@@ -565,7 +589,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def prevFrame(self):
-        if self.frame_no >= 1:
+        if self.frame_no > 0:
             self.gotoFrame(self.frame_no - 1)
 
     def _flag_tracks(self, all_tracks, cur_tracks):
@@ -585,41 +609,58 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.blockSignals(True)
         self.pos_spin.setValue(pos)
         self.pos_spin.blockSignals(False)
-        if pos == self.frame_no:
-            logging.debug(f'left frame: {pos}')
+        tracks = self.track_reader.getTracks(pos)
+        old_all_tracks = self.all_tracks
+        self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
+        self.all_tracks_by_frame[pos] = self.all_tracks.copy()
+        self.sigAllTracksList.emit(list(self.all_tracks.keys()))
+        if self.disableSeekAction.isChecked():
+            self.frame_no = pos
+            self.left_frame = self.right_frame
+            self.right_frame = frame
+            self.left_tracks = self.right_tracks
+            self.right_tracks = self._flag_tracks({}, tracks)
+            if self.left_frame is not None:
+                self.sigLeftFrame.emit(self.left_frame, pos - 1)
+            self.sigRightFrame.emit(self.right_frame, pos)
+            if self.showAllTracksAction.isChecked():
+                self.sigLeftTracks.emit(old_all_tracks)
+                self.sigRightTracks.emit(self.all_tracks)
+            else:
+                self.sigLeftTracks.emit(self.left_tracks)
+                self.sigRightTracks.emit(self.right_tracks)
+            self.sigLeftTrackList.emit(list(self.left_tracks.keys()))
+            self.sigRightTrackList.emit(list(self.right_tracks.keys()))
+        elif pos == self.frame_no - 1:
+            logging.debug(f'Received left frame: {pos}')
             self.sigLeftFrame.emit(frame, pos)
-            tracks = self.track_reader.getTracks(pos)
             self.left_tracks = self._flag_tracks({}, tracks)
-            self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
-            self.all_tracks_by_frame[pos] = self.all_tracks.copy()
-            # self.all_list.replaceAll(self.all_tracks)
-            self.sigAllTracksList.emit(list(self.all_tracks.keys()))
             if self.showAllTracksAction.isChecked():
                 self.sigLeftTracks.emit(self.all_tracks)
             else:
                 self.sigLeftTracks.emit(self.left_tracks)
             self.sigLeftTrackList.emit(list(self.left_tracks.keys()))
-        elif pos == self.frame_no + 1:
+            self._wait_cond.set()
+            return  # do not show popup message for old frame
+        elif pos == self.frame_no:
             logging.debug(f'right frame: {pos}')
             self.sigRightFrame.emit(frame, pos)
-            tracks = self.track_reader.getTracks(pos)
             self.right_tracks = self._flag_tracks({}, tracks)
-            all_tracks = self._flag_tracks(self.all_tracks, tracks)
             if self.showAllTracksAction.isChecked():
-                self.sigRightTracks.emit(all_tracks)
+                self.sigRightTracks.emit(self.all_tracks)
             else:
                 self.sigRightTracks.emit(self.right_tracks)
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
             # Pause if there is a mismatch with the earlier tracks
-            message = self._get_diff()
-            if len(message) > 0:
-                if self.showDifferenceAction.isChecked():
-                    qw.QMessageBox.information(self, 'Track mismatch', message)
-                self.sigDiffMessage.emit(message)
         else:
             raise Exception('This should not be reached')
+        message = self._get_diff()
+        if len(message) > 0:
+            if self.showDifferenceAction.isChecked():
+                qw.QMessageBox.information(self, 'Track mismatch', message)
+            self.sigDiffMessage.emit(message)
         self._wait_cond.set()
-        logging.debug('End wait ...')
+        logging.debug('wait condition set')
 
     def _get_diff(self):
         left_keys = set(self.left_tracks.keys())
@@ -661,6 +702,10 @@ class ReviewWidget(qw.QWidget):
         self.all_tracks.clear()
         self.left_list.clear()
         self.right_list.clear()
+        self.left_tracks = {}
+        self.right_tracks = {}
+        self.left_frame = None
+        self.right_frame = None
         self.gotoFrame(0)
         self.updateGeometry()
 
@@ -671,7 +716,11 @@ class ReviewWidget(qw.QWidget):
         except IOError:
             return
         self.track_reader = TrackReader(data_path)
-        self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+        if not self.disableSeekAction.isChecked():
+            self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+        else:
+            self.sigNextFrame.connect(self.video_reader.read)
+        
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.frame_interval = 1000.0 / self.video_reader.fps
         self.pos_spin.setRange(0, self.track_reader.last_frame)
@@ -748,7 +797,7 @@ class ReviewWidget(qw.QWidget):
             self.track_reader.swapTrack(self.frame_no, tgt, cur)
         else:
             self.track_reader.changeTrack(self.frame_no, tgt, cur)
-        tracks = self.track_reader.getTracks(self.frame_no + 1)
+        tracks = self.track_reader.getTracks(self.frame_no)
         self.sigRightTrackList.emit(list(tracks.keys()))
         self.right_tracks = self._flag_tracks({}, tracks)
         self.sigRightTracks.emit(self.right_tracks)
@@ -811,6 +860,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.showAllTracksAction)
         view_menu.addAction(self.review_widget.showDifferenceAction)
         play_menu = self.menuBar().addMenu('Play')
+        play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)
         play_menu.addAction(self.review_widget.speedUpAction)
         play_menu.addAction(self.review_widget.slowDownAction)

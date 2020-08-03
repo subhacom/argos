@@ -26,7 +26,7 @@ def init():
     qc.QCoreApplication.setApplicationName('Argos')
 
     settings = qc.QSettings()
-    debug = settings.value('debug', logging.ERROR)
+    debug = settings.value('debug', logging.ERROR, type=int)
     logging.basicConfig(stream=sys.stdout,
                         format='%(asctime)s '
                                'p=%(processName)s[%(process)d] '
