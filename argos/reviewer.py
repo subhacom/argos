@@ -94,6 +94,8 @@ class TrackReader(qc.QObject):
         `trackdf` should have a single `frame` value - changes  only
         upto and including this frame are applied.
         """
+        if len(tdata) == 0:
+            return {}
         tracks = {row.trackid: [row.x, row.y, row.w, row.h]
                   for row in tdata.itertuples()}
         frameno = tdata.frame.values[0]
