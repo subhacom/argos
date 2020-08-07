@@ -160,7 +160,7 @@ def make_parser():
     timestamp_group.add_argument('--fs', type=float, default=1.0,
                                  help='Font scale for timestamp text '
                                  '(this is not font size).')
-    parser.add_argument('--interval', type=float, default=-1,  # 
+    parser.add_argument('--interval', type=float, default=-1,  #
                         help='Interval in seconds between acquiring frames.')
     parser.add_argument('--duration', type=str, default='',
                         help='Duration of recordings in HH:MM:SS format.'
@@ -169,6 +169,8 @@ def make_parser():
     parser.add_argument('--interactive', type=int, default=1,
                         help='Whether to display video as it gets captured. '
                              'Setting it to 0 may speed up things a bit.')
+    parser.add_argument('--roi', type=int, default=1,
+                        help='Whether to select ROI.')
     parser.add_argument('--max_frames', type=int, default=-1,
                         help='After these many frames, save in a '
                         'new video file')
@@ -246,7 +248,6 @@ def capture(params):
     tswriter = None
     timestamp_file = None
     prev_frame = None
-    duration = 0
     if isinstance(input_, int):
         tstart = datetime.now()
         if params['width'] > 0:
@@ -264,13 +265,15 @@ def capture(params):
         raise Exception('Could not get frame')
     if not isinstance(input_, int):
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    roi = 'Select ROI. Press ENTER when done, C to continue with default.'
-    cv2.namedWindow(roi, cv2.WINDOW_NORMAL)
-    x, y, width, height = cv2.selectROI(roi, frame)
-    cv2.destroyAllWindows()
-    print('ROI', x, y, width, height)
-    if width == 0 or height == 0:
-        x, y, width, height = 0, 0, frame.shape[1], frame.shape[0]
+    x, y, width, height = 0, 0, frame.shape[1], frame.shape[0]
+    if params['roi'] == 1:
+        roi = 'Select ROI. Press ENTER when done, C to continue with default.'
+        cv2.namedWindow(roi, cv2.WINDOW_NORMAL)
+        x, y, width, height = cv2.selectROI(roi, frame)
+        cv2.destroyAllWindows()
+        print('ROI', x, y, width, height)
+        if width == 0 or height == 0:
+            x, y, width, height = 0, 0, frame.shape[1], frame.shape[0]
     width = int(width)
     height = int(height)
 
@@ -426,7 +429,7 @@ def check_params(args):
     camera = isinstance(input_, int)  # recording from camera
     if params['fps'] <= 0:
         if camera:
-            params['fps'] = get_camera_fps(input_, params['width'], 
+            params['fps'] = get_camera_fps(input_, params['width'],
                                            params['height'], 33)
         else:
             params['fps'] = get_video_fps(input_)
