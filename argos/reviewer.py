@@ -18,9 +18,9 @@ from PyQt5 import (
     QtGui as qg
 )
 
-from argos.constants import Change
+from argos.constants import Change, DrawingGeom
 from argos import utility as ut
-from argos.utility import make_color, get_cmap_color
+from argos.utility import make_color, get_cmap_color, rect2points
 from argos.frameview import FrameScene, FrameView
 from argos.vreader import VideoReader
 
@@ -96,7 +96,7 @@ class TrackReader(qc.QObject):
         """
         if len(tdata) == 0:
             return {}
-        tracks = {row.trackid: [row.x, row.y, row.w, row.h]
+        tracks = {row.trackid: np.array([row.x, row.y, row.w, row.h])
                   for row in tdata.itertuples()}
         frameno = tdata.frame.values[0]
         for change in self.change_list:
@@ -146,9 +146,13 @@ class TrackReader(qc.QObject):
 
 
 class ReviewScene(FrameScene):
+
+    sigRoi = qc.pyqtSignal(qg.QPolygonF)  # Signal for selected polygon ROI.
+    
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
+        self.roi = None
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -162,8 +166,11 @@ class ReviewScene(FrameScene):
         are displayed with a special line style (default: dashes)
         """
         logging.debug(f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
-        logging.debug(f'{self.objectName()} Rectangles:\n{rects}')
+        logging.debug(f'{self.objectName()} Rectangles: {rects}\nroi {self.roi}')
+        roi = None if self.roi is None else self.roi.polygon()
+        logging.debug(f'{self.objectName()} display ROI {roi}')
         self.clearItems()
+        logging.debug(f'{self.objectName()} cleared')
         for id_, tdata in rects.items():
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
@@ -188,8 +195,72 @@ class ReviewScene(FrameScene):
             text.setPos(rect[0], rect[1])
             self.polygons[id_] = rect
             logging.debug(f'Set {id_}: {rect}')
+        logging.debug(f'{self.objectName()} display ROI {roi}')
+        # Hack to display ROI
+        if roi is not None:
+            self.roi = self.addPolygon(roi)
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
+
+    def mouseReleaseEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
+        """Start drawing arena"""
+        logging.debug(f'Drawing arena')
+        if self.geom != DrawingGeom.arena:
+            super(ReviewScene, self).mouseReleaseEvent(event)
+            
+        if event.button() == qc.Qt.RightButton:
+            self.points = []
+            if self.roi is not None:
+                self.removeItem(self.roi)
+                self.roi = None
+            self._clearIncomplete()
+            return
+        pos = event.scenePos().toPoint()
+        pos = np.array((pos.x(), pos.y()), dtype=int)
+        if len(self.points) > 0:
+            dvec = pos - self.points[0]
+            if max(abs(dvec)) < self.snap_dist and \
+                    len(self.points) > 2:
+                self.removeItem(self.roi)
+                poly = qg.QPolygonF([qc.QPointF(*p) for p in self.points])
+                self.roi = self.addPolygon(poly)
+                self.sigRoi.emit(qg.QPolygonF(poly))
+                self._clearIncomplete()
+                self.points = []
+                event.accept()
+                logging.debug(f'###### finished ROI: points - {self.points}')
+                return
+        self.points.append(pos)
+        path = qg.QPainterPath(qc.QPointF(*self.points[0]))
+        for point in self.points[1:]:
+            path.lineTo(qc.QPointF(*point))
+        self.addIncompletePath(path)
+        event.accept()
+
+    def mouseMoveEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
+        pos = event.scenePos()
+        pos = np.array((pos.x(), pos.y()), dtype=int)
+        if len(self.points) > 0:
+            pen = qg.QPen(self.incomplete_color, self.linewidth)
+            self._clearIncomplete()
+            path = qg.QPainterPath(
+                qc.QPointF(self.points[0][0], self.points[0][1]))
+            [path.lineTo(qc.QPointF(p[0], p[1])) for p in self.points[1:]]
+            path.lineTo(qc.QPointF(pos[0], pos[1]))
+            self.addIncompletePath(path)
+        event.accept()
+
+    @qc.pyqtSlot()
+    def resetRoi(self):
+        self.roi = None
+
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setRoi(self, roi: qg.QPolygonF) -> None:
+        logging.debug(f'{self.objectName()} set ROI {roi}')
+        if self.roi is not None:
+            self.removeItem(self.roi)
+        self.roi = self.addPolygon(roi)
+
 
 
 class TrackView(FrameView):
@@ -312,6 +383,7 @@ class ReviewWidget(qw.QWidget):
         self.track_reader = None
         self.left_tracks = {}
         self.right_tracks = {}
+        self.roi = None
         # Since video seek is buggy, we have to do continuous reading
         self.left_frame = None
         self.right_frame = None
@@ -361,6 +433,7 @@ class ReviewWidget(qw.QWidget):
         self.right_view = TrackView()
         self.right_view.setObjectName('RightView')
         self.right_view.frame_scene.setObjectName('RightScene')
+        self.right_view.frame_scene.setArenaMode()
         # self.right_view.setSizePolicy(qw.QSizePolicy.Expanding,
         #                              qw.QSizePolicy.Expanding)
         self.right_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
@@ -385,6 +458,8 @@ class ReviewWidget(qw.QWidget):
         self.timer.timeout.connect(self.nextFrame)
         self.sigLeftFrame.connect(self.left_view.setFrame)
         self.sigRightFrame.connect(self.right_view.setFrame)
+        self.right_view.frame_scene.sigRoi.connect(self.setRoi)
+        # self.right_view.frame_scene.sigRoi.connect(self.left_view.frame_scene.setRoi)
         self.sigLeftTracks.connect(self.left_view.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
         self.sigRightTracks.connect(self.right_view.sigSetRectangles)
@@ -399,8 +474,8 @@ class ReviewWidget(qw.QWidget):
         self.slider.valueChanged.connect(self.gotoFrame)
         self.pos_spin.valueChanged.connect(self.gotoFrame)
         self.pos_spin.lineEdit().setEnabled(False)
-        self.sigSetColormap.connect(self.left_view.scene().setColormap)
-        self.sigSetColormap.connect(self.right_view.scene().setColormap)
+        self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
+        self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
     @qc.pyqtSlot()
     def speedUp(self):
@@ -450,6 +525,11 @@ class ReviewWidget(qw.QWidget):
         self.colormapAction = qw.QAction('Use colormap')
         self.colormapAction.triggered.connect(self.setColormap)
         self.colormapAction.setCheckable(True)
+        self.setRoiAction = qw.QAction('Set polygon ROI')
+        self.setRoiAction.triggered.connect(self.right_view.frame_scene.setRoiPolygonMode)
+        self.resetRoiAction = qw.QAction('Reset ROI')
+        self.resetRoiAction.triggered.connect(self.resetRoi)
+        self.resetRoiAction.triggered.connect(self.right_view.frame_scene.resetRoi)
         self.openAction = qw.QAction('Open tracked data')
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data')
@@ -602,6 +682,14 @@ class ReviewWidget(qw.QWidget):
             ret[tid] = np.r_[rect[:4], 1]
         return ret
 
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setRoi(self, roi: qg.QPolygonF) -> None:
+        self.roi = roi
+
+    @qc.pyqtSlot()
+    def resetRoi(self):
+        self.roi = None
+
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int) -> None:
         logging.debug(f'Received frame: {pos}')
@@ -612,6 +700,19 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.setValue(pos)
         self.pos_spin.blockSignals(False)
         tracks = self.track_reader.getTracks(pos)
+        if self.roi is not None:
+            # flag tracks outside ROI
+            include = {}
+            for trackid, rect in tracks.items():
+                logging.debug(f'{trackid}: {rect}, {type(rect)}')
+                vertices = rect2points(np.array(rect))
+                contained = [self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
+                           for vtx in vertices]
+                if np.any(contained):
+                    include[trackid] = rect
+            tracks = include
+                    
+                
         old_all_tracks = self.all_tracks
         self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
         self.all_tracks_by_frame[pos] = self.all_tracks.copy()
@@ -870,7 +971,8 @@ class ReviewerMain(qw.QMainWindow):
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
-                                self.review_widget.deleteTrackAction])
+                                self.review_widget.deleteTrackAction,
+                                self.review_widget.resetRoiAction])
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
         toolbar.addActions(action_menu.actions())
