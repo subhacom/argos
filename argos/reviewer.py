@@ -96,7 +96,7 @@ class TrackReader(qc.QObject):
         """
         if len(tdata) == 0:
             return {}
-        tracks = {row.trackid: np.array([row.x, row.y, row.w, row.h])
+        tracks = {row.trackid: [row.x, row.y, row.w, row.h]
                   for row in tdata.itertuples()}
         frameno = tdata.frame.values[0]
         for change in self.change_list:
@@ -132,6 +132,7 @@ class TrackReader(qc.QObject):
         for frame_no, tdata in self.track_data.groupby('frame'):
             tracks = self.applyChanges(tdata)
             for tid, tdata in tracks.items():
+                logging.debug(f'{frame_no}, {tid}, {tdata}, {type(tdata)}')
                 data.append([frame_no, tid] + tdata)
                 self.sigSavedFrames.emit(frame_no)
         data = pd.DataFrame(data=data,
@@ -703,15 +704,14 @@ class ReviewWidget(qw.QWidget):
         if self.roi is not None:
             # flag tracks outside ROI
             include = {}
-            for trackid, rect in tracks.items():
-                logging.debug(f'{trackid}: {rect}, {type(rect)}')
-                vertices = rect2points(np.array(rect))
+            track_ids = list(tracks.keys())
+            for tid in track_ids:
+                vertices = rect2points(np.array(tracks[tid]))            
                 contained = [self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
-                           for vtx in vertices]
-                if np.any(contained):
-                    include[trackid] = rect
-            tracks = include
-                    
+                             for vtx in vertices]
+                if not np.any(contained):
+                    self.track_reader.deleteTrack(self.frame_no, tid)
+                    tracks.pop(tid)                    
                 
         old_all_tracks = self.all_tracks
         self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
