@@ -81,6 +81,7 @@ class TrackReader(qc.QObject):
         self.change_list.append(Change(frame=frame_no, change=self.op_delete,
                                        orig=orig_id, new=None))
 
+    @qc.pyqtSlot(int)
     def undoChangeTrack(self, frame_no):
         for ii in range(len(self.change_list) - 1, 0, -1):
             if self.change_list[ii][0] < frame_no:
@@ -132,7 +133,6 @@ class TrackReader(qc.QObject):
         for frame_no, tdata in self.track_data.groupby('frame'):
             tracks = self.applyChanges(tdata)
             for tid, tdata in tracks.items():
-                logging.debug(f'{frame_no}, {tid}, {tdata}, {type(tdata)}')
                 data.append([frame_no, tid] + tdata)
                 self.sigSavedFrames.emit(frame_no)
         data = pd.DataFrame(data=data,
@@ -364,6 +364,7 @@ class ReviewWidget(qw.QWidget):
     sigChangeTrack = qc.pyqtSignal(int, int, int)
     sigSetColormap = qc.pyqtSignal(str, int)
     sigDiffMessage = qc.pyqtSignal(str)
+    sigUndoCurrentChanges = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
@@ -510,6 +511,7 @@ class ReviewWidget(qw.QWidget):
     def makeActions(self):
         self.disableSeekAction = qw.QAction('Disable seek')
         self.disableSeekAction.setCheckable(True)
+        self.disableSeekAction.setChecked(True)
         self.disableSeekAction.triggered.connect(self.disableSeek)
         self.tieViewsAction = qw.QAction('Scroll views together')
         self.tieViewsAction.setCheckable(True)
@@ -564,6 +566,8 @@ class ReviewWidget(qw.QWidget):
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
         self.deleteTrackAction = qw.QAction('Delete track')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
+        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame')
+        self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -581,21 +585,19 @@ class ReviewWidget(qw.QWidget):
         self.sc_prev.activated.connect(self.prevFrame)
 
         self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
-        self.sc_remove.activated.connect(
-            self.deleteSelected)
+        self.sc_remove.activated.connect(self.deleteSelected)
         self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
-        self.sc_remove_2.activated.connect(
-            self.deleteSelected)
+        self.sc_remove_2.activated.connect(self.deleteSelected)
         self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Up), self)
         self.sc_speedup.activated.connect(self.speedUp)
         self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Down), self)
         self.sc_slowdown.activated.connect(self.slowDown)
         self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
-        self.sc_save.activated.connect(
-            self.saveReviewedTracks)
+        self.sc_save.activated.connect(self.saveReviewedTracks)
         self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
-        self.sc_open.activated.connect(
-            self.openTrackedData)
+        self.sc_open.activated.connect(self.openTrackedData)
+        self.sc_undo = qw.QShortcut(qg.QKeySequence('Ctrl+Z'), self)
+        self.sc_undo.activated.connect(self.undoCurrentChanges)
 
     @qc.pyqtSlot(bool)
     def disableSeek(self, checked: bool) -> None:
@@ -604,7 +606,13 @@ class ReviewWidget(qw.QWidget):
                 self.sigGotoFrame.disconnect()
             except TypeError:
                 pass
+            if self.video_reader is not None:
+                self.sigNextFrame.connect(self.video_reader.read)
         else:
+            try:
+                self.sigNextFrame.disconnect()
+            except TypeError:
+                pass
             if self.video_reader is not None:
                 self.sigGotoFrame.connect(self.video_reader.gotoFrame)
 
@@ -690,6 +698,10 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot()
     def resetRoi(self):
         self.roi = None
+
+    @qc.pyqtSlot()
+    def undoCurrentChanges(self):
+        self.sigUndoCurrentChanges.emit(self.frame_no)
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int) -> None:
@@ -819,16 +831,16 @@ class ReviewWidget(qw.QWidget):
         except IOError:
             return
         self.track_reader = TrackReader(data_path)
-        if not self.disableSeekAction.isChecked():
-            self.sigGotoFrame.connect(self.video_reader.gotoFrame)
-        else:
+        if self.disableSeekAction.isChecked():
             self.sigNextFrame.connect(self.video_reader.read)
-        
+        else:
+            self.sigGotoFrame.connect(self.video_reader.gotoFrame)        
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.frame_interval = 1000.0 / self.video_reader.fps
         self.pos_spin.setRange(0, self.track_reader.last_frame)
         self.slider.setRange(0, self.track_reader.last_frame)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
+        self.sigUndoCurrentChanges.connect(self.track_reader.undoChangeTrack)
 
     @qc.pyqtSlot()
     def saveReviewedTracks(self):
@@ -972,6 +984,7 @@ class ReviewerMain(qw.QMainWindow):
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
                                 self.review_widget.deleteTrackAction,
+                                self.review_widget.undoCurrentChangesAction,
                                 self.review_widget.resetRoiAction])
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
