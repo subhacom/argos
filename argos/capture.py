@@ -300,11 +300,11 @@ def capture(params):
             read_frames += 1
             if writ_frames == 0:
                 fname, _, ext = params['output'].rpartition('.')
-                output_file = f'{fname}_{file_count}.{ext}' \
+                output_file = f'{fname}_{file_count:03d}.{ext}' \
                     if params['max_frames'] > 0 else params['output']
                 while os.path.exists(output_file):
                     file_count += 1
-                    output_file = f'{fname}_{file_count}.{ext}'
+                    output_file = f'{fname}_{file_count:03d}.{ext}'
                 file_count += 1
                 timestamp_file = f'{output_file}.csv'
                 print('Creating output file', output_file)
