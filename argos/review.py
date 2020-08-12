@@ -179,6 +179,11 @@ class ReviewScene(FrameScene):
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
+        self.hist_len = 1
+
+    @qc.pyqtSlot(int)
+    def setHistLen(self, age: int) -> None:
+        self.hist_len = age
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -195,7 +200,9 @@ class ReviewScene(FrameScene):
         logging.debug(f'{self.objectName()} Rectangles: {rects}')
         self.clearItems()
         logging.debug(f'{self.objectName()} cleared')
+
         for id_, tdata in rects.items():
+            print('$$$$$', tdata.shape, tdata, tdata[4], type(tdata[4]))
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
             if self.autocolor:
@@ -205,9 +212,11 @@ class ReviewScene(FrameScene):
                     *get_cmap_color(id_ % self.max_colors, self.max_colors,
                                     self.colormap))
             else:
-                color = self.color
+                color = qg.QColor(self.color)
+            # Use transparency to indicate age
+            color.setAlpha(int(255 - 128.0 * tdata[4] / self.hist_len))
             pen = qg.QPen(color, self.linewidth)
-            if tdata[4] == 0:
+            if tdata[4] > 0:
                 pen.setStyle(self.historic_track_ls)
                 logging.debug(f'{self.objectName()}: old track : {id_}')
             rect = tdata[:4].copy()
@@ -343,8 +352,8 @@ class ReviewWidget(qw.QWidget):
         # Keep track of all the tracks seen so far
         self.setObjectName('ReviewWidget')
         self.to_save = False
+        self.history_length = 1
         self.all_tracks = OrderedDict()
-        self.all_tracks_by_frame = OrderedDict()
         self.left_frame = None
         self.left_tracks = None
         self.right_frame = None
@@ -453,6 +462,17 @@ class ReviewWidget(qw.QWidget):
         self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
     @qc.pyqtSlot()
+    def setHistLen(self):
+        val, ok = qw.QInputDialog.getInt(self, 'History length',
+                                     'Oldest tracks to show (# of frames)',
+                                     value=self.history_length,
+                                     min=1)
+        if ok:
+            self.history_length = val
+        self.left_view.frame_scene.setHistLen(val)
+        self.right_view.frame_scene.setHistLen(val)
+
+    @qc.pyqtSlot()
     def speedUp(self):
         self.speed *= 1.25
         logging.debug(f'Speed: {self.speed}')
@@ -520,9 +540,9 @@ class ReviewWidget(qw.QWidget):
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
         self.zoomOutRightAction = qw.QAction('Zoom-in right')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
-        self.showAllTracksAction = qw.QAction('Show all tracks seen so far')
-        self.showAllTracksAction.setCheckable(True)
-        # self.showAllTracksAction.triggered.connect(self.all_list.setEnabled)
+        self.showOldTracksAction = qw.QAction('Show old tracks')
+        self.showOldTracksAction.setCheckable(True)
+        # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
         self.playAction = qw.QAction('Play')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
@@ -545,6 +565,8 @@ class ReviewWidget(qw.QWidget):
         self.lim_win.setVisible(False)
         self.showLimitsAction.triggered.connect(self.lim_win.setVisible)
         self.lim_win.sigClose.connect(self.showLimitsAction.setChecked)
+        self.histlenAction = qw.QAction('Set old track age limit')
+        self.histlenAction.triggered.connect(self.setHistLen)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -661,12 +683,19 @@ class ReviewWidget(qw.QWidget):
             self.gotoFrame(self.frame_no - 1)
 
     def _flag_tracks(self, all_tracks, cur_tracks):
-        """Change the track info to include current indicator 1, or 0 for old
-        tracks."""
-        ret = {tid: np.r_[rect[:4], 0] for tid, rect in all_tracks.items()}
+        """Change the track info to include it age, if age is more than
+        `history_length` then remove this track from all tracks -
+        this avoids cluttering the view with very old tracks that have not been
+        seen in a long time."""
+        pop = []
+        for tid, rect in all_tracks.items():
+            rect[4] += 1
+            if rect[4] > self.history_length:
+               pop.append(tid)
+        [all_tracks.pop(tid) for tid in pop]
         for tid, rect in cur_tracks.items():
-            ret[tid] = np.r_[rect[:4], 1]
-        return ret
+            all_tracks[tid] = np.r_[rect[:4], 0]
+        return all_tracks
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF) -> None:
@@ -702,9 +731,8 @@ class ReviewWidget(qw.QWidget):
                     self.track_reader.deleteTrack(self.frame_no, tid)
                     tracks.pop(tid)                    
                 
-        old_all_tracks = self.all_tracks
-        self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
-        self.all_tracks_by_frame[pos] = self.all_tracks.copy()
+        old_all_tracks = self.all_tracks.copy()
+        self._flag_tracks(self.all_tracks, tracks)
         self.sigAllTracksList.emit(list(self.all_tracks.keys()))
         if self.disableSeekAction.isChecked():
             self.frame_no = pos
@@ -715,7 +743,7 @@ class ReviewWidget(qw.QWidget):
             if self.left_frame is not None:
                 self.sigLeftFrame.emit(self.left_frame, pos - 1)
             self.sigRightFrame.emit(self.right_frame, pos)
-            if self.showAllTracksAction.isChecked():
+            if self.showOldTracksAction.isChecked():
                 self.sigLeftTracks.emit(old_all_tracks)
                 self.sigRightTracks.emit(self.all_tracks)
             else:
@@ -727,7 +755,7 @@ class ReviewWidget(qw.QWidget):
             logging.debug(f'Received left frame: {pos}')
             self.sigLeftFrame.emit(frame, pos)
             self.left_tracks = self._flag_tracks({}, tracks)
-            if self.showAllTracksAction.isChecked():
+            if self.showOldTracksAction.isChecked():
                 self.sigLeftTracks.emit(self.all_tracks)
             else:
                 self.sigLeftTracks.emit(self.left_tracks)
@@ -738,7 +766,7 @@ class ReviewWidget(qw.QWidget):
             logging.debug(f'right frame: {pos}')
             self.sigRightFrame.emit(frame, pos)
             self.right_tracks = self._flag_tracks({}, tracks)
-            if self.showAllTracksAction.isChecked():
+            if self.showOldTracksAction.isChecked():
                 self.sigRightTracks.emit(self.all_tracks)
             else:
                 self.sigRightTracks.emit(self.right_tracks)
@@ -807,11 +835,10 @@ class ReviewWidget(qw.QWidget):
             self.video_reader = VideoReader(video_path, self._wait_cond)
         except IOError:
             return
+        self.all_tracks.clear()
+        self.right_view.resetArenaAction.trigger()
         self.track_reader = TrackReader(data_path)
-        # self.track_reader.setWmin(self._wmin_edit.value())
-        # self.track_reader.setWmax(self._wmax_edit.value())
-        # self.track_reader.setHmin(self._hmin_edit.value())
-        # self.track_reader.setHmax(self._hmax_edit.value())
+        self.history_length = self.track_reader.last_frame
         self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
         self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
         self.lim_widget.sigHmin.connect(self.track_reader.setHmin)
@@ -888,6 +915,7 @@ class ReviewWidget(qw.QWidget):
         self.playVideo(False)
         self.left_view.clearAll()
         self.right_view.clearAll()
+        self.all_tracks.clear()
         self.setupReading(self.video_filename, self.track_filename)
         self.gotoFrame(0)
 
@@ -957,9 +985,10 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.tieViewsAction)
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
-        view_menu.addAction(self.review_widget.showAllTracksAction)
+        view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showDifferenceAction)
         view_menu.addAction(self.review_widget.showLimitsAction)
+        view_menu.addAction(self.review_widget.histlenAction)
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)
@@ -1043,7 +1072,7 @@ def test_review():
     toolbar.addAction(reviewer.tieViewsAction)
     toolbar.addAction(reviewer.autoColorAction)
     toolbar.addAction(reviewer.colormapAction)
-    toolbar.addAction(reviewer.showAllTracksAction)
+    toolbar.addAction(reviewer.showOldTracksAction)
     win.setCentralWidget(reviewer)
     win.show()
     # reviewer.before.setViewportRect(qc.QRectF(50, 50, 100, 100))
