@@ -23,6 +23,7 @@ from argos import utility as ut
 from argos.utility import make_color, get_cmap_color, rect2points
 from argos.frameview import FrameScene, FrameView
 from argos.vreader import VideoReader
+from argos.limitswidget import LimitsWidget
 
 
 settings = ut.init()
@@ -46,11 +47,31 @@ class TrackReader(qc.QObject):
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
         self.track_data = self.track_data.astype({'frame': int, 'trackid': int})
         self.last_frame = self.track_data.frame.max()
+        self.wmin = 0
+        self.wmax = 1000
+        self.hmin = 0
+        self.hmax = 1000
         self.change_list = []
 
     @property
     def max_id(self):
         return self.track_data.trackid.max()
+
+    @qc.pyqtSlot(int)
+    def setWmin(self, val: int):
+        self.wmin = val
+
+    @qc.pyqtSlot(int)
+    def setWmax(self, val: int):
+        self.wmax = val
+
+    @qc.pyqtSlot(int)
+    def setHmin(self, val: int):
+        self.hmin = val
+
+    @qc.pyqtSlot(int)
+    def setHmax(self, val: int):
+        self.hmax = val
 
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
@@ -58,6 +79,13 @@ class TrackReader(qc.QObject):
             return
         self.frame_pos = frame_no
         tracks = self.track_data[self.track_data.frame == frame_no]
+        # Filter bboxes violating size constraints
+        wh = np.sort(tracks[['w', 'h']].values, axis=1)
+        sel = np.flatnonzero((wh[:, 0] >= self.wmin) &
+                             (wh[:, 0] <= self.wmax) &
+                             (wh[:, 1] >= self.hmin) &
+                             (wh[:, 0] <= self.hmax))
+        tracks = tracks.iloc[sel]
         tracks = self.applyChanges(tracks)
         return tracks
 
@@ -147,13 +175,10 @@ class TrackReader(qc.QObject):
 
 
 class ReviewScene(FrameScene):
-
-    sigRoi = qc.pyqtSignal(qg.QPolygonF)  # Signal for selected polygon ROI.
     
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
-        self.roi = None
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -167,9 +192,7 @@ class ReviewScene(FrameScene):
         are displayed with a special line style (default: dashes)
         """
         logging.debug(f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
-        logging.debug(f'{self.objectName()} Rectangles: {rects}\nroi {self.roi}')
-        roi = None if self.roi is None else self.roi.polygon()
-        logging.debug(f'{self.objectName()} display ROI {roi}')
+        logging.debug(f'{self.objectName()} Rectangles: {rects}')
         self.clearItems()
         logging.debug(f'{self.objectName()} cleared')
         for id_, tdata in rects.items():
@@ -196,71 +219,10 @@ class ReviewScene(FrameScene):
             text.setPos(rect[0], rect[1])
             self.polygons[id_] = rect
             logging.debug(f'Set {id_}: {rect}')
-        logging.debug(f'{self.objectName()} display ROI {roi}')
-        # Hack to display ROI
-        if roi is not None:
-            self.roi = self.addPolygon(roi)
+        if self.arena is not None:
+            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
-
-    def mouseReleaseEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
-        """Start drawing arena"""
-        logging.debug(f'Drawing arena')
-        if self.geom != DrawingGeom.arena:
-            super(ReviewScene, self).mouseReleaseEvent(event)
-            
-        if event.button() == qc.Qt.RightButton:
-            self.points = []
-            if self.roi is not None:
-                self.removeItem(self.roi)
-                self.roi = None
-            self._clearIncomplete()
-            return
-        pos = event.scenePos().toPoint()
-        pos = np.array((pos.x(), pos.y()), dtype=int)
-        if len(self.points) > 0:
-            dvec = pos - self.points[0]
-            if max(abs(dvec)) < self.snap_dist and \
-                    len(self.points) > 2:
-                self.removeItem(self.roi)
-                poly = qg.QPolygonF([qc.QPointF(*p) for p in self.points])
-                self.roi = self.addPolygon(poly)
-                self.sigRoi.emit(qg.QPolygonF(poly))
-                self._clearIncomplete()
-                self.points = []
-                event.accept()
-                logging.debug(f'###### finished ROI: points - {self.points}')
-                return
-        self.points.append(pos)
-        path = qg.QPainterPath(qc.QPointF(*self.points[0]))
-        for point in self.points[1:]:
-            path.lineTo(qc.QPointF(*point))
-        self.addIncompletePath(path)
-        event.accept()
-
-    def mouseMoveEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
-        pos = event.scenePos()
-        pos = np.array((pos.x(), pos.y()), dtype=int)
-        if len(self.points) > 0:
-            pen = qg.QPen(self.incomplete_color, self.linewidth)
-            self._clearIncomplete()
-            path = qg.QPainterPath(
-                qc.QPointF(self.points[0][0], self.points[0][1]))
-            [path.lineTo(qc.QPointF(p[0], p[1])) for p in self.points[1:]]
-            path.lineTo(qc.QPointF(pos[0], pos[1]))
-            self.addIncompletePath(path)
-        event.accept()
-
-    @qc.pyqtSlot()
-    def resetRoi(self):
-        self.roi = None
-
-    @qc.pyqtSlot(qg.QPolygonF)
-    def setRoi(self, roi: qg.QPolygonF) -> None:
-        logging.debug(f'{self.objectName()} set ROI {roi}')
-        if self.roi is not None:
-            self.removeItem(self.roi)
-        self.roi = self.addPolygon(roi)
 
 
 
@@ -349,6 +311,17 @@ class TrackList(qw.QListWidget):
         self.sigSelected.emit(items)
 
 
+class LimitWin(qw.QMainWindow):
+    sigClose = qc.pyqtSignal(bool)  # connected to action checked state
+
+    def __init__(self, *args, **kwargs):
+        super(LimitWin, self).__init__(*args, **kwargs)
+
+    def closeEvent(self, a0: qg.QCloseEvent) -> None:
+        self.sigClose.emit(False)
+        super(LimitWin, self).closeEvent(a0)
+
+
 class ReviewWidget(qw.QWidget):
     """A widget with two panes for reviewing track mislabelings"""
     sigNextFrame = qc.pyqtSignal()
@@ -356,8 +329,7 @@ class ReviewWidget(qw.QWidget):
     sigLeftFrame = qc.pyqtSignal(np.ndarray, int)
     sigRightFrame = qc.pyqtSignal(np.ndarray, int)
     sigLeftTracks = qc.pyqtSignal(dict)
-    sigLeftTrackList = qc.pyqtSignal(
-        list)  # to separate tracks displayed on frame from those in list widget
+    sigLeftTrackList = qc.pyqtSignal(list)  # to separate tracks displayed on frame from those in list widget
     sigRightTracks = qc.pyqtSignal(dict)
     sigRightTrackList = qc.pyqtSignal(list)
     sigAllTracksList = qc.pyqtSignal(list)
@@ -454,14 +426,15 @@ class ReviewWidget(qw.QWidget):
         ctrl_layout.addWidget(self.reset_button)
         layout.addLayout(ctrl_layout)
         self.setLayout(layout)
+        self.lim_widget = LimitsWidget(self)
+        self.lim_win = LimitWin()
+        self.lim_win.setCentralWidget(self.lim_widget)
         self.makeActions()
         self.makeShortcuts()
-
         self.timer.timeout.connect(self.nextFrame)
         self.sigLeftFrame.connect(self.left_view.setFrame)
         self.sigRightFrame.connect(self.right_view.setFrame)
-        self.right_view.frame_scene.sigRoi.connect(self.setRoi)
-        # self.right_view.frame_scene.sigRoi.connect(self.left_view.frame_scene.setRoi)
+        self.right_view.sigArena.connect(self.setRoi)
         self.sigLeftTracks.connect(self.left_view.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
         self.sigRightTracks.connect(self.right_view.sigSetRectangles)
@@ -529,10 +502,8 @@ class ReviewWidget(qw.QWidget):
         self.colormapAction.triggered.connect(self.setColormap)
         self.colormapAction.setCheckable(True)
         self.setRoiAction = qw.QAction('Set polygon ROI')
-        self.setRoiAction.triggered.connect(self.right_view.frame_scene.setRoiPolygonMode)
-        self.resetRoiAction = qw.QAction('Reset ROI')
-        self.resetRoiAction.triggered.connect(self.resetRoi)
-        self.resetRoiAction.triggered.connect(self.right_view.frame_scene.resetRoi)
+        self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
+        self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
         self.openAction = qw.QAction('Open tracked data')
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data')
@@ -568,6 +539,12 @@ class ReviewWidget(qw.QWidget):
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
+        self.showLimitsAction = qw.QAction('Size limits')
+        self.showLimitsAction.setCheckable(True)
+        self.showLimitsAction.setChecked(False)
+        self.lim_win.setVisible(False)
+        self.showLimitsAction.triggered.connect(self.lim_win.setVisible)
+        self.lim_win.sigClose.connect(self.showLimitsAction.setChecked)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -831,6 +808,14 @@ class ReviewWidget(qw.QWidget):
         except IOError:
             return
         self.track_reader = TrackReader(data_path)
+        # self.track_reader.setWmin(self._wmin_edit.value())
+        # self.track_reader.setWmax(self._wmax_edit.value())
+        # self.track_reader.setHmin(self._hmin_edit.value())
+        # self.track_reader.setHmax(self._hmax_edit.value())
+        self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
+        self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
+        self.lim_widget.sigHmin.connect(self.track_reader.setHmin)
+        self.lim_widget.sigHmax.connect(self.track_reader.setHmax)
         if self.disableSeekAction.isChecked():
             self.sigNextFrame.connect(self.video_reader.read)
         else:
@@ -974,6 +959,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.showAllTracksAction)
         view_menu.addAction(self.review_widget.showDifferenceAction)
+        view_menu.addAction(self.review_widget.showLimitsAction)
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)
@@ -985,7 +971,7 @@ class ReviewerMain(qw.QMainWindow):
                                 self.review_widget.replaceTrackAction,
                                 self.review_widget.deleteTrackAction,
                                 self.review_widget.undoCurrentChangesAction,
-                                self.review_widget.resetRoiAction])
+                                self.review_widget.right_view.resetArenaAction])
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
         toolbar.addActions(action_menu.actions())
@@ -1042,7 +1028,7 @@ def test_review():
     zo.triggered.connect(reviewer.right_view.zoomOut)
     arena = qw.QAction('Select arena')
     arena.triggered.connect(reviewer.left_view.scene().setArenaMode)
-    arena_reset = qw.QAction('Rset arena')
+    arena_reset = qw.QAction('Reset arena')
     arena_reset.triggered.connect(reviewer.right_view.scene().resetArena)
     roi = qw.QAction('Select rectangular ROIs')
     roi.triggered.connect(reviewer.left_view.scene().setRoiRectMode)

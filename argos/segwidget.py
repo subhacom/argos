@@ -12,7 +12,8 @@ import cv2
 from sklearn import cluster
 from PyQt5 import (
     QtWidgets as qw,
-    QtCore as qc
+    QtCore as qc,
+    QtGui as qg
 )
 
 import argos.constants
@@ -164,7 +165,7 @@ def segment_by_watershed(binary_img: np.ndarray, img: np.ndarray,
     return markers, ret
 
 
-def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
+def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
     """
     Filter valid objects based on size limits.
 
@@ -198,13 +199,24 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax):
     """
     logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
                   f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
-    mr_size = np.array([cv2.minAreaRect(points)[1] for points in points_list])
+    minrects = [cv2.minAreaRect(points) for points in points_list]
+    mr_size = np.array([mr[1] for mr in minrects])
     mr_size.sort(axis=1)
     p_size = np.array([len(points) for points in points_list])
     good = (p_size >= pmin) & (p_size < pmax) \
            & (mr_size[:, 0] >= wmin) & (mr_size[:, 0] < wmax) \
-           & (mr_size[:, 1] >= hmin) & (mr_size[:, 1] < hmax)
+           & (mr_size[:, 1] >= hmin) & (mr_size[:, 1] < hmax) \
+
     good = np.flatnonzero(good)
+    if roi is not None:
+        inside = []
+        for ii in good:
+            vertices = np.int0(cv2.boxPoints(minrects[ii]))
+            contained = [roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
+                             for vtx in vertices]
+            if np.any(contained):
+                inside.append(ii)
+        good = inside
     logging.debug(f'From {len(points_list)} indices fitting size conds: {good}')
     return [points_list[ii] for ii in good]
 
@@ -390,6 +402,7 @@ class SegWorker(qc.QObject):
         self.wmax = 50
         self.hmin = 50
         self.hmax = 200
+        self.roi = None
         self.intermediate = argos.constants.SegStep.final
         self.cmap = cv2.COLORMAP_JET
 
@@ -472,6 +485,14 @@ class SegWorker(qc.QObject):
     def setMaxHeight(self, value: int) -> None:
         self.hmax = value
 
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setRoi(self, roi: qg.QPolygonF):
+        self.roi = roi
+
+    @qc.pyqtSlot()
+    def resetRoi(self):
+        self.roi = None
+
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int) -> None:
         """Segment image
@@ -533,7 +554,7 @@ class SegWorker(qc.QObject):
                     cv2.applyColorMap(binary, self.cmap),
                     pos)
         seg = extract_valid(seg, self.pmin, self.pmax, self.wmin, self.wmax,
-                            self.hmin, self.hmax)
+                            self.hmin, self.hmax, roi=self.roi)
         if self.intermediate == argos.constants.SegStep.filtered:
             for ii, points in enumerate(seg):
                 binary[points[:, 1], points[:, 0]] = ii + 1
@@ -576,6 +597,13 @@ class SegWidget(qw.QWidget):
     sigIntermediateOutput = qc.pyqtSignal(argos.constants.SegStep)
 
     sigQuit = qc.pyqtSignal()
+
+    setWmin = qc.pyqtSignal(int)
+    setWmax = qc.pyqtSignal(int)
+    setHmin = qc.pyqtSignal(int)
+    setHmax = qc.pyqtSignal(int)
+    setRoi = qc.pyqtSignal(qg.QPolygonF)
+    resetRoi = qc.pyqtSignal()
 
 
     def __init__(self, *args, **kwargs):
@@ -689,42 +717,42 @@ class SegWidget(qw.QWidget):
         self._pmax_edit.setValue(value)
         self.worker.pmax = value
         layout.addRow(self._pmax_label, self._pmax_edit)
-        self._wmin_label = qw.QLabel('Minimum width')
-        self._wmin_edit = qw.QSpinBox()
-        self._wmin_edit.setRange(1, 1000)
+        # self._wmin_label = qw.QLabel('Minimum width')
+        # self._wmin_edit = qw.QSpinBox()
+        # self._wmin_edit.setRange(1, 1000)
         value = settings.value('segment/min_width',
                                self.worker.wmin,
                                type=int)
-        self._wmin_edit.setValue(value)
+        # self._wmin_edit.setValue(value)
         self.worker.wmin = value
-        layout.addRow(self._wmin_label, self._wmin_edit)
-        self._wmax_label = qw.QLabel('Maximum width')
-        self._wmax_edit = qw.QSpinBox()
-        self._wmax_edit.setRange(1, 1000)
+        # layout.addRow(self._wmin_label, self._wmin_edit)
+        # self._wmax_label = qw.QLabel('Maximum width')
+        # self._wmax_edit = qw.QSpinBox()
+        # self._wmax_edit.setRange(1, 1000)
         value = settings.value('segment/max_width',
                                self.worker.wmax,
                                type=int)
-        self._wmax_edit.setValue(value)
+        # self._wmax_edit.setValue(value)
         self.worker.wmax = value
-        layout.addRow(self._wmax_label, self._wmax_edit)
-        self._hmin_label = qw.QLabel('Minimum length')
-        self._hmin_edit = qw.QSpinBox()
-        self._hmin_edit.setRange(1, 1000)
+        # layout.addRow(self._wmax_label, self._wmax_edit)
+        # self._hmin_label = qw.QLabel('Minimum length')
+        # self._hmin_edit = qw.QSpinBox()
+        # self._hmin_edit.setRange(1, 1000)
         value = settings.value('segment/min_height',
                                self.worker.hmin,
                                type=int)
-        self._hmin_edit.setValue(value)
+        # self._hmin_edit.setValue(value)
         self.worker.hmin = value
-        layout.addRow(self._hmin_label, self._hmin_edit)
-        self._hmax_label = qw.QLabel('Maximum length')
-        self._hmax_edit = qw.QSpinBox()
-        self._hmax_edit.setRange(1, 1000)
+        # layout.addRow(self._hmin_label, self._hmin_edit)
+        # self._hmax_label = qw.QLabel('Maximum length')
+        # self._hmax_edit = qw.QSpinBox()
+        # self._hmax_edit.setRange(1, 1000)
         value = settings.value('segment/max_height',
                                self.worker.hmax,
                                type=int)
-        self._hmax_edit.setValue(value)
+        # self._hmax_edit.setValue(value)
         self.worker.hmax = value
-        layout.addRow(self._hmax_label, self._hmax_edit)
+        # layout.addRow(self._hmax_label, self._hmax_edit)
         self._wdist_label = qw.QLabel('Distance threshold')
         self._wdist = qw.QDoubleSpinBox()
         self._wdist.setRange(0, 10)
@@ -780,6 +808,7 @@ class SegWidget(qw.QWidget):
         self.worker.moveToThread(self.thread)
         ####################################
         # Connections
+
         self._blur_width_edit.valueChanged.connect(self.worker.setBlurWidth)
         self._blur_sd_edit.valueChanged.connect(self.worker.setBlurSigma)
         self._invert_check.stateChanged.connect(self.worker.setInvertThreshold)
@@ -797,10 +826,16 @@ class SegWidget(qw.QWidget):
         )
         self._pmin_edit.valueChanged.connect(self.worker.setMinPixels)
         self._pmax_edit.valueChanged.connect(self.worker.setMaxPixels)
-        self._wmin_edit.valueChanged.connect(self.worker.setMinWidth)
-        self._wmax_edit.valueChanged.connect(self.worker.setMaxWidth)
-        self._hmin_edit.valueChanged.connect(self.worker.setMinHeight)
-        self._hmax_edit.valueChanged.connect(self.worker.setMaxHeight)
+        # self._wmin_edit.valueChanged.connect(self.worker.setMinWidth)
+        # self._wmax_edit.valueChanged.connect(self.worker.setMaxWidth)
+        # self._hmin_edit.valueChanged.connect(self.worker.setMinHeight)
+        # self._hmax_edit.valueChanged.connect(self.worker.setMaxHeight)
+        self.setWmin.connect(self.worker.setMinWidth)
+        self.setWmax.connect(self.worker.setMaxWidth)
+        self.setHmin.connect(self.worker.setMinHeight)
+        self.setHmax.connect(self.worker.setMaxHeight)
+        self.setRoi.connect(self.worker.setRoi)
+        self.resetRoi.connect(self.worker.resetRoi)
         self._wdist.valueChanged.connect(self.worker.setDistThreshWatershed)
         self._intermediate_combo.currentTextChanged.connect(
             self.setIntermediateOutput)
@@ -863,10 +898,10 @@ class SegWidget(qw.QWidget):
         settings.setValue('segment/dbscan_eps', self.worker.dbscan_eps)
         settings.setValue('segment/min_pixels', self.worker.pmin)
         settings.setValue('segment/max_pixels', self.worker.pmax)
-        settings.setValue('segment/min_width', self.worker.wmin)
-        settings.setValue('segment/max_width', self.worker.wmax)
-        settings.setValue('segment/min_height', self.worker.hmin)
-        settings.setValue('segment/max_height', self.worker.hmax)
+        # settings.setValue('segment/min_width', self.worker.wmin)
+        # settings.setValue('segment/max_width', self.worker.wmax)
+        # settings.setValue('segment/min_height', self.worker.hmin)
+        # settings.setValue('segment/max_height', self.worker.hmax)
         settings.setValue('segment/watershed_distthresh',
                           self.worker.wdist_thresh)
 

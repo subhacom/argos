@@ -23,9 +23,11 @@ from argos.utility import cv2qimage, make_color, get_cmap_color
 class FrameScene(qw.QGraphicsScene):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
+    sigArena = qc.pyqtSignal(qg.QPolygonF)
 
     def __init__(self, *args, **kwargs):
         super(FrameScene, self).__init__(*args, **kwargs)
+        self.roi = None
         self.arena = None
         self.polygons = {}
         self.item_dict = {}
@@ -131,8 +133,6 @@ class FrameScene(qw.QGraphicsScene):
         self.geom = DrawingGeom.polygon
 
     def setFrame(self, frame: np.ndarray) -> None:
-        if self.arena is None:
-            self.setArena(np.array((0, 0, frame.shape[1], frame.shape[0])))
         self._frame = cv2qimage(frame)
         # self.clear()
         logging.debug(f'Diagonal sum of image: {frame.diagonal().sum()}')
@@ -172,18 +172,13 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_item = self.addPath(path, pen)
 
     @qc.pyqtSlot(np.ndarray)
-    def setArena(self, rect: np.ndarray):
-        logging.debug(f'Arena: {rect}')
-        # Current selection is relative to scene coordinates
-        # make it relative to the original _image
-        # if self.arena is not None:
-        #     rect = qc.QRect(self.arena.x() + rect.x(),
-        #                     self.arena.y() + rect.y(),
-        #                     rect.width(),
-        #                     rect.height())
+    def setArena(self, vertices: np.ndarray):
+        logging.debug(f'Arena: {vertices}')
         self.clearItems()
-        self.arena = rect
-        self.setSceneRect(qc.QRectF(*rect))
+        self.arena = qg.QPolygonF([qc.QPointF(*p) for p in vertices])
+        self.addPolygon(self.arena)
+        self.sigArena.emit(self.arena)
+        self.setSceneRect(self.arena.boundingRect())
 
     @qc.pyqtSlot()
     def resetArena(self):
@@ -258,6 +253,8 @@ class FrameScene(qw.QGraphicsScene):
             text.setPos(rect[0], rect[1])
             self.item_dict[id_] = item
             logging.debug(f'Set {id_}: {rect}')
+        if self.arena is not None:
+            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -288,6 +285,8 @@ class FrameScene(qw.QGraphicsScene):
             text.setPos(pos[0], pos[1])
             self.item_dict[id_] = item
             logging.debug(f'Set {id_}: {poly}')
+        if self.arena is not None:
+            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -298,15 +297,14 @@ class FrameScene(qw.QGraphicsScene):
 
     def mouseReleaseEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
         """Start drawing arena"""
-        logging.debug(f'AAAA Number of items {len(self.items())}')
+        logging.debug(f'Number of items {len(self.items())}')
         if event.button() == qc.Qt.RightButton:
             self.points = []
             self._clearIncomplete()
             return
         pos = event.scenePos().toPoint()
         pos = np.array((pos.x(), pos.y()), dtype=int)
-        if self.geom == DrawingGeom.rectangle or \
-                self.geom == DrawingGeom.arena:
+        if self.geom == DrawingGeom.rectangle:
             if len(self.points) > 0:
                 rect = util.points2rect(self.points[0], pos)
                 self.points = []
@@ -323,12 +321,16 @@ class FrameScene(qw.QGraphicsScene):
                 logging.debug(f'XXXX Number of items {len(self.items())}\n'
                               f'pos: {pos}')
                 return
-        elif self.geom == DrawingGeom.polygon:
+        elif self.geom == DrawingGeom.polygon or \
+                self.geom == DrawingGeom.arena:
             if len(self.points) > 0:
                 dvec = pos - self.points[0]
                 if max(abs(dvec)) < self.snap_dist and \
                         len(self.points) > 2:
-                    self._addItem(np.array(self.points))
+                    if self.geom == DrawingGeom.polygon:
+                        self._addItem(np.array(self.points))
+                    elif self.geom == DrawingGeom.arena:
+                        self.setArena(np.array(self.points))
                     self._clearIncomplete()
                     self.points = []
                     logging.debug(f'YYYY Number of items {len(self.items())}')
@@ -348,7 +350,7 @@ class FrameScene(qw.QGraphicsScene):
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if len(self.points) > 0:
             pen = qg.QPen(self.incomplete_color, self.linewidth)
-            if self.geom == DrawingGeom.rectangle or self.geom == DrawingGeom.arena:
+            if self.geom == DrawingGeom.rectangle:
                 if self.incomplete_item is not None:
                     # logging.debug('AAAAA %r', len(self.items()))
                     self._clearIncomplete()
@@ -373,7 +375,7 @@ class FrameScene(qw.QGraphicsScene):
             arena = qc.QRectF(0, 0, self._frame.width(), self._frame.height())
             self.setSceneRect(arena)
         else:
-            arena = qc.QRectF(*self.arena)
+            arena = self.arena.boundingRect()
         # logging.debug(f'arena: {arena}, {self.arena}, param: {rect}')
         painter.drawImage(arena, self._frame, arena)
 
@@ -384,6 +386,10 @@ class FrameView(qw.QGraphicsView):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
     sigViewportAreaChanged = qc.pyqtSignal(qc.QRectF)
+    sigArena = qc.pyqtSignal(qg.QPolygonF)
+    setArenaMode = qc.pyqtSignal()
+    setRoiRectMode = qc.pyqtSignal()
+    setRoiPolygonMode = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
@@ -392,8 +398,8 @@ class FrameView(qw.QGraphicsView):
         self.sigSetRectangles.connect(self.frame_scene.setRectangles)
         self.sigSetPolygons.connect(self.frame_scene.setPolygons)
         self.frame_scene.sigPolygons.connect(self.sigPolygons)
-        # scene.sigPolygonsSet.connect(self.sigPolygonsSet)
         self.frame_scene.sigPolygonsSet.connect(self.polygonsSet)
+        self.frame_scene.sigArena.connect(self.sigArena)
         self.setMouseTracking(True)
         self.resetArenaAction = qw.QAction('Reset arena')
         self.resetArenaAction.triggered.connect(self.frame_scene.resetArena)
@@ -404,6 +410,9 @@ class FrameView(qw.QGraphicsView):
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(self.frame_scene.setAutoColor)
+        self.setArenaMode.connect(self.frame_scene.setArenaMode)
+        self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
+        self.setRoiPolygonMode.connect(self.frame_scene.setRoiPolygonMode)
 
     def _makeScene(self):
         """Keep this separate so that subclasses can override frame_scene with s

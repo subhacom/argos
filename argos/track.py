@@ -24,6 +24,7 @@ from argos.yolactwidget import YolactWidget
 from argos.sortracker import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
+from argos.limitswidget import LimitsWidget
 
 # Set up logging for multithreading/multiprocessing
 settings = util.init()
@@ -40,6 +41,8 @@ class ArgosMain(qw.QMainWindow):
         self.setCentralWidget(self._video_widget)
         self._yolact_widget = YolactWidget()
         self._seg_widget = SegWidget()
+
+        self._lim_widget = LimitsWidget()
 
         self._sort_widget = SORTWidget()
         self._csrt_widget = CSRTWidget()
@@ -58,6 +61,12 @@ class ArgosMain(qw.QMainWindow):
         self._seg_scroll.setWidgetResizable(True)
         self._seg_scroll.setWidget(self._seg_widget)
         self._seg_dock.setWidget(self._seg_scroll)
+
+        self._lim_dock = qw.QDockWidget('Size limits')
+        self._lim_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                       qc.Qt.RightDockWidgetArea)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._lim_dock)
+        self._lim_dock.setWidget(self._lim_widget)
 
         self._sort_dock = qw.QDockWidget('SORTracker settings')
         self._sort_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
@@ -116,23 +125,31 @@ class ArgosMain(qw.QMainWindow):
                                     self._video_widget.autoColorAction,
                                     self._video_widget.colormapAction])
         self._advanced_menu = self.menuBar().addMenu('Advanced')
+        # self._advanced_menu.addAction(self._video_widget.arenaSelectAction)
+        self._advanced_menu.addAction(self._video_widget.resetArenaAction)
         self._advanced_menu.addAction(self._debug_action)
         self._advanced_menu.addAction(self._clear_settings_action)
 
         ##########################
         # Connections
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
-        # self._yolact_widget.sigProcessed.connect(self._sort_widget.sigTrack)
-        self._yolact_widget.sigProcessed.connect(self._sort_widget.track)
-        self._yolact_widget.sigProcessed.connect(
-            self._video_widget.sigSetSegmented)
+        self._video_widget.sigArena.connect(self._lim_widget.setRoi)
+        self._video_widget.sigReset.connect(self._lim_widget.resetRoi)
+        self._video_widget.sigArena.connect(self._seg_widget.setRoi)
+        self._video_widget.sigReset.connect(self._seg_widget.resetRoi)
+        self._video_widget.resetArenaAction.triggered.connect(self._seg_widget.resetRoi)
+        self._yolact_widget.sigProcessed.connect(self._lim_widget.process)
+        self._lim_widget.sigProcessed.connect(self._sort_widget.track)
+        self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
+        self._lim_widget.sigWmin.connect(self._seg_widget.setWmin)
+        self._lim_widget.sigWmax.connect(self._seg_widget.setWmax)
+        self._lim_widget.sigHmin.connect(self._seg_widget.setHmin)
+        self._lim_widget.sigHmax.connect(self._seg_widget.setHmax)
         self._seg_widget.sigProcessed.connect(self._sort_widget.sigTrack)
-        self._seg_widget.sigProcessed.connect(
-            self._video_widget.sigSetSegmented)
+        self._seg_widget.sigProcessed.connect(self._video_widget.sigSetSegmented)
         self._sort_widget.sigTracked.connect(self._video_widget.setTracked)
         self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
-        self._video_widget.openAction.triggered.connect(
-            self._sort_widget.sigReset)
+        self._video_widget.openAction.triggered.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._seg_grp.triggered.connect(self.switchSegmentation)
@@ -140,6 +157,7 @@ class ArgosMain(qw.QMainWindow):
         self.sigQuit.connect(self._video_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._seg_widget.sigQuit)
+        self.sigQuit.connect(self._lim_widget.sigQuit)
         self.sigQuit.connect(self._sort_widget.sigQuit)
         self.sigQuit.connect(self._csrt_widget.sigQuit)
 
@@ -202,7 +220,7 @@ class ArgosMain(qw.QMainWindow):
             newhandler = self._csrt_widget.setBboxes
             oldhandler = self._sort_widget.sigTrack
         if self._yolact_action.isChecked():
-            sig = self._yolact_widget.sigProcessed
+            sig = self._lim_widget.sigProcessed
         else:
             sig = self._seg_widget.sigProcessed
         util.reconnect(sig, newhandler, oldhandler)

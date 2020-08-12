@@ -7,7 +7,10 @@ import threading
 import numpy as np
 import os
 
-from PyQt5 import QtWidgets as qw, QtCore as qc
+from PyQt5 import (
+    QtWidgets as qw,
+    QtCore as qc,
+    QtGui as qg)
 
 from argos import utility
 from argos.frameview import FrameView
@@ -26,6 +29,7 @@ class VideoWidget(qw.QWidget):
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
     sigSetColormap = qc.pyqtSignal(str, int)
+    sigArena = qc.pyqtSignal(qg.QPolygonF)
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
@@ -55,6 +59,9 @@ class VideoWidget(qw.QWidget):
         self.showFrameNumAction.setCheckable(True)
         self.zoomInAction = qw.QAction('Zoom in')
         self.zoomOutAction = qw.QAction('Zoom out')
+        self.arenaSelectAction = qw.QAction('Select arena')
+        self.rectSelectAction = qw.QAction('Select rectangles')
+        self.polygonSelectAction = qw.QAction('Select polygons')
         self.resetArenaAction = qw.QAction('Reset arena')
         self.openAction.triggered.connect(self.openVideo)
         self.openCamAction.triggered.connect(self.openCamera)
@@ -178,6 +185,7 @@ class VideoWidget(qw.QWidget):
 
         if self.display_widget is None:
             self.display_widget = FrameView()
+            self.display_widget.frame_scene.setArenaMode()
             self.autoColorAction.triggered.connect(
                 self.display_widget.autoColorAction.trigger)
             self.sigSetColormap.connect(
@@ -186,9 +194,13 @@ class VideoWidget(qw.QWidget):
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
             self.display_widget.sigPolygonsSet.connect(self.startTimer)
+            self.display_widget.sigArena.connect(self.sigArena)
             self.sigReset.connect(self.display_widget.resetArenaAction.trigger)
             self.zoomInAction.triggered.connect(self.display_widget.zoomIn)
             self.zoomOutAction.triggered.connect(self.display_widget.zoomOut)
+            self.arenaSelectAction.triggered.connect(self.display_widget.setArenaMode)
+            self.rectSelectAction.triggered.connect(self.display_widget.setRoiRectMode)
+            self.polygonSelectAction.triggered.connect(self.display_widget.setRoiPolygonMode)
             self.resetArenaAction.triggered.connect(
                 self.display_widget.resetArenaAction.trigger)
             # self.sigSetTracked.connect(self.display_widget.sigSetRectangles)
