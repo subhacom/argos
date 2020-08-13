@@ -1005,6 +1005,7 @@ class ReviewerMain(qw.QMainWindow):
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
         v = settings.value('review/debug', False, type=bool)
+        self.setDebug(v)
         self.debugAction.setChecked(v)
         self.debugAction.triggered.connect(self.setDebug)
         action_menu.addAction(self.debugAction)
