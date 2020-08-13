@@ -626,6 +626,8 @@ class ReviewWidget(qw.QWidget):
         self.right_view.scene().removeSelected()
         for sel in selected:
             self.track_reader.deleteTrack(self.frame_no, sel)
+            if sel not in self.right_tracks:
+                continue
             self.right_tracks.pop(sel)
             right_items = self.right_list.findItems(items[0].text(),
                                                     qc.Qt.MatchExactly)
