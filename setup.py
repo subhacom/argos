@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-04 4:13 PM
-import setuptools
+from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 import numpy
 
@@ -11,14 +11,20 @@ with open("README.md", "r") as fh:
 
 
 ext_modules = [
-    setuptools.Extension(
+    Extension(
         'yolact.utils.cython_nms',
-        sources=['./yolact/utils/cython_nms.c', './yolact/utils/cython_nms.pyx'],
+        sources=['yolact/utils/cython_nms.pyx'],
         include_dirs=[numpy.get_include()],
         extra_compile_args=[]
-    )
+    ),
+    Extension(
+        'argos.cutility',
+        sources=['argos/cutility.pyx'],
+        include_dirs=[numpy.get_include()],
+        extra_compile_args=[]
+    ),
 ]
-setuptools.setup(
+setup(
     name="argos",
     version="0.1",
     author="Subhasis Ray",
@@ -27,7 +33,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/subhacom/argos",
-    packages=setuptools.find_packages(),
+    packages=find_packages(),
     ext_modules = cythonize(ext_modules),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -36,5 +42,5 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=['torch', 'torchvision', 'numpy', 'scipy', 'pyqt5',
-                      'opencv-python', 'pyyaml'],
+                      'opencv-contrib-python', 'pyyaml'],
 )
