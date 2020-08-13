@@ -882,6 +882,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def doQuit(self):
+        self._wait_cond.set()
         if self.to_save:
             self.saveReviewedTracks()
         settings.setValue('review/showdiff', int(self.showDifferenceAction.isChecked()))
@@ -912,6 +913,7 @@ class ReviewWidget(qw.QWidget):
         if self.video_reader is None:
             # Not initialized - do nothing
             return
+        self._wait_cond.set()
         self.playVideo(False)
         self.left_view.clearAll()
         self.right_view.clearAll()
