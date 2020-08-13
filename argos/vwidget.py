@@ -153,12 +153,18 @@ class VideoWidget(qw.QWidget):
             qw.QMessageBox.critical(self, 'Video open failed', str(err))
             return
         ## Set-up for saving data
+        self.writer = None
         directory = settings.value('data/directory', '.')
         filename = writer.makepath(directory, self.video_filename)
         self.outfile, _ = qw.QFileDialog.getSaveFileName(
             self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf);;Text (*.csv)')
-        if self.writer is not None:
+        logging.debug(f'Output file "{self.outfile}"')
+        if len(self.outfile.strip()) == 0:
+            qw.QMessageBox.critical(self, 'No output file',
+                                    'Output file not specified. Closing video')
+            self.video_reader = None
             self.writer = None
+            return
         if self.outfile.endswith('.csv'):
             self.writer = writer.CSVWriter(self.outfile, mode='w')
             qw.QMessageBox.information(self,
