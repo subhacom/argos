@@ -537,7 +537,7 @@ class ReviewWidget(qw.QWidget):
         self.zoomInRightAction.triggered.connect(self.right_view.zoomIn)
         self.zoomOutLeftAction = qw.QAction('Zoom-out left')
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
-        self.zoomOutRightAction = qw.QAction('Zoom-in right')
+        self.zoomOutRightAction = qw.QAction('Zoom-out right')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
         self.showOldTracksAction = qw.QAction('Show old tracks')
         self.showOldTracksAction.setCheckable(True)
