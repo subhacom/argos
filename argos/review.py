@@ -202,7 +202,6 @@ class ReviewScene(FrameScene):
         logging.debug(f'{self.objectName()} cleared')
 
         for id_, tdata in rects.items():
-            print('$$$$$', tdata.shape, tdata, tdata[4], type(tdata[4]))
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
             if self.autocolor:
@@ -882,7 +881,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def doQuit(self):
-        self._wait_cond.set()
+        # self._wait_cond.set()
         if self.to_save:
             self.saveReviewedTracks()
         settings.setValue('review/showdiff', int(self.showDifferenceAction.isChecked()))
@@ -1003,6 +1002,12 @@ class ReviewerMain(qw.QMainWindow):
                                 self.review_widget.deleteTrackAction,
                                 self.review_widget.undoCurrentChangesAction,
                                 self.review_widget.right_view.resetArenaAction])
+        self.debugAction = qw.QAction('Debug')
+        self.debugAction.setCheckable(True)
+        v = settings.value('review/debug', False, type=bool)
+        self.debugAction.setChecked(v)
+        self.debugAction.triggered.connect(self.setDebug)
+        action_menu.addAction(self.debugAction)
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
         toolbar.addActions(action_menu.actions())
@@ -1011,6 +1016,14 @@ class ReviewerMain(qw.QMainWindow):
         self.status_label = qw.QLabel()
         self.review_widget.sigDiffMessage.connect(self.status_label.setText)
         self.statusBar().addWidget(self.status_label)
+
+    @qc.pyqtSlot(bool)
+    def setDebug(self, val: bool):
+        settings.setValue('review/debug', val)
+        if val:
+            logging.getLogger().setLevel(logging.DEBUG)
+        else:
+            logging.getLogger().setLevel(logging.INFO)
 
     @qc.pyqtSlot()
     def cleanup(self):
@@ -1084,7 +1097,6 @@ def test_review():
 if __name__ == '__main__':
     # test_reviewwidget()
     # test_review()
-    logging.getLogger().setLevel(logging.DEBUG)
     app = qw.QApplication(sys.argv)
     win = ReviewerMain()
     win.setMinimumSize(800, 600)
