@@ -105,7 +105,7 @@ class ArgosMain(qw.QMainWindow):
         self._sort_action.setChecked(True)
         self._debug_action = qw.QAction('Debug')
         self._debug_action.setCheckable(
-            settings.value('debug', logging.ERROR) == logging.ERROR)
+            settings.value('track/debug', logging.INFO) == logging.DEBUG)
         self._debug_action.triggered.connect(self.setDebug)
         self._clear_settings_action = qw.QAction('Reset to default settings')
         self._clear_settings_action.triggered.connect(self.clearSettings)
@@ -163,7 +163,7 @@ class ArgosMain(qw.QMainWindow):
 
     @qc.pyqtSlot(bool)
     def setDebug(self, state):
-        level = logging.DEBUG if state else logging.ERROR
+        level = logging.DEBUG if state else logging.INFO
         settings.setValue('debug', level)
         logging.getLogger().setLevel(level)
 

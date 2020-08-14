@@ -753,7 +753,6 @@ class ReviewWidget(qw.QWidget):
                 self.sigRightTracks.emit(self.right_tracks)
             self.sigLeftTrackList.emit(list(self.left_tracks.keys()))
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
-            self._wait_cond.set()
         elif pos == self.frame_no - 1:
             logging.debug(f'Received left frame: {pos}')
             self.sigLeftFrame.emit(frame, pos)
@@ -776,6 +775,7 @@ class ReviewWidget(qw.QWidget):
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
             # Pause if there is a mismatch with the earlier tracks
         else:
+            self._wait_cond.set()
             raise Exception('This should not be reached')
         message = self._get_diff()
         if len(message) > 0:
