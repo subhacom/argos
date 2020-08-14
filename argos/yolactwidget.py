@@ -189,6 +189,7 @@ class YolactWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(YolactWidget, self).__init__(*args, **kwargs)
         self.worker = YolactWorker()
+        self.indicator = None
         self.load_config_action = qw.QAction('Load YOLACT configuration', self)
         self.load_config_action.setToolTip('Load YOLACT configuration. This '
                                            'should be a YAML (.yml) file '
@@ -298,10 +299,15 @@ class YolactWidget(qw.QWidget):
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigWeightsFile.emit(filename)
-        indicator = qw.QProgressDialog('Setting up neural net', 'Cancel', 0, 0, self)
-        indicator.setWindowModality(qc.Qt.WindowModal)
-        self.worker.sigInitialized.connect(indicator.reset)
-        indicator.show()
+        if self.indicator is None:
+            self.indicator = qw.QProgressDialog('Setting up neural net', 'Cancel', 0, 0, self)
+            self.indicator.setWindowModality(qc.Qt.WindowModal)
+        try:
+            self.worker.sigInitialized.disconnect()
+        except TypeError:
+            pass
+        self.worker.sigInitialized.connect(self.indicator.reset)
+        self.indicator.show()
 
     @qc.pyqtSlot()
     def setInitialized(self):
