@@ -60,11 +60,13 @@ class VideoReader(qc.QObject):
         self._fourcc = cv2.VideoWriter_fourcc(*format)
         self._outfile = cv2.VideoWriter(self._outpath, self._fourcc, self.fps,
                                       (self.frame_width, self.frame_height))
-        self._ts_file = open(f'{self._outpath}.csv', 'w')
-        self._ts_writer = csv.writer(self._ts_file)
-        self._ts_writer.writerow(['frame', 'timestamp'])
-        self._frame_no = -1
-        self.mutex.unlock()
+        try:
+            self._ts_file = open(f'{self._outpath}.csv', 'w')
+            self._ts_writer = csv.writer(self._ts_file)
+            self._ts_writer.writerow(['frame', 'timestamp'])
+            self._frame_no = -1
+        finally:
+            self.mutex.unlock()
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no: int) -> None:
@@ -79,6 +81,7 @@ class VideoReader(qc.QObject):
         self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no) 
         pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
         if pos != frame_no:
+            self.mutex.unlock()
             raise RuntimeError('This video format does not allow correct seek')
         self._frame_no = pos
         ret, frame = self._vid.read()
@@ -137,6 +140,7 @@ class VideoReader(qc.QObject):
         logging.debug('Finished waiting')
 
     def __del__(self):
+        self.mutex.unlock()
         if self._vid.isOpened():
             self._vid.release()
         if self._outfile is not None and self._outfile.isOpened():

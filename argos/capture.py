@@ -174,7 +174,7 @@ def make_parser():
     parser.add_argument('--max_frames', type=int, default=-1,
                         help='After these many frames, save in a '
                         'new video file')
-    parser.add_argument('--format', type=str, default='X264',
+    parser.add_argument('--format', type=str, default='MJPG',
                         help='Output video codec, see '
                         'http://www.fourcc.org/codecs.php for description'
                         ' of available codecs on different platforms.'

@@ -90,6 +90,9 @@ class LimitsWidget(qw.QWidget):
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, bboxes: np.ndarray, pos: int) -> None:
+        logging.debug(bboxes.shape)
+        if len(bboxes) == 0:
+            self.sigProcessed.emit(bboxes.copy(), pos)
         wh = np.sort(bboxes[:, 2:], axis=1)
         valid = bboxes[(wh[:, 0] >= self._wmin_edit.value()) &
                        (wh[:, 0] <= self._wmax_edit.value()) &
