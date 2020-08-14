@@ -369,6 +369,7 @@ class ReviewWidget(qw.QWidget):
         # Since video seek is buggy, we have to do continuous reading
         self.left_frame = None
         self.right_frame = None
+        self.save_indicator = None
         layout = qw.QVBoxLayout()
         panes_layout = qw.QHBoxLayout()
         self.left_view = TrackView()
@@ -864,17 +865,26 @@ class ReviewWidget(qw.QWidget):
             datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) > 0:
-            try:
-                indicator = qw.QProgressDialog('Saving track data', None,
+            if self.save_indicator is None:
+                self.save_indicator = qw.QProgressDialog('Saving track data', None,
                                                0,
                                                self.track_reader.last_frame + 1,
                                                self)
 
-                indicator.setWindowModality(qc.Qt.WindowModal)
-                indicator.show()
-                self.track_reader.sigSavedFrames.connect(indicator.setValue)
+                self.save_indicator.setWindowModality(qc.Qt.WindowModal)
+                self.track_reader.sigSavedFrames.connect(self.save_indicator.setValue)
+            else:
+                self.save_indicator.setValue(0)
+                try: # make sure same track reader is not connected multiple times
+                    self.track_reader.sigSavedFrames.disconnect()
+                    self.track_reader.sigSavedFrames.connect(
+                        self.save_indicator.setValue)
+                except TypeError:
+                    pass
+            self.save_indicator.show()
+            try:
                 self.track_reader.saveChanges(track_filename)
-                indicator.setValue(self.track_reader.last_frame + 1)
+                self.save_indicator.setValue(self.track_reader.last_frame + 1)
                 self.to_save = False
             except OSError as err:
                 qw.QMessageBox.critical(
