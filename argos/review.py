@@ -213,7 +213,7 @@ class ReviewScene(FrameScene):
             else:
                 color = qg.QColor(self.color)
             # Use transparency to indicate age
-            color.setAlpha(int(255 - 128.0 * tdata[4] / self.hist_len))
+            color.setAlpha(int(255 * (1 - 0.25 * min(tdata[4], self.hist_len) / self.hist_len)))
             pen = qg.QPen(color, self.linewidth)
             if tdata[4] > 0:
                 pen.setStyle(self.historic_track_ls)
@@ -689,15 +689,14 @@ class ReviewWidget(qw.QWidget):
         `history_length` then remove this track from all tracks -
         this avoids cluttering the view with very old tracks that have not been
         seen in a long time."""
-        pop = []
+        ret = {}
         for tid, rect in all_tracks.items():
             rect[4] += 1
-            if rect[4] > self.history_length:
-               pop.append(tid)
-        [all_tracks.pop(tid) for tid in pop]
+            if rect[4] <= self.history_length:
+               ret[tid] = rect.copy()
         for tid, rect in cur_tracks.items():
-            all_tracks[tid] = np.r_[rect[:4], 0]
-        return all_tracks
+            ret[tid] = np.r_[rect[:4], 0]
+        return ret
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF) -> None:
@@ -734,9 +733,10 @@ class ReviewWidget(qw.QWidget):
                     tracks.pop(tid)                    
                 
         old_all_tracks = self.all_tracks.copy()
-        self._flag_tracks(self.all_tracks, tracks)
+        self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
         self.sigAllTracksList.emit(list(self.all_tracks.keys()))
         if self.disableSeekAction.isChecked():
+            # Going sequentially through frames - copy right to left
             self.frame_no = pos
             self.left_frame = self.right_frame
             self.right_frame = frame
@@ -753,6 +753,7 @@ class ReviewWidget(qw.QWidget):
                 self.sigRightTracks.emit(self.right_tracks)
             self.sigLeftTrackList.emit(list(self.left_tracks.keys()))
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
+            self._wait_cond.set()
         elif pos == self.frame_no - 1:
             logging.debug(f'Received left frame: {pos}')
             self.sigLeftFrame.emit(frame, pos)
