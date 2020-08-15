@@ -89,6 +89,7 @@ class FrameScene(qw.QGraphicsScene):
                                         self.colormap))
                 else:
                     color = self.color
+                color.setAlpha(64)  # make the non-selected items transparent
                 pen = qg.QPen(color, self.linewidth)
                 self.item_dict[key].setPen(pen)
                 self.label_dict[key].setDefaultTextColor(color)

@@ -5,6 +5,7 @@
 
 import sys
 import os
+import csv
 from typing import List, Tuple, Union, Dict
 import logging
 import threading
@@ -18,7 +19,7 @@ from PyQt5 import (
     QtGui as qg
 )
 
-from argos.constants import Change, DrawingGeom
+from argos.constants import Change
 from argos import utility as ut
 from argos.utility import make_color, get_cmap_color, rect2points
 from argos.frameview import FrameScene, FrameView
@@ -37,6 +38,10 @@ class TrackReader(qc.QObject):
     op_assign = 0
     op_swap = 1
     op_delete = 2
+
+    change_code = {op_assign: 'assign',
+                   op_swap: 'swap',
+                   op_delete: 'delete'}
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
@@ -172,6 +177,26 @@ class TrackReader(qc.QObject):
         self.track_data = data
         self.change_list = []
 
+    @qc.pyqtSlot(str)
+    def saveChangeList(self, fname: str) -> None:
+        with open(fname, 'w') as fd:
+            writer = csv.writer(fd)
+            writer.writerow(['frame', 'change', 'old', 'new'])
+            for change in self.change_list:
+                writer.writerow(change.frame, change.change, change.orig,
+                                change.new)
+
+    @qc.pyqtSlot(str)
+    def loadChangeList(self, fname: str) -> None:
+        self.change_list = []
+        with open(fname) as fd:
+            line = 0
+            reader = csv.reader(fd)
+            for row in reader:
+                if line > 0:
+                    self.change_list.append(
+                        Change(frame=int(row[0]), change=int(row[1]),
+                               orig=int(row[2]), new=int(row[3])))
 
 
 class ReviewScene(FrameScene):
@@ -330,6 +355,26 @@ class LimitWin(qw.QMainWindow):
         super(LimitWin, self).closeEvent(a0)
 
 
+class ChangeWindow(qw.QMainWindow):
+    cols = ['frame', 'change', 'old id', 'new id']
+    def __init__(self):
+        super(ChangeWindow, self).__init__()
+        self.table = qw.QTableWidget()
+        self.table.setColumnCount(len(self.cols))
+        self.table.setHorizontalHeaderLabels(self.cols)
+        self.setCentralWidget(self.table)
+
+    def setChangeList(self, change_list):
+        self.table.clearContents()
+        self.table.setRowCount(len(change_list))
+        for ii, change in enumerate(change_list):
+            self.table.setItem(ii, 0, qw.QTableWidgetItem(str(change.frame)))
+            self.table.setItem(ii, 1, qw.QTableWidgetItem(
+                TrackReader.change_code[change.change]))
+            self.table.setItem(ii, 2, qw.QTableWidgetItem(str(change.orig)))
+            self.table.setItem(ii, 3, qw.QTableWidgetItem(str(change.new)))
+
+
 class ReviewWidget(qw.QWidget):
     """A widget with two panes for reviewing track mislabelings"""
     sigNextFrame = qc.pyqtSignal()
@@ -350,6 +395,7 @@ class ReviewWidget(qw.QWidget):
         super(ReviewWidget, self).__init__(*args, **kwargs)
         # Keep track of all the tracks seen so far
         self.setObjectName('ReviewWidget')
+        self._wait_cond = threading.Event()
         self.to_save = False
         self.history_length = 1
         self.all_tracks = OrderedDict()
@@ -438,6 +484,8 @@ class ReviewWidget(qw.QWidget):
         self.lim_widget = LimitsWidget(self)
         self.lim_win = LimitWin()
         self.lim_win.setCentralWidget(self.lim_widget)
+        self.changelist_widget = ChangeWindow()
+        self.changelist_widget.setVisible(False)
         self.makeActions()
         self.makeShortcuts()
         self.timer.timeout.connect(self.nextFrame)
@@ -524,26 +572,26 @@ class ReviewWidget(qw.QWidget):
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
-        self.openAction = qw.QAction('Open tracked data')
+        self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
-        self.saveAction = qw.QAction('Save reviewed data')
+        self.saveAction = qw.QAction('Save reviewed data (ctrl+s)')
         self.saveAction.triggered.connect(self.saveReviewedTracks)
-        self.speedUpAction = qw.QAction('Double speed')
+        self.speedUpAction = qw.QAction('Double speed (Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
-        self.slowDownAction = qw.QAction('Half speed')
+        self.slowDownAction = qw.QAction('Half speed (Down arrow)')
         self.slowDownAction.triggered.connect(self.slowDown)
-        self.zoomInLeftAction = qw.QAction('Zoom-in left')
+        self.zoomInLeftAction = qw.QAction('Zoom-in left (+)')
         self.zoomInLeftAction.triggered.connect(self.left_view.zoomIn)
-        self.zoomInRightAction = qw.QAction('Zoom-in right')
+        self.zoomInRightAction = qw.QAction('Zoom-in right (+)')
         self.zoomInRightAction.triggered.connect(self.right_view.zoomIn)
-        self.zoomOutLeftAction = qw.QAction('Zoom-out left')
+        self.zoomOutLeftAction = qw.QAction('Zoom-out left (-)')
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
-        self.zoomOutRightAction = qw.QAction('Zoom-out right')
+        self.zoomOutRightAction = qw.QAction('Zoom-out right (-)')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
         self.showOldTracksAction = qw.QAction('Show old tracks')
         self.showOldTracksAction.setCheckable(True)
         # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
-        self.playAction = qw.QAction('Play')
+        self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
         self.resetAction.triggered.connect(self.reset)
@@ -555,9 +603,9 @@ class ReviewWidget(qw.QWidget):
         self.swapTracksAction.triggered.connect(self.swapTracks)
         self.replaceTrackAction = qw.QAction('Replace track')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
-        self.deleteTrackAction = qw.QAction('Delete track')
+        self.deleteTrackAction = qw.QAction('Delete track (Delete/x')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
-        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame')
+        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+Z)')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
         self.showLimitsAction = qw.QAction('Size limits')
         self.showLimitsAction.setCheckable(True)
@@ -567,6 +615,12 @@ class ReviewWidget(qw.QWidget):
         self.lim_win.sigClose.connect(self.showLimitsAction.setChecked)
         self.histlenAction = qw.QAction('Set old track age limit')
         self.histlenAction.triggered.connect(self.setHistLen)
+        self.showChangeListAction = qw.QAction('Show list of changes')
+        self.showChangeListAction.triggered.connect(self.showChangeList)
+        self.loadChangeListAction = qw.QAction('Load list of changes')
+        self.loadChangeListAction.triggered.connect(self.loadChangeList)
+        self.saveChangeListAction = qw.QAction('Save list of changes')
+        self.saveChangeListAction.triggered.connect(self.saveChangeList)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -697,6 +751,31 @@ class ReviewWidget(qw.QWidget):
         for tid, rect in cur_tracks.items():
             ret[tid] = np.r_[rect[:4], 0]
         return ret
+
+    @qc.pyqtSlot()
+    def showChangeList(self):
+        if self.track_reader is None:
+            return
+        self.changelist_widget.setChangeList(self.track_reader.change_list)
+        self.changelist_widget.setVisible(True)
+
+    @qc.pyqtSlot()
+    def saveChangeList(self):
+        if self.track_reader is None:
+            return
+        fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save list of changes',
+                                                  filter='Text (*.csv)')
+        if len(fname) > 0:
+            self.track_reader.saveChangeList(fname)
+
+    @qc.pyqtSlot()
+    def loadChangeList(self):
+        if self.track_reader is None:
+            return
+        fname, _ = qw.QFileDialog.getOpenFileName(self, 'Load list of changes',
+                                                  filter='Text (*.csv)')
+        if len(fname) > 0:
+            self.track_reader.loadChangeList(fname)
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF) -> None:
@@ -833,10 +912,12 @@ class ReviewWidget(qw.QWidget):
         self.updateGeometry()
 
     def setupReading(self, video_path, data_path):
-        self._wait_cond = threading.Event()
         try:
             self.video_reader = VideoReader(video_path, self._wait_cond)
-        except IOError:
+        except IOError as e:
+            qw.QMessageBox.critical(self, 'Error opening video',
+                                    f'Could not open video: {video_path}\n'
+                                    f'{e}')
             return
         self.all_tracks.clear()
         self.right_view.resetArenaAction.trigger()
@@ -875,6 +956,9 @@ class ReviewWidget(qw.QWidget):
                 self.save_indicator.setWindowModality(qc.Qt.WindowModal)
                 self.track_reader.sigSavedFrames.connect(self.save_indicator.setValue)
             else:
+
+                self.save_indicator.setRange(0,
+                                             self.track_reader.last_frame + 1)
                 self.save_indicator.setValue(0)
                 try: # make sure same track reader is not connected multiple times
                     self.track_reader.sigSavedFrames.disconnect()
@@ -902,12 +986,12 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
         if play:
-            self.play_button.setText('Pause')
-            self.playAction.setText('Pause')
+            self.play_button.setText('Pause (Space)')
+            self.playAction.setText('Pause (Space)')
             self.timer.start(self.frame_interval / self.speed)
         else:
-            self.play_button.setText('Play')
-            self.playAction.setText('Play')
+            self.play_button.setText('Play (Space)')
+            self.playAction.setText('Play (Space)')
             self.timer.stop()
 
     @qc.pyqtSlot()
@@ -991,6 +1075,8 @@ class ReviewerMain(qw.QMainWindow):
         file_menu = self.menuBar().addMenu('&File')
         file_menu.addAction(self.review_widget.openAction)
         file_menu.addAction(self.review_widget.saveAction)
+        file_menu.addAction(self.review_widget.loadChangeListAction)
+        file_menu.addAction(self.review_widget.saveChangeListAction)
         view_menu = self.menuBar().addMenu('&View')
         view_menu.addAction(self.review_widget.zoomInLeftAction)
         view_menu.addAction(self.review_widget.zoomInRightAction)
@@ -1003,6 +1089,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.showDifferenceAction)
         view_menu.addAction(self.review_widget.showLimitsAction)
         view_menu.addAction(self.review_widget.histlenAction)
+        view_menu.addAction(self.review_widget.showChangeListAction)
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)
@@ -1080,9 +1167,9 @@ def test_review():
     reviewer.gotoFrame(0)
     win = qw.QMainWindow()
     toolbar = win.addToolBar('Zoom')
-    zi = qw.QAction('Zoom in')
+    zi = qw.QAction('Zoom in (+)')
     zi.triggered.connect(reviewer.left_view.zoomIn)
-    zo = qw.QAction('Zoom out')
+    zo = qw.QAction('Zoom out (-)')
     zo.triggered.connect(reviewer.right_view.zoomOut)
     arena = qw.QAction('Select arena')
     arena.triggered.connect(reviewer.left_view.scene().setArenaMode)

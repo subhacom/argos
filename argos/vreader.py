@@ -140,7 +140,7 @@ class VideoReader(qc.QObject):
         logging.debug('Finished waiting')
 
     def __del__(self):
-        self.mutex.unlock()
+        # self.mutex.unlock() # this causes crash
         if self._vid.isOpened():
             self._vid.release()
         if self._outfile is not None and self._outfile.isOpened():
