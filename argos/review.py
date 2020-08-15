@@ -780,6 +780,8 @@ class ReviewWidget(qw.QWidget):
         message = self._get_diff()
         if len(message) > 0:
             if self.showDifferenceAction.isChecked():
+                self.play_button.setChecked(False)
+                self.playVideo(False)
                 qw.QMessageBox.information(self, 'Track mismatch', message)
             self.sigDiffMessage.emit(message)
         self._wait_cond.set()
@@ -789,8 +791,6 @@ class ReviewWidget(qw.QWidget):
         left_keys = set(self.left_tracks.keys())
         right_keys = set(self.right_tracks.keys())
         if left_keys != right_keys:
-            self.play_button.setChecked(False)
-            self.playVideo(False)
             logging.info(f'Tracks don\'t match between frames {self.frame_no} '
                          f'and {self.frame_no + 1}: '
                          f'{left_keys.symmetric_difference(right_keys)}')
