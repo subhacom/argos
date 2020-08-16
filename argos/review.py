@@ -183,8 +183,8 @@ class TrackReader(qc.QObject):
             writer = csv.writer(fd)
             writer.writerow(['frame', 'change', 'old', 'new'])
             for change in self.change_list:
-                writer.writerow(change.frame, change.change, change.orig,
-                                change.new)
+                writer.writerow([change.frame, change.change, change.orig,
+                                 change.new])
 
     @qc.pyqtSlot(str)
     def loadChangeList(self, fname: str) -> None:
