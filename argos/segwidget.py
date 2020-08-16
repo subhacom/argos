@@ -692,7 +692,11 @@ class SegWidget(qw.QWidget):
         self._dbscan_eps_label = qw.QLabel('DBSCAN epsilon')
         self._dbscan_eps = qw.QDoubleSpinBox()
         self._dbscan_eps.setRange(0.1, 100)
-        self._dbscan_eps.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
+        try:
+            # setStepType was added in Qt v 5.12 only
+            self._dbscan_eps.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
+        except AttributeError:
+            pass  # Avoid problem with older Qt versions
         value = settings.value('segment/dbscan_eps',
                                self.worker.dbscan_eps,
                                type=float)
@@ -756,7 +760,10 @@ class SegWidget(qw.QWidget):
         self._wdist_label = qw.QLabel('Distance threshold')
         self._wdist = qw.QDoubleSpinBox()
         self._wdist.setRange(0, 10)
-        self._wdist.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
+        try:
+            self._wdist.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
+        except AttributeError:
+            pass
         self._wdist.setSingleStep(0.1)
         value = settings.value('segment/watershed_distthresh',
                                self.worker.wdist_thresh,
