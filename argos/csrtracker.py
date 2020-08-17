@@ -239,11 +239,11 @@ class CSRTWidget(qw.QWidget):
         self._miss_limit_spin.setValue(value)
         self.tracker.miss_limit = value
         layout.addRow(self._miss_limit_label, self._miss_limit_spin)
-        self._max_dist_label = qw.QLabel('Minimum overlap')
+        self._max_dist_label = qw.QLabel('Minimum separation')
         self._max_dist_spin = qw.QDoubleSpinBox()
-        self._max_dist_spin.setToolTip('Minimum overlap between a tracker and'
-                                       ' its closest bounding box to match'
-                                       ' them.')
+        self._max_dist_spin.setToolTip('Minimum separation between a tracker and'
+                                       ' its closest bounding box to consider'
+                                       ' them to be separate objects.')
         value = settings.value('csrt/max_dist', self.tracker.max_dist,
                                type=float)
         self._max_dist_spin.setValue(value)
