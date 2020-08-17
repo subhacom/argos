@@ -50,7 +50,7 @@ class VideoWidget(qw.QWidget):
         self.timer.setSingleShot(True)
         self.openAction = qw.QAction('Open video')
         self.openCamAction = qw.QAction('Open camera')
-        self.playAction = qw.QAction('Play/Pause')
+        self.playAction = qw.QAction('Play')
         self.playAction.setCheckable(True)
         self.resetAction = qw.QAction('Reset')
         self.resetAction.setToolTip('Go back to the start and reset the'
@@ -74,6 +74,7 @@ class VideoWidget(qw.QWidget):
         self.colormapAction.triggered.connect(self.setColormap)
         self.reader_thread = qc.QThread()
         self.sigQuit.connect(self.reader_thread.quit)
+        self.sigQuit.connect(self.quit)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
     @qc.pyqtSlot()
@@ -266,21 +267,27 @@ class VideoWidget(qw.QWidget):
         """This function is for playing raw video without any processing
         """
         if play:
+            self.playAction.setText('Pause')
             time = 1000.0 / self.video_reader.fps
             self.timer.start(time)
         else:
-            self.timer.stop()
+            self.pauseVideo()
 
     @qc.pyqtSlot()
     def pauseVideo(self):
         self.playAction.setChecked(False)
         self.timer.stop()
+        self.playAction.setText('Play')
 
     @qc.pyqtSlot()
     def resetVideo(self):
         self.pauseVideo()
         self.sigReset.emit()
         self.sigGotoFrame.emit(0)
+
+    @qc.pyqtSlot()
+    def quit(self):
+        self.reader_thread.wait()
 
 
 def test_vreader():

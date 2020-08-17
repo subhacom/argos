@@ -27,7 +27,6 @@ class VideoReader(qc.QObject):
         super(VideoReader, self).__init__()
         # TODO check if I really need the mutex just for reading
         self.mutex = qc.QMutex()
-        locker = qc.QMutexLocker(self.mutex)   # this ensures unlock at exit
         self.is_webcam = path.isdigit()
         self._path = path
         self._outpath = None
@@ -41,7 +40,9 @@ class VideoReader(qc.QObject):
             self.fps = cu.get_camera_fps(int(path))
             self._vid = cv2.VideoCapture(int(path))
             self.frame_count = -1
+            self.mutex.lock()
             ret, frame = self._vid.read()
+            self.mutex.unlock()
             logging.debug(f'Read frame: {frame.shape}')
             self.frame_height, self.frame_width = frame.shape[:2]
             self._outpath = f'{path}.avi'

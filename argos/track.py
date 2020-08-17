@@ -104,8 +104,9 @@ class ArgosMain(qw.QMainWindow):
         self._track_grp.addAction(self._csrt_action)
         self._sort_action.setChecked(True)
         self._debug_action = qw.QAction('Debug')
-        self._debug_action.setCheckable(
-            settings.value('track/debug', logging.INFO) == logging.DEBUG)
+        self._debug_action.setCheckable(True)
+        debug = settings.value('track/debug', logging.INFO) == logging.DEBUG
+        self._debug_action.setChecked(debug)
         self._debug_action.triggered.connect(self.setDebug)
         self._clear_settings_action = qw.QAction('Reset to default settings')
         self._clear_settings_action.triggered.connect(self.clearSettings)
@@ -164,7 +165,7 @@ class ArgosMain(qw.QMainWindow):
     @qc.pyqtSlot(bool)
     def setDebug(self, state):
         level = logging.DEBUG if state else logging.INFO
-        settings.setValue('debug', level)
+        settings.setValue('track/debug', level)
         logging.getLogger().setLevel(level)
 
     def cleanup(self):
@@ -223,7 +224,14 @@ class ArgosMain(qw.QMainWindow):
             sig = self._lim_widget.sigProcessed
         else:
             sig = self._seg_widget.sigProcessed
+        try:
+            sig.disconnect()
+        except TypeError:
+            pass
+        logging.debug(f'YOLACT limwidget receivers: {self._lim_widget.receivers(self._lim_widget.sigProcessed)}')
         util.reconnect(sig, newhandler, oldhandler)
+        logging.debug(f'Switched connection of {sig} from {oldhandler} to {newhandler}')
+        logging.debug(f'YOLACT limwidget receivers: {self._lim_widget.receivers(self._lim_widget.sigProcessed)}')
 
 
 if __name__ == '__main__':
