@@ -12,7 +12,7 @@ from PyQt5 import (
     QtWidgets as qw
 )
 
-from argos.utility import match_bboxes, init
+from argos.utility import match_bboxes, pairwise_distance, init
 from argos.constants import OutlineStyle, DistanceMetric
 
 settings = init()
@@ -70,6 +70,20 @@ class CSRMultiTracker(qc.QObject):
         self._next_id += 1
         return tracker.id_
 
+    def find_nonoverlapping(self, bboxes):
+        """Remove entries which are within `max_dist` distance from another bbox
+        considering them to be the same object detected twice."""
+        dist = pairwise_distance(bboxes, bboxes,
+                                 OutlineStyle.bbox,
+                                 DistanceMetric.iou)
+        close_row, close_col = np.where(dist <= self.max_dist)
+        ignore = close_col[close_col > close_row]
+        if len(ignore) > 0:
+            logging.debug(f'Ignore {ignore}')
+        valid_idx = set(list(range(bboxes.shape[0]))) - set(ignore)
+        logging.debug(f'Valid indices: {valid_idx}')
+        return bboxes[list(valid_idx)].copy()
+
     @qc.pyqtSlot(np.ndarray, np.ndarray, int)
     def track(self, frame: np.ndarray, bboxes: np.ndarray, pos: int) -> None:
         """Track objects in frame, possibly comparing them to bounding boxes
@@ -94,8 +108,9 @@ class CSRMultiTracker(qc.QObject):
 
         self.age += 1
         if len(self.trackers) == 0:
-            ret = {self._add_tracker(frame, bboxes[ii]): bboxes[ii].copy()
-                   for ii in range(bboxes.shape[0])}
+            valid = self.find_nonoverlapping(bboxes)
+            ret = {self._add_tracker(frame, valid[ii]): valid[ii]
+                   for ii in range(valid.shape[0])}
             logging.debug(f'==== Added initial trackers \n{ret}')
             self.sigTracked.emit(ret, pos)
             return
@@ -103,30 +118,26 @@ class CSRMultiTracker(qc.QObject):
         predicted = {id_: tracker.update(frame)
                      for id_, tracker in self.trackers.items()}
         self.sigTracked.emit(predicted, pos)
-        logging.debug(f'############ Predicted trackers')
-        logging.debug('\n'.join([str(it) for it in predicted.items()]))
-        logging.debug('\n')
-        logging.debug('Received bboxes:\n'
-                      f'{bboxes}')
         if self.age > self.check_age:
+            valid = self.find_nonoverlapping(bboxes)
             matched, new_unmatched, old_unmatched = match_bboxes(
-                predicted, bboxes, boxtype=OutlineStyle.bbox,
+                predicted, valid, boxtype=OutlineStyle.bbox,
                 metric=self.dist_metric,
                 max_dist=self.max_dist)
             logging.debug(f'==== matching bboxes Frame: {pos} ====')
-            logging.debug(f'Input bboxes: {bboxes}\n'
+            logging.debug(f'Input bboxes: {valid}\n'
                           f'Matched: {matched}\n'
                           f'New unmatched: {new_unmatched}\n'
                           f'Old unmatched: {old_unmatched}')
             # Renitialize trackers that matched to closest bounding box
             for tid, idx in matched.items():
-                self.trackers[tid].reinit(frame, bboxes[idx])
+                self.trackers[tid].reinit(frame, valid[idx])
             # Increase miss count for unmatched trackers
             for tid in old_unmatched:
                 self.trackers[tid].misses += 1
             # Add trackers for bboxes that did not match any tracker
             for idx in new_unmatched:
-                self._add_tracker(frame, bboxes[idx])
+                self._add_tracker(frame, valid[idx])
             self.check_count += 1
         # Remove the trackers that missed too many times - only after we have
         # given them `check_seq` chances for rematching

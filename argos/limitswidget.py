@@ -29,7 +29,6 @@ class LimitsWidget(qw.QWidget):
     sigWmax = qc.pyqtSignal(int)
     sigHmin = qc.pyqtSignal(int)
     sigHmax = qc.pyqtSignal(int)
-    sigDmin = qc.pyqtSignal(float)
     def __init__(self, *args, **kwargs):
         super(LimitsWidget, self).__init__(*args, **kwargs)
         self.roi = None
@@ -65,25 +64,11 @@ class LimitsWidget(qw.QWidget):
                                type=int)
         self._hmax_edit.setValue(value)
         layout.addRow(self._hmax_label, self._hmax_edit)
-        self._dmin_label = qw.QLabel('Maximum allowed overlap')
-        self._dmin_edit = qw.QDoubleSpinBox()
-        self._dmin_edit.setRange(0.0, 1.0)
-        try:
-            # setStepType was added in Qt v 5.12 only
-            self._dmin_edit.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
-        except AttributeError:
-            pass  # Avoid problem with older Qt versions
-        value = settings.value('segment/min_dist',
-                               0.3,
-                               type=float)
-        self._dmin_edit.setValue(value)
-        layout.addRow(self._dmin_label, self._dmin_edit)
         self.setLayout(layout)
         self._hmax_edit.valueChanged.connect(self.sigHmax)
         self._hmin_edit.valueChanged.connect(self.sigHmin)
         self._wmax_edit.valueChanged.connect(self.sigWmax)
         self._wmin_edit.valueChanged.connect(self.sigWmin)
-        self._dmin_edit.valueChanged.connect(self.sigDmin)
         self.sigQuit.connect(self.saveSettings)
 
     @qc.pyqtSlot()
@@ -93,7 +78,6 @@ class LimitsWidget(qw.QWidget):
         settings.setValue('segment/max_width', self._wmax_edit.value())
         settings.setValue('segment/min_height', self._hmin_edit.value())
         settings.setValue('segment/max_height', self._hmax_edit.value())
-        settings.setValue('segment/min_dist', self._dmin_edit.value())
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF):
@@ -114,21 +98,8 @@ class LimitsWidget(qw.QWidget):
                        (wh[:, 0] <= self._wmax_edit.value()) &
                        (wh[:, 1] >= self._hmin_edit.value()) &
                        (wh[:, 1] <= self._hmax_edit.value())]
-        overlap = 1 - ut.pairwise_distance(valid, valid, const.OutlineStyle.bbox,
-                                    const.DistanceMetric.iou)
-        close_row, close_col = np.where(overlap > self._dmin_edit.value())
-        ignore = close_col[close_col > close_row]
-        if len(ignore) > 0:
-            logging.debug(f'Ignore {ignore}')
-        # for ii in range(1, len(valid)):
-        #     for jj in range(ii):
-        #         if dist[ii, jj] < self._dmin_edit.value():
-        #             ignore.add(jj)
-        valid_idx = set(list(range(len(valid)))) - set(ignore)
-        logging.debug(f'Valid indices: {valid_idx}')
-        valid = valid[list(valid_idx)].copy()
         if self.roi is None:
-            self.sigProcessed.emit(valid, pos)
+            self.sigProcessed.emit(valid.copy(), pos)
             return
         vidx = []
         for ii in range(valid.shape[0]):
