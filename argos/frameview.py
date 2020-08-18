@@ -62,6 +62,10 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_item = None
         self.clear()
 
+    def clearAll(self):
+        self.clearItems()
+        self._frame = None
+
     @qc.pyqtSlot(list)
     def setSelected(self, selected: List[int]) -> None:
         """Set list of selected items"""
@@ -378,7 +382,8 @@ class FrameScene(qw.QGraphicsScene):
         else:
             arena = self.arena.boundingRect()
         # logging.debug(f'arena: {arena}, {self.arena}, param: {rect}')
-        painter.drawImage(arena, self._frame, arena)
+        if self._frame is not None:
+            painter.drawImage(arena, self._frame, arena)
 
 
 class FrameView(qw.QGraphicsView):
@@ -422,7 +427,8 @@ class FrameView(qw.QGraphicsView):
         self.setScene(self.frame_scene)
 
     def clearAll(self):
-        self.frame_scene.clearItems()
+        self.frame_scene.clearAll()
+        # self.setFrame(np.zeros((4, 4)), 0)
         self.viewport().update()
 
     @qc.pyqtSlot(np.ndarray, int)

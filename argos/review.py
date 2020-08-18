@@ -25,6 +25,7 @@ from argos.utility import make_color, get_cmap_color, rect2points
 from argos.frameview import FrameScene, FrameView
 from argos.vreader import VideoReader
 from argos.limitswidget import LimitsWidget
+from argos.vwidget import VidInfo
 
 
 settings = ut.init()
@@ -190,13 +191,14 @@ class TrackReader(qc.QObject):
     def loadChangeList(self, fname: str) -> None:
         self.change_list = []
         with open(fname) as fd:
-            line = 0
+            first = True
             reader = csv.reader(fd)
             for row in reader:
-                if line > 0:
+                if not first and len(row) > 0:
                     self.change_list.append(
                         Change(frame=int(row[0]), change=int(row[1]),
                                orig=int(row[2]), new=int(row[3])))
+                first = False
 
 
 class ReviewScene(FrameScene):
@@ -390,6 +392,7 @@ class ReviewWidget(qw.QWidget):
     sigSetColormap = qc.pyqtSignal(str, int)
     sigDiffMessage = qc.pyqtSignal(str)
     sigUndoCurrentChanges = qc.pyqtSignal(int)
+    sigDataFile = qc.pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
@@ -409,6 +412,7 @@ class ReviewWidget(qw.QWidget):
         self.timer.setSingleShot(True)
         self.video_reader = None
         self.track_reader = None
+        self.vid_info = VidInfo()
         self.left_tracks = {}
         self.right_tracks = {}
         self.roi = None
@@ -621,6 +625,8 @@ class ReviewWidget(qw.QWidget):
         self.loadChangeListAction.triggered.connect(self.loadChangeList)
         self.saveChangeListAction = qw.QAction('Save list of changes')
         self.saveChangeListAction.triggered.connect(self.saveChangeList)
+        self.vidinfoAction = qw.QAction('Video information')
+        self.vidinfoAction.triggered.connect(self.vid_info.show)
 
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
@@ -899,8 +905,16 @@ class ReviewWidget(qw.QWidget):
         self.setupReading(vid_filename, track_filename)
         self.video_filename = vid_filename
         self.track_filename = track_filename
+        self.vid_info.vidfile.setText(self.video_filename)
+        self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
+        self.vid_info.fps.setText(f'{self.video_reader.fps}')
+        self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
+        self.vid_info.frame_height.setText(f'{self.video_reader.frame_height}')
+        self.sigDataFile.emit(self.track_filename)
         settings.setValue('data/directory', os.path.dirname(track_filename))
         settings.setValue('video/directory', os.path.dirname(vid_filename))
+        self.left_view.clearAll()
+        self.left_view.update()
         self.all_tracks.clear()
         self.left_list.clear()
         self.right_list.clear()
@@ -1090,6 +1104,8 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.showLimitsAction)
         view_menu.addAction(self.review_widget.histlenAction)
         view_menu.addAction(self.review_widget.showChangeListAction)
+        view_menu.addAction(self.review_widget.vidinfoAction)
+
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)
@@ -1104,33 +1120,36 @@ class ReviewerMain(qw.QMainWindow):
                                 self.review_widget.right_view.resetArenaAction])
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
-        v = settings.value('review/debug', False, type=bool)
+        v = settings.value('review/debug', logging.INFO)
         self.setDebug(v)
-        self.debugAction.setChecked(v)
+        self.debugAction.setChecked(v == logging.DEBUG)
         self.debugAction.triggered.connect(self.setDebug)
         action_menu.addAction(self.debugAction)
         toolbar = self.addToolBar('View')
         toolbar.addActions(view_menu.actions())
         toolbar.addActions(action_menu.actions())
-        self.setCentralWidget(self.review_widget)
+        self.review_widget.sigDataFile.connect(self.updateTitle)
         self.sigQuit.connect(self.review_widget.doQuit)
         self.status_label = qw.QLabel()
         self.review_widget.sigDiffMessage.connect(self.status_label.setText)
         self.statusBar().addWidget(self.status_label)
+        self.setCentralWidget(self.review_widget)
 
     @qc.pyqtSlot(bool)
     def setDebug(self, val: bool):
-        settings.setValue('review/debug', val)
-        if val:
-            logging.getLogger().setLevel(logging.DEBUG)
-        else:
-            logging.getLogger().setLevel(logging.INFO)
+        level = logging.DEBUG if val else logging.INFO
+        logging.getLogger().setLevel(level)
+        settings.setValue('review/debug', level)
 
     @qc.pyqtSlot()
     def cleanup(self):
         self.sigQuit.emit()
         settings.sync()
         logging.debug('Saved settings')
+
+    @qc.pyqtSlot(str)
+    def updateTitle(self, filename: str) -> None:
+        self.setWindowTitle(f'Argos:review {filename}')
 
 
 
@@ -1199,7 +1218,7 @@ if __name__ == '__main__':
     # test_reviewwidget()
     # test_review()
     app = qw.QApplication(sys.argv)
-    debug_level = settings.value('review/debug', logging.INFO)
+    debug_level = logging.INFO #settings.value('review/debug', logging.INFO)
     logging.getLogger().setLevel(debug_level)
     win = ReviewerMain()
     win.setMinimumSize(800, 600)

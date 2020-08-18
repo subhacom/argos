@@ -3,6 +3,7 @@
 # Created: 2020-05-28 3:01 PM
 
 import sys
+import os
 import time
 import enum
 import threading
@@ -125,7 +126,8 @@ class ArgosMain(qw.QMainWindow):
                                     self._video_widget.zoomOutAction,
                                     self._video_widget.resetArenaAction,
                                     self._video_widget.autoColorAction,
-                                    self._video_widget.colormapAction])
+                                    self._video_widget.colormapAction,
+                                    self._video_widget.infoAction])
         self._advanced_menu = self.menuBar().addMenu('Advanced')
         # self._advanced_menu.addAction(self._video_widget.arenaSelectAction)
         self._advanced_menu.addAction(self._video_widget.resetArenaAction)
@@ -134,6 +136,7 @@ class ArgosMain(qw.QMainWindow):
 
         ##########################
         # Connections
+        self._video_widget.sigVideoFile.connect(self.updateTitle)
         self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
         self._video_widget.sigArena.connect(self._lim_widget.setRoi)
         self._video_widget.sigReset.connect(self._lim_widget.resetRoi)
@@ -229,10 +232,11 @@ class ArgosMain(qw.QMainWindow):
             sig.disconnect()
         except TypeError:
             pass
-        logging.debug(f'YOLACT limwidget receivers: {self._lim_widget.receivers(self._lim_widget.sigProcessed)}')
         util.reconnect(sig, newhandler, oldhandler)
-        logging.debug(f'Switched connection of {sig} from {oldhandler} to {newhandler}')
-        logging.debug(f'YOLACT limwidget receivers: {self._lim_widget.receivers(self._lim_widget.sigProcessed)}')
+
+    @qc.pyqtSlot(str)
+    def updateTitle(self, filename: str) -> None:
+        self.setWindowTitle(f'Argos:track {filename}')
 
 
 if __name__ == '__main__':

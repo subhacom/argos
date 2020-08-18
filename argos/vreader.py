@@ -49,6 +49,8 @@ class VideoReader(qc.QObject):
         else:
             self._vid = cv2.VideoCapture(path)
             self.frame_count = int(self._vid.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.frame_height = int(self._vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            self.frame_width = int(self._vid.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.fps = self._vid.get(cv2.CAP_PROP_FPS)
         if not self._vid.isOpened():
             raise IOError(f'Could not open video: {path}')
