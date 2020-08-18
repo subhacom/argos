@@ -1199,6 +1199,8 @@ if __name__ == '__main__':
     # test_reviewwidget()
     # test_review()
     app = qw.QApplication(sys.argv)
+    debug_level = settings.value('review/debug', logging.INFO)
+    logging.getLogger().setLevel(debug_level)
     win = ReviewerMain()
     win.setMinimumSize(800, 600)
     win.setWindowTitle('Argos - review tracks')

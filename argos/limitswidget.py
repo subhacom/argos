@@ -117,15 +117,15 @@ class LimitsWidget(qw.QWidget):
         overlap = 1 - ut.pairwise_distance(valid, valid, const.OutlineStyle.bbox,
                                     const.DistanceMetric.iou)
         close_row, close_col = np.where(overlap > self._dmin_edit.value())
-        ignore = set()
-        for row, col in zip(close_row, close_col):
-            if col > row:
-                ignore.add(col)
+        ignore = close_col[close_col > close_row]
+        if len(ignore) > 0:
+            logging.debug(f'Ignore {ignore}')
         # for ii in range(1, len(valid)):
         #     for jj in range(ii):
         #         if dist[ii, jj] < self._dmin_edit.value():
         #             ignore.add(jj)
-        valid_idx = set(list(range(len(valid)))) - ignore
+        valid_idx = set(list(range(len(valid)))) - set(ignore)
+        logging.debug(f'Valid indices: {valid_idx}')
         valid = valid[list(valid_idx)].copy()
         if self.roi is None:
             self.sigProcessed.emit(valid, pos)

@@ -49,11 +49,11 @@ class CSRMultiTracker(qc.QObject):
 
     def __init__(self, *args, **kwargs):
         super(CSRMultiTracker, self).__init__(*args, **kwargs)
-        self.check_age = settings.value('csrt/check_age', 10)  # check against segmentation after these many frames
-        self.check_seq = settings.value('csrt/check_seq', 1)  # keep checking for these many frames for missing objects
-        self.miss_limit = settings.value('csrt/miss_limit', 3)  # delete tracker after these many misses
-        self.max_dist = settings.value('csrt/max_dist', 0.3)
-        if settings.value('csrt/max_dist', 'iou') == 'euclidean':
+        self.check_age = settings.value('csrt/check_age', 10, type=int)  # check against segmentation after these many frames
+        self.check_seq = settings.value('csrt/check_seq', 1, type=int)  # keep checking for these many frames for missing objects
+        self.miss_limit = settings.value('csrt/miss_limit', 3, type=int)  # delete tracker after these many misses
+        self.max_dist = settings.value('csrt/max_dist', 0.3, type=float)
+        if settings.value('csrt/dist_metric', 'iou', type=str) == 'euclidean':
             self.dist_metric = DistanceMetric.euclidean
         else:
             self.dist_metric = DistanceMetric.iou
@@ -113,8 +113,8 @@ class CSRMultiTracker(qc.QObject):
                 predicted, bboxes, boxtype=OutlineStyle.bbox,
                 metric=self.dist_metric,
                 max_dist=self.max_dist)
-            logging.info(f'==== matching bboxes Frame: {pos} ====')
-            logging.info(f'Input bboxes: {bboxes}\n'
+            logging.debug(f'==== matching bboxes Frame: {pos} ====')
+            logging.debug(f'Input bboxes: {bboxes}\n'
                           f'Matched: {matched}\n'
                           f'New unmatched: {new_unmatched}\n'
                           f'Old unmatched: {old_unmatched}')
@@ -168,16 +168,6 @@ class CSRMultiTracker(qc.QObject):
         self._next_id = 1
         self.age = 0
         self.check_count = 0
-
-    @qc.pyqtSlot()
-    def saveSettings(self):
-        settings.setValue('csrt/check_age', self.check_age)
-        settings.setValue('csrt/check_seq', self.check_seq)
-        settings.setValue('csrt/miss_limit', self.miss_limit)
-        settings.setValue('csrt/max_dist', self.max_dist)
-        settings.setValue('csrt/dist_metric',
-                          'iou' if self.dist_metric == DistanceMetric.iou
-                          else 'euclidean')
 
 
 class CSRTWidget(qw.QWidget):
@@ -244,10 +234,7 @@ class CSRTWidget(qw.QWidget):
         self._max_dist_spin.setToolTip('Minimum separation between a tracker and'
                                        ' its closest bounding box to consider'
                                        ' them to be separate objects.')
-        value = settings.value('csrt/max_dist', self.tracker.max_dist,
-                               type=float)
-        self._max_dist_spin.setValue(value)
-        self.tracker.max_dist = value
+        self._max_dist_spin.setValue(self.tracker.max_dist)
         layout.addRow(self._max_dist_label, self._max_dist_spin)
         self._dist_metric_label = qw.QLabel('Distance metric')
         self._dist_metric_combo = qw.QComboBox(self)
@@ -269,7 +256,7 @@ class CSRTWidget(qw.QWidget):
         self.sigTrack.connect(self.tracker.track)
         self.tracker.sigTracked.connect(self.sigTracked)
         self.sigReset.connect(self.tracker.reset)
-        self.sigQuit.connect(self.tracker.saveSettings)
+        self.sigQuit.connect(self.saveSettings)
         self.sigQuit.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self._check_age_spin.valueChanged.connect(self.tracker.setCheckAge)
@@ -314,4 +301,12 @@ class CSRTWidget(qw.QWidget):
             self._frame_pos = -1
             self._bboxes_pos = -1
 
-
+    @qc.pyqtSlot()
+    def saveSettings(self):
+        settings.setValue('csrt/check_age', self.tracker.check_age)
+        settings.setValue('csrt/check_seq', self.tracker.check_seq)
+        settings.setValue('csrt/miss_limit', self.tracker.miss_limit)
+        settings.setValue('csrt/max_dist', self.tracker.max_dist)
+        settings.setValue('csrt/dist_metric',
+                          'iou' if self.tracker.dist_metric == DistanceMetric.iou
+                          else 'euclidean')
