@@ -223,11 +223,10 @@ class ReviewScene(FrameScene):
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
-        """rects: a dict of id: (x, y, w, h, flag)
+        """rects: a dict of id: (x, y, w, h, frame)
 
         This overrides the same slot in FrameScene where each rectangle has
-        a fifth entry indicating if this bbox/track is present in the current
-        frame (1) or was scene in an earlier frame (0).
+        a fifth entry indicating frame no of the rectangle.
 
         The ones from earlier frame that are not present in the current frame
         are displayed with a special line style (default: dashes)
@@ -251,7 +250,7 @@ class ReviewScene(FrameScene):
             # Use transparency to indicate age
             color.setAlpha(int(255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]), self.hist_len) / self.hist_len)))
             pen = qg.QPen(color, self.linewidth)
-            if tdata[4] > 0:
+            if tdata[4] != self.frameno:
                 pen.setStyle(self.historic_track_ls)
                 logging.debug(f'{self.objectName()}: old track : {id_}')
             rect = tdata[:4].copy()
@@ -564,7 +563,7 @@ class ReviewWidget(qw.QWidget):
     def makeActions(self):
         self.disableSeekAction = qw.QAction('Disable seek')
         self.disableSeekAction.setCheckable(True)
-        disable_seek = settings.value('review/disable_seek', True)
+        disable_seek = settings.value('review/disable_seek', True, type=bool)
         self.disableSeek(disable_seek)
         self.disableSeekAction.setChecked(disable_seek)
         self.disableSeekAction.triggered.connect(self.disableSeek)
@@ -941,7 +940,7 @@ class ReviewWidget(qw.QWidget):
         self.video_filename = video_path
         self.track_filename = data_path
         settings.setValue('data/directory', os.path.dirname(self.track_filename))
-        settings.setValue('video/directory', os.path.dirname(self.vid_filename))
+        settings.setValue('video/directory', os.path.dirname(self.video_filename))
         self.vid_info.vidfile.setText(self.video_filename)
         self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
         self.vid_info.fps.setText(f'{self.video_reader.fps}')
@@ -959,8 +958,6 @@ class ReviewWidget(qw.QWidget):
         self.history_length = self.track_reader.last_frame
         self.left_view.frame_scene.setHistLen(self.history_length)
         self.right_view.frame_scene.setHistLen(self.history_length)
-        self.gotoFrame(0)
-        self.updateGeometry()
         self.right_view.resetArenaAction.trigger()
         self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
         self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
@@ -977,6 +974,8 @@ class ReviewWidget(qw.QWidget):
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
         self.sigUndoCurrentChanges.connect(self.track_reader.undoChangeTrack)
         self.sigDataFile.emit(self.track_filename)
+        self.gotoFrame(0)
+        self.updateGeometry()
         return True
 
     @qc.pyqtSlot()
@@ -1028,7 +1027,7 @@ class ReviewWidget(qw.QWidget):
         elif self.showDifferenceAction.isChecked():
             diff = 2
         settings.setValue('review/showdiff', diff)
-        settings.setValue('review/disble_seek', self.disableSeekAction.isChecked())
+        settings.setValue('review/disable_seek', self.disableSeekAction.isChecked())
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
