@@ -11,7 +11,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    Anaconda prompt):
    
    ```
-   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg
+   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers
    ```
    
    This will create a virtual Python environment called `track`
