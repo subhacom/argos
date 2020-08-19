@@ -28,6 +28,7 @@ class FrameScene(qw.QGraphicsScene):
     def __init__(self, *args, **kwargs):
         super(FrameScene, self).__init__(*args, **kwargs)
         self.roi = None
+        self.frameno = -1
         self.arena = None
         self.polygons = {}
         self.item_dict = {}
@@ -166,7 +167,7 @@ class FrameScene(qw.QGraphicsScene):
         self.label_dict[index] = text
         text.setDefaultTextColor(self.color)
         logging.debug(f'Scene bounding rect of {index}={bbox}')
-        text.setPos(bbox.x(), bbox.y())
+        text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -360,7 +361,7 @@ class FrameScene(qw.QGraphicsScene):
                     # logging.debug('AAAAA %r', len(self.items()))
                     self._clearIncomplete()
                     # logging.debug('BBBBB %r', len(self.items()))
-                logging.debug(f'BBBB points: {self.points}, pos: {pos}')
+                # logging.debug(f'BBBB points: {self.points}, pos: {pos}')
                 rect = util.points2rect(self.points[-1], pos)
                 self.incomplete_item = self.addRect(*rect, pen)
                 # logging.debug('CCCC %r', len(self.items()))
@@ -399,7 +400,6 @@ class FrameView(qw.QGraphicsView):
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
-        self._framenum = 0
         self._makeScene()
         self.sigSetRectangles.connect(self.frame_scene.setRectangles)
         self.sigSetPolygons.connect(self.frame_scene.setPolygons)
@@ -435,7 +435,7 @@ class FrameView(qw.QGraphicsView):
     def setFrame(self, frame: np.ndarray, pos: int):
         logging.debug(f'Frame set {pos}')
         self.frame_scene.setFrame(frame)
-        self._framenum = pos
+        self.frame_scene.frameno = pos
         self.viewport().update()
 
     @qc.pyqtSlot()
