@@ -412,7 +412,6 @@ class ReviewWidget(qw.QWidget):
         self.history_length = 1
         self.all_tracks = OrderedDict()
         self.left_frame = None
-        self.left_tracks = None
         self.right_frame = None
         self.right_tracks = None
         self.frame_no = -1
@@ -928,30 +927,7 @@ class ReviewWidget(qw.QWidget):
             self, 'Open video', viddir)
         logging.debug(f'filename:{vid_filename}\nselected filter:{vfilter}')
         fmt = 'csv' if filter.startswith('Text') else 'hdf'
-
-        if not self.setupReading(vid_filename, track_filename):
-            return
-        self.video_filename = vid_filename
-        self.track_filename = track_filename
-        self.vid_info.vidfile.setText(self.video_filename)
-        self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
-        self.vid_info.fps.setText(f'{self.video_reader.fps}')
-        self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
-        self.vid_info.frame_height.setText(f'{self.video_reader.frame_height}')
-        self.sigDataFile.emit(self.track_filename)
-        settings.setValue('data/directory', os.path.dirname(track_filename))
-        settings.setValue('video/directory', os.path.dirname(vid_filename))
-        self.left_view.clearAll()
-        self.left_view.update()
-        self.all_tracks.clear()
-        self.left_list.clear()
-        self.right_list.clear()
-        self.left_tracks = {}
-        self.right_tracks = {}
-        self.left_frame = None
-        self.right_frame = None
-        self.gotoFrame(0)
-        self.updateGeometry()
+        self.setupReading(vid_filename, track_filename)
 
     def setupReading(self, video_path, data_path):
         try:
@@ -961,12 +937,31 @@ class ReviewWidget(qw.QWidget):
                                     f'Could not open video: {video_path}\n'
                                     f'{e}')
             return False
-        self.all_tracks.clear()
-        self.right_view.resetArenaAction.trigger()
         self.track_reader = TrackReader(data_path)
+        self.video_filename = video_path
+        self.track_filename = data_path
+        settings.setValue('data/directory', os.path.dirname(self.track_filename))
+        settings.setValue('video/directory', os.path.dirname(self.vid_filename))
+        self.vid_info.vidfile.setText(self.video_filename)
+        self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
+        self.vid_info.fps.setText(f'{self.video_reader.fps}')
+        self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
+        self.vid_info.frame_height.setText(f'{self.video_reader.frame_height}')
+        self.left_view.clearAll()
+        self.left_view.update()
+        self.all_tracks.clear()
+        self.left_list.clear()
+        self.right_list.clear()
+        self.left_tracks = {}
+        self.right_tracks = {}
+        self.left_frame = None
+        self.right_frame = None
         self.history_length = self.track_reader.last_frame
         self.left_view.frame_scene.setHistLen(self.history_length)
         self.right_view.frame_scene.setHistLen(self.history_length)
+        self.gotoFrame(0)
+        self.updateGeometry()
+        self.right_view.resetArenaAction.trigger()
         self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
         self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
         self.lim_widget.sigHmin.connect(self.track_reader.setHmin)
@@ -981,6 +976,7 @@ class ReviewWidget(qw.QWidget):
         self.slider.setRange(0, self.track_reader.last_frame)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
         self.sigUndoCurrentChanges.connect(self.track_reader.undoChangeTrack)
+        self.sigDataFile.emit(self.track_filename)
         return True
 
     @qc.pyqtSlot()
@@ -1062,11 +1058,7 @@ class ReviewWidget(qw.QWidget):
             return
         self._wait_cond.set()
         self.playVideo(False)
-        self.left_view.clearAll()
-        self.right_view.clearAll()
-        self.all_tracks.clear()
-        if self.setupReading(self.video_filename, self.track_filename):
-            self.gotoFrame(0)
+        self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int, bool)
     def mapTracks(self, cur: int, tgt: int, swap: bool) -> None:
