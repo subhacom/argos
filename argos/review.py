@@ -589,7 +589,7 @@ class ReviewWidget(qw.QWidget):
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
         self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
-        self.saveAction = qw.QAction('Save reviewed data (ctrl+s)')
+        self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
         self.saveAction.triggered.connect(self.saveReviewedTracks)
         self.speedUpAction = qw.QAction('Double speed (Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
