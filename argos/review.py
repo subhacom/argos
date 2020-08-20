@@ -227,7 +227,6 @@ class ReviewScene(FrameScene):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
         self.hist_gradient = 1
-        self.tmp_rect = None
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
