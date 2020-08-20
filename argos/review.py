@@ -134,8 +134,7 @@ class TrackReader(qc.QObject):
                self.change_list[loc].frame == frame_no:
                 self.change_list.pop(loc)
             else:
-                return
-            
+                return            
 
     def applyChanges(self, tdata):
         """Apply the changes in `change_list` to traks in `trackdf`
@@ -420,6 +419,8 @@ class ReviewWidget(qw.QWidget):
         self.setObjectName('ReviewWidget')
         self._wait_cond = threading.Event()
         self.breakpoint = -1
+        self.entry_break = -1
+        self.exit_break = -1
         self.history_length = 1
         self.all_tracks = OrderedDict()
         self.left_frame = None
@@ -550,6 +551,32 @@ class ReviewWidget(qw.QWidget):
     def setBreakpointAtCurrent(self):
         self.breakpoint = self.frame_no
 
+    @qc.pyqtSlot()
+    def setBreakpointAtEntry(self):
+        val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint at entry',
+                                         'Pause at appearance of trackid #',
+                                         value=-1,
+                                         min=-1)
+        if ok:
+            self.entry_break = val
+
+    @qc.pyqtSlot()
+    def setBreakpointAtExit(self):
+        val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint on exit',
+                                         'Pause at disappearance of trackid #',
+                                         value=-1,
+                                         min=-1)
+        if ok:
+            self.exit_break = val
+
+    @qc.pyqtSlot()
+    def clearBreakpointAtEntry(self):
+        self.entry_break = -1
+
+    @qc.pyqtSlot()
+    def clearBreakpointAtExit(self):
+        self.exit_break = -1
+        
     def breakpointMessage(self, pos):
         if pos == self.breakpoint:
             self.play_button.setChecked(False)
@@ -557,6 +584,21 @@ class ReviewWidget(qw.QWidget):
             qw.QMessageBox.information(
                 self, 'Processing paused',
                 f'Reached breakpoint at frame # {self.breakpoint}')
+
+    def entryExitMessage(self, left, right):
+        do_break = False
+        if (self.entry_break in right) and (self.entry_break not in left):
+            do_break = True
+            message = f'Reached breakpoint at entry of # {self.entry_break}'
+        elif (self.exit_break in left) and (self.exit_break not in right):
+            do_break = True
+            message = f'Reached breakpoint at exit of # {self.exit_break}'
+        if do_break:
+            self.play_button.setChecked(False)
+            self.playVideo(False)
+            qw.QMessageBox.information(
+                self, 'Processing paused',
+                message)
 
     @qc.pyqtSlot()
     def setHistLen(self):
@@ -660,6 +702,15 @@ class ReviewWidget(qw.QWidget):
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
         self.clearBreakpointAction = qw.QAction('Clear breakpoint')
         self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
+        self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance')
+        self.entryBreakpointAction.triggered.connect(self.setBreakpointAtEntry)
+        self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance')
+        self.exitBreakpointAction.triggered.connect(self.setBreakpointAtExit)
+        self.clearEntryBreakpointAction = qw.QAction('Clear breakpoint on appearance')
+        self.clearEntryBreakpointAction.triggered.connect(self.clearBreakpointAtEntry)
+        self.clearExitBreakpointAction = qw.QAction('Clear breakpoint on disappearance')
+        self.clearExitBreakpointAction.triggered.connect(self.clearBreakpointAtExit)
+
         self.resetAction.triggered.connect(self.reset)
         self.showDifferenceAction = qw.QAction('Show popup message for left/right mismatch')
         self.showDifferenceAction.setCheckable(True)
@@ -941,6 +992,7 @@ class ReviewWidget(qw.QWidget):
             self._wait_cond.set()
             raise Exception('This should not be reached')
         self.breakpointMessage(pos)
+        self.entryExitMessage(self.left_tracks, self.right_tracks)
         message = self._get_diff(self.showNewAction.isChecked())
         if len(message) > 0:
             if self.showDifferenceAction.isChecked() or self.showNewAction.isChecked():
@@ -1222,9 +1274,16 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.speedUpAction)
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
+
         play_menu.addAction(self.review_widget.breakpointAction)
         play_menu.addAction(self.review_widget.curBreakpointAction)
+        play_menu.addAction(self.review_widget.entryBreakpointAction)
+        play_menu.addAction(self.review_widget.exitBreakpointAction)
+        
         play_menu.addAction(self.review_widget.clearBreakpointAction)
+        play_menu.addAction(self.review_widget.clearEntryBreakpointAction)
+        play_menu.addAction(self.review_widget.clearExitBreakpointAction)
+
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
