@@ -407,6 +407,7 @@ class ReviewWidget(qw.QWidget):
         # Keep track of all the tracks seen so far
         self.setObjectName('ReviewWidget')
         self._wait_cond = threading.Event()
+        self.breakpoint = -1
         self.to_save = False
         self.history_length = 1
         self.all_tracks = OrderedDict()
@@ -521,6 +522,32 @@ class ReviewWidget(qw.QWidget):
         self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
     @qc.pyqtSlot()
+    def setBreakpoint(self):
+        val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint',
+                                         'Pause at frame #',
+                                         value=self.breakpoint,
+                                         min=0)
+        if ok:
+            self.breakpoint = val
+
+    @qc.pyqtSlot()
+    def clearBreakpoint(self):
+        if self.video_reader is not None:
+            self.breakpoint = self.video_reader.frame_count
+
+    @qc.pyqtSlot()
+    def setBreakpointAtCurrent(self):
+        self.breakpoint = self.frame_no
+
+    def breakpointMessage(self, pos):
+        if pos == self.breakpoint:
+            self.play_button.setChecked(False)
+            self.playVideo(False)
+            qw.QMessageBox.information(
+                self, 'Processing paused',
+                f'Reached breakpoint at frame # {self.breakpoint}')
+
+    @qc.pyqtSlot()
     def setHistLen(self):
         val, ok = qw.QInputDialog.getInt(self, 'History length',
                                      'Oldest tracks to show (# of frames)',
@@ -607,6 +634,12 @@ class ReviewWidget(qw.QWidget):
         self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
+        self.breakpointAction = qw.QAction('Set breakpoint')
+        self.breakpointAction.triggered.connect(self.setBreakpoint)
+        self.curBreakpointAction = qw.QAction('Set breakpoint at current frame')
+        self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
+        self.clearBreakpointAction = qw.QAction('Clear breakpoint')
+        self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
         self.resetAction.triggered.connect(self.reset)
         self.showDifferenceAction = qw.QAction('Show popup message for left/right mismatch')
         self.showDifferenceAction.setCheckable(True)
@@ -646,6 +679,12 @@ class ReviewWidget(qw.QWidget):
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
         self.sc_play.activated.connect(self.togglePlay)
+        self.sc_break = qw.QShortcut(qg.QKeySequence('B'), self)
+        self.sc_break.activated.connect(self.setBreakpoint)
+        self.sc_break_cur = qw.QShortcut(qg.QKeySequence('Ctrl+B'), self)
+        self.sc_break_cur.activated.connect(self.setBreakpointAtCurrent)
+        self.sc_clear_bp = qw.QShortcut(qg.QKeySequence('C'), self)
+        self.sc_clear_bp.activated.connect(self.clearBreakpoint)
         self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
         self.sc_zoom_in.activated.connect(self.left_view.zoomIn)
         self.sc_zoom_in.activated.connect(self.right_view.zoomIn)
@@ -878,6 +917,7 @@ class ReviewWidget(qw.QWidget):
         else:
             self._wait_cond.set()
             raise Exception('This should not be reached')
+        self.breakpointMessage(pos)
         message = self._get_diff(self.showNewAction.isChecked())
         if len(message) > 0:
             if self.showDifferenceAction.isChecked() or self.showNewAction.isChecked():
@@ -908,7 +948,7 @@ class ReviewWidget(qw.QWidget):
             right_message = f'Tracks only on right: {right_only}.' \
                 if len(right_only) > 0 else ''
             if len(new) > 0:
-                right_message += f'\nNew tracks: <b>{new}</b>'
+                right_message += f'New tracks: <b>{new}</b>'
             return f'Frame {self.frame_no - 1}-{self.frame_no}: {left_message} {right_message}'
         else:
             return ''
@@ -942,6 +982,7 @@ class ReviewWidget(qw.QWidget):
         settings.setValue('data/directory', os.path.dirname(self.track_filename))
         settings.setValue('video/directory', os.path.dirname(self.video_filename))
         self.vid_info.vidfile.setText(self.video_filename)
+        self.breakpoint = self.video_reader.frame_count
         self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
         self.vid_info.fps.setText(f'{self.video_reader.fps}')
         self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
@@ -1031,6 +1072,8 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
+        if self.video_reader is None:
+            return
         if play:
             self.play_button.setText('Pause (Space)')
             self.playAction.setText('Pause (Space)')
@@ -1042,6 +1085,8 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def togglePlay(self):
+        if self.video_reader is None:
+            return
         if self.play_button.isChecked():
             self.play_button.setChecked(False)
             self.playVideo(False)
@@ -1151,6 +1196,9 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.speedUpAction)
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
+        play_menu.addAction(self.review_widget.breakpointAction)
+        play_menu.addAction(self.review_widget.curBreakpointAction)
+        play_menu.addAction(self.review_widget.clearBreakpointAction)
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
