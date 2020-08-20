@@ -84,7 +84,9 @@ class FrameScene(qw.QGraphicsScene):
                 pen = qg.QPen(color, self.linewidth,
                               style=self.linestyle_selected)
                 self.item_dict[key].setPen(pen)
+                self.item_dict[key].setZValue(1)
                 self.label_dict[key].setDefaultTextColor(color)
+                self.label_dict[key].setZValue(1)
             else:
                 if self.autocolor:
                     color = qg.QColor(*make_color(key))
@@ -97,7 +99,9 @@ class FrameScene(qw.QGraphicsScene):
                 color.setAlpha(64)  # make the non-selected items transparent
                 pen = qg.QPen(color, self.linewidth)
                 self.item_dict[key].setPen(pen)
+                self.item_dict[key].setZValue(0)
                 self.label_dict[key].setDefaultTextColor(color)
+                self.label_dict[key].setZValue(0)
 
     @qc.pyqtSlot()
     def keepSelected(self):

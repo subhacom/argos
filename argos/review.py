@@ -38,6 +38,7 @@ class TrackReader(qc.QObject):
     """Class to read the tracking data"""
     sigEnd = qc.pyqtSignal()
     sigSavedFrames = qc.pyqtSignal(int)
+    sigChangeList = qc.pyqtSignal(SortedKeyList)
 
     op_assign = 0
     op_swap = 1
@@ -105,6 +106,7 @@ class TrackReader(qc.QObject):
         change = Change(frame=frame_no, change=self.op_assign,
                                        orig=orig_id, new=new_id)
         self.change_list.add(change)
+        self.sigChangeList.emit(self.change_list)
         logging.debug(
             f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
@@ -126,7 +128,14 @@ class TrackReader(qc.QObject):
     def undoChangeTrack(self, frame_no):
         """This puts the specified frame in a blacklist so all changes applied
         on it are ignored"""
-        self.undone_changes.add(frame_no)
+        while True:
+            loc = self.change_list.bisect_key_left(frame_no)
+            if loc < len(self.change_list) and \
+               self.change_list[loc].frame == frame_no:
+                self.change_list.pop(loc)
+            else:
+                return
+            
 
     def applyChanges(self, tdata):
         """Apply the changes in `change_list` to traks in `trackdf`
@@ -182,7 +191,8 @@ class TrackReader(qc.QObject):
         else:
             data.to_hdf(filepath, 'tracked', mode='w')
         self.track_data = data
-        # self.change_list.clear()
+        self.change_list.clear()
+        self.sigChangeList.emit(self.change_list)
 
     @qc.pyqtSlot(str)
     def saveChangeList(self, fname: str) -> None:
@@ -208,6 +218,7 @@ class TrackReader(qc.QObject):
                                orig=int(row[2]), new=new)
                     self.change_list.add(change)
                 first = False
+        self.sigChangeList.emit(self.change_list)
 
 
 class ReviewScene(FrameScene):
@@ -215,11 +226,12 @@ class ReviewScene(FrameScene):
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
-        self.hist_len = 1
+        self.hist_gradient = 1
+        self.tmp_rect = None
 
     @qc.pyqtSlot(int)
-    def setHistLen(self, age: int) -> None:
-        self.hist_len = age
+    def setHistGradient(self, age: int) -> None:
+        self.hist_gradient = age
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -248,7 +260,7 @@ class ReviewScene(FrameScene):
             else:
                 color = qg.QColor(self.color)
             # Use transparency to indicate age
-            color.setAlpha(int(255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]), self.hist_len) / self.hist_len)))
+            color.setAlpha(int(255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]), self.hist_gradient) / self.hist_gradient)))
             pen = qg.QPen(color, self.linewidth)
             if tdata[4] != self.frameno:
                 pen.setStyle(self.historic_track_ls)
@@ -266,7 +278,7 @@ class ReviewScene(FrameScene):
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
-
+        
 
 
 class TrackView(FrameView):
@@ -374,6 +386,7 @@ class ChangeWindow(qw.QMainWindow):
         self.table.setHorizontalHeaderLabels(self.cols)
         self.setCentralWidget(self.table)
 
+    @qc.pyqtSlot(SortedKeyList)
     def setChangeList(self, change_list):
         self.table.clearContents()
         self.table.setRowCount(len(change_list))
@@ -408,7 +421,6 @@ class ReviewWidget(qw.QWidget):
         self.setObjectName('ReviewWidget')
         self._wait_cond = threading.Event()
         self.breakpoint = -1
-        self.to_save = False
         self.history_length = 1
         self.all_tracks = OrderedDict()
         self.left_frame = None
@@ -550,13 +562,22 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot()
     def setHistLen(self):
         val, ok = qw.QInputDialog.getInt(self, 'History length',
-                                     'Oldest tracks to show (# of frames)',
+                                     'Oldest tracks to keep (# of frames)',
                                      value=self.history_length,
                                      min=1)
         if ok:
             self.history_length = val
-        self.left_view.frame_scene.setHistLen(val)
-        self.right_view.frame_scene.setHistLen(val)
+
+    @qc.pyqtSlot()
+    def setHistGradient(self):
+        val, ok = qw.QInputDialog.getInt(
+            self, 'Color-gradient for  old tracks',
+            'Faintest of old tracks (# of frames)',
+            value=self.right_view.frame_scene.hist_gradient,
+            min=1)
+        if ok:
+            self.left_view.frame_scene.setHistGradient(val)
+            self.right_view.frame_scene.setHistGradient(val)
 
     @qc.pyqtSlot()
     def speedUp(self):
@@ -665,8 +686,10 @@ class ReviewWidget(qw.QWidget):
         self.lim_win.setVisible(False)
         self.showLimitsAction.triggered.connect(self.lim_win.setVisible)
         self.lim_win.sigClose.connect(self.showLimitsAction.setChecked)
-        self.histlenAction = qw.QAction('Set old track age limit')
+        self.histlenAction = qw.QAction('Set oldest tracks to remember')
         self.histlenAction.triggered.connect(self.setHistLen)
+        self.histGradientAction = qw.QAction('Set oldest tracks to display')
+        self.histGradientAction.triggered.connect(self.setHistGradient)
         self.showChangeListAction = qw.QAction('Show list of changes')
         self.showChangeListAction.triggered.connect(self.showChangeList)
         self.loadChangeListAction = qw.QAction('Load list of changes')
@@ -691,7 +714,9 @@ class ReviewWidget(qw.QWidget):
         self.sc_zoom_out = qw.QShortcut(qg.QKeySequence('-'), self)
         self.sc_zoom_out.activated.connect(self.left_view.zoomOut)
         self.sc_zoom_out.activated.connect(self.right_view.zoomOut)
-
+        self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('o'), self)
+        self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
+        
         self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
         self.sc_next.activated.connect(self.nextFrame)
         self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
@@ -748,7 +773,6 @@ class ReviewWidget(qw.QWidget):
                                                     qc.Qt.MatchExactly)
             for item in right_items:
                 self.right_list.takeItem(self.right_list.row(item))
-        self.to_save = True
 
     @qc.pyqtSlot()
     def swapTracks(self):
@@ -997,8 +1021,8 @@ class ReviewWidget(qw.QWidget):
         self.left_frame = None
         self.right_frame = None
         self.history_length = self.track_reader.last_frame
-        self.left_view.frame_scene.setHistLen(self.history_length)
-        self.right_view.frame_scene.setHistLen(self.history_length)
+        self.left_view.frame_scene.setHistGradient(self.history_length)
+        self.right_view.frame_scene.setHistGradient(self.history_length)
         self.right_view.resetArenaAction.trigger()
         self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
         self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
@@ -1013,6 +1037,7 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.setRange(0, self.track_reader.last_frame)
         self.slider.setRange(0, self.track_reader.last_frame)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
+        self.track_reader.sigChangeList.connect(self.changelist_widget.setChangeList)
         self.sigUndoCurrentChanges.connect(self.track_reader.undoChangeTrack)
         self.sigDataFile.emit(self.track_filename)
         self.gotoFrame(0)
@@ -1035,9 +1060,9 @@ class ReviewWidget(qw.QWidget):
                                                self)
 
                 self.save_indicator.setWindowModality(qc.Qt.WindowModal)
+                self.save_indicator.resize(400, 200)
                 self.track_reader.sigSavedFrames.connect(self.save_indicator.setValue)
-            else:
-
+            else:                
                 self.save_indicator.setRange(0,
                                              self.track_reader.last_frame + 1)
                 self.save_indicator.setValue(0)
@@ -1051,7 +1076,6 @@ class ReviewWidget(qw.QWidget):
             try:
                 self.track_reader.saveChanges(track_filename)
                 self.save_indicator.setValue(self.track_reader.last_frame + 1)
-                self.to_save = False
             except OSError as err:
                 qw.QMessageBox.critical(
                     self, 'Error opening file for writing',
@@ -1060,7 +1084,10 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot()
     def doQuit(self):
         # self._wait_cond.set()
-        if self.to_save:
+        self.vid_info.close()
+        self.changelist_widget.close()
+
+        if self.track_reader is not None and len(self.track_reader.change_list) > 0:
             self.saveReviewedTracks()
         diff = 0
         if self.showNewAction.isChecked():
@@ -1114,7 +1141,6 @@ class ReviewWidget(qw.QWidget):
         self.sigRightTrackList.emit(list(tracks.keys()))
         self.right_tracks = self._flag_tracks({}, tracks)
         self.sigRightTracks.emit(self.right_tracks)
-        self.to_save = True
 
     @qc.pyqtSlot(bool)
     def setColormap(self, checked):
@@ -1187,6 +1213,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addActions(diffgrp.actions())
         view_menu.addAction(self.review_widget.showLimitsAction)
         view_menu.addAction(self.review_widget.histlenAction)
+        view_menu.addAction(self.review_widget.histGradientAction)
         view_menu.addAction(self.review_widget.showChangeListAction)
         view_menu.addAction(self.review_widget.vidinfoAction)
 
