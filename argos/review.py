@@ -1293,7 +1293,7 @@ class ReviewerMain(qw.QMainWindow):
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
         v = settings.value('review/debug', logging.INFO)
-        self.setDebug(v)
+        self.setDebug(v == logging.DEBUG)
         self.debugAction.setChecked(v == logging.DEBUG)
         self.debugAction.triggered.connect(self.setDebug)
         action_menu.addAction(self.debugAction)
