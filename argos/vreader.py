@@ -21,6 +21,7 @@ class VideoReader(qc.QObject):
     Needs a separate thread to avoid blocking the main UI"""
 
     sigFrameRead = qc.pyqtSignal(np.ndarray, int)
+    sigSeekError = qc.pyqtSignal(Exception)
     sigVideoEnd = qc.pyqtSignal()
 
     def __init__(self, path: str, waitCond: threading.Event=None):
@@ -85,7 +86,10 @@ class VideoReader(qc.QObject):
         pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
         if pos != frame_no:
             self.mutex.unlock()
-            raise RuntimeError('This video format does not allow correct seek')
+            self.sigSeekError.emit(RuntimeError(
+                f'This video format does not allow correct seek: '
+                f'tried {frame_no}, got {pos}'))
+            return
         self._frame_no = pos
         ret, frame = self._vid.read()
         self.mutex.unlock()

@@ -182,13 +182,15 @@ class TrackReader(qc.QObject):
             tracks = self.applyChanges(tdata)
             for tid, tdata in tracks.items():
                 data.append([frame_no, tid] + tdata[:4])
-                self.sigSavedFrames.emit(frame_no)
+                qw.QApplication.processEvents()
+            self.sigSavedFrames.emit(frame_no)
         data = pd.DataFrame(data=data,
                             columns=['frame', 'trackid', 'x', 'y', 'w', 'h'])
         if filepath.endswith('.csv'):
             data.to_csv(filepath, index=False)
         else:
             data.to_hdf(filepath, 'tracked', mode='w')
+            
         self.track_data = data
         self.change_list.clear()
         self.sigChangeList.emit(self.change_list)
@@ -533,6 +535,12 @@ class ReviewWidget(qw.QWidget):
         self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
         self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
+    @qc.pyqtSlot(Exception)
+    def catchSeekError(self, err: Exception)-> None:
+        qw.QMessageBox.critical(self, 'Error jumping frames', str(err))
+        self.disableSeek(True)
+        self.disableSeekAction.setChecked(True)
+
     @qc.pyqtSlot()
     def setBreakpoint(self):
         val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint',
@@ -696,8 +704,8 @@ class ReviewWidget(qw.QWidget):
         self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
-        self.breakpointAction = qw.QAction('Set breakpoint')
-        self.breakpointAction.triggered.connect(self.setBreakpoint)
+        self.frameBreakpointAction = qw.QAction('Set breakpoint at frame')
+        self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
         self.curBreakpointAction = qw.QAction('Set breakpoint at current frame')
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
         self.clearBreakpointAction = qw.QAction('Clear breakpoint')
@@ -865,7 +873,7 @@ class ReviewWidget(qw.QWidget):
     def nextFrame(self):
         self.gotoFrame(self.frame_no + 1)
         if self.play_button.isChecked():
-            self.timer.start(self.frame_interval / self.speed)
+            self.timer.start(int(self.frame_interval / self.speed))
 
     @qc.pyqtSlot()
     def prevFrame(self):
@@ -1013,9 +1021,9 @@ class ReviewWidget(qw.QWidget):
             return ''
         left_keys = set(self.left_tracks.keys())
         if left_keys != right_keys:
-            logging.info(f'Tracks don\'t match between frames {self.frame_no - 1} '
-                         f'and {self.frame_no}: '
-                         f'{left_keys.symmetric_difference(right_keys)}')
+            # logging.info(f'Tracks don\'t match between frames {self.frame_no - 1} '
+            #              f'and {self.frame_no}: '
+            #              f'{left_keys.symmetric_difference(right_keys)}')
             left_only = left_keys - right_keys
             left_message = f'Tracks only on left: {left_only}.' \
                 if len(left_only) > 0 else ''
@@ -1084,6 +1092,7 @@ class ReviewWidget(qw.QWidget):
         else:
             self.sigGotoFrame.connect(self.video_reader.gotoFrame)        
         self.video_reader.sigFrameRead.connect(self.setFrame)
+        self.video_reader.sigSeekError.connect(self.catchSeekError)
         self.frame_interval = 1000.0 / self.video_reader.fps
         self.pos_spin.setRange(0, self.track_reader.last_frame)
         self.slider.setRange(0, self.track_reader.last_frame)
@@ -1155,7 +1164,7 @@ class ReviewWidget(qw.QWidget):
         if play:
             self.play_button.setText('Pause (Space)')
             self.playAction.setText('Pause (Space)')
-            self.timer.start(self.frame_interval / self.speed)
+            self.timer.start(int(self.frame_interval / self.speed))
         else:
             self.play_button.setText('Play (Space)')
             self.playAction.setText('Play (Space)')
@@ -1275,7 +1284,7 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
 
-        play_menu.addAction(self.review_widget.breakpointAction)
+        play_menu.addAction(self.review_widget.frameBreakpointAction)
         play_menu.addAction(self.review_widget.curBreakpointAction)
         play_menu.addAction(self.review_widget.entryBreakpointAction)
         play_menu.addAction(self.review_widget.exitBreakpointAction)
