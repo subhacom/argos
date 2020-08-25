@@ -6,6 +6,7 @@
 This works using multiple processes to utilize multiple CPU cores.
 """
 import os
+import argparse
 from typing import Tuple
 import sys
 import logging
@@ -24,6 +25,9 @@ from yolact.data import config as yconfig
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
+from argos.sortracker import KalmanTracker
+from argos.constants import DistanceMetric, OutlineStyle
+from argos.utility import match_bboxes
 
 logging.basicConfig(stream=sys.stdout,
                     format='%(asctime)s '
@@ -44,7 +48,7 @@ def init_yolact(cfgfile, netfile, cuda):
     load_weights(netfile, cuda)
 
 
-def process(frame_data: Tuple[int, np.ndarray], cuda: bool,
+def segment(frame: np.ndarray, cuda: bool,
             score_threshold: float, top_k: int):
     """:returns (classes, scores, boxes)
 
@@ -60,21 +64,19 @@ def process(frame_data: Tuple[int, np.ndarray], cuda: bool,
     global ynet
     global config
 
-    pos, image = frame_data
-    logging.debug(f'Received frame {pos}')
     if ynet is None:
         raise ValueError('Network not initialized')
     # Partly follows yolact eval.py
     tic = time.perf_counter_ns()
     with torch.no_grad():
         if cuda:
-            image = torch.from_numpy(image).cuda().float()
+            frame = torch.from_numpy(frame).cuda().float()
         else:
-            image = torch.from_numpy(image).float()
-        batch = FastBaseTransform()(image.unsqueeze(0))
+            frame = torch.from_numpy(frame).float()
+        batch = FastBaseTransform()(frame.unsqueeze(0))
         preds = ynet(batch)
-        image_gpu = image / 255.0
-        h, w, _ = image.shape
+        frame_gpu = frame / 255.0
+        h, w, _ = frame.shape
         save = config.rescore_bbox
         config.rescore_bbox = True
         classes, scores, boxes, masks = oututils.postprocess(
@@ -100,10 +102,9 @@ def process(frame_data: Tuple[int, np.ndarray], cuda: bool,
         if len(boxes) > 0:
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
         toc = time.perf_counter_ns()
-        logging.debug('Time to process single _image: %f s',
+        logging.debug('Time to process single image: %f s',
                       1e-9 * (toc - tic))
-        return (pos, boxes)
-        logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
+        return boxes
 
 
 def load_config(filename):
@@ -138,10 +139,80 @@ def load_weights(filename, cuda):
     logging.debug(f'Time to load weights: {1e-9 * (toc - tic)}')
 
 
+class SORTracker(object):
+    """SORT algorithm implementation. This is same as SORTracker
+    sortracker.py except avoids Qt and multi-threading complications.
+
+    NOTE: accepts bounding boxes in (x, y, w, h) format.
+
+    """
+    def __init__(self, metric=DistanceMetric.iou, min_dist=0.3, max_age=1,
+                 n_init=3, min_hits=3, boxtype=OutlineStyle.bbox):
+        super(SORTracker, self).__init__()
+        self.n_init = n_init
+        self.min_hits = min_hits
+        self.boxtype = boxtype
+        self.metric = metric
+        if self.metric == DistanceMetric.iou:
+            self.min_dist = 1 - min_dist
+        else:
+            self.min_dist = min_dist
+        self.max_age = max_age
+        self.trackers = {}
+        self._next_id = 1
+        self.frame_count = 0
+
+    def reset(self):
+        logging.debug('Resetting trackers.')
+        self.trackers = {}
+        self._next_id = 1
+        self.frame_count = 0
+
+    def update(self, bboxes: np.ndarray):
+        predicted_bboxes = {}
+        for id_, tracker in self.trackers.items():
+            prior = tracker.predict()
+            if np.any(np.isnan(prior)) or np.any(prior[:KalmanTracker.NDIM] < 0):
+                logging.info(f'Found nan or negative in prior of {id_}')
+                continue
+            predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
+        self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
+        for id_, bbox in predicted_bboxes.items():
+            if np.any(bbox < 0):
+                logging.debug(f'EEEE prediced bbox negative: {id_}: {bbox}')
+        matched, new_unmatched, old_unmatched = match_bboxes(
+            predicted_bboxes,
+            bboxes[:, :KalmanTracker.NDIM],
+            boxtype=self.boxtype,
+            metric=self.metric,
+            max_dist=self.min_dist)
+        for track_id, bbox_id in matched.items():
+            self.trackers[track_id].update(bboxes[bbox_id])
+        for ii in new_unmatched:
+            self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
+        ret = {}
+        for id_ in list(self.trackers.keys()):
+            tracker = self.trackers[id_]
+            if (tracker.time_since_update < 1) and \
+                (tracker.hits >= self.min_hits or
+                 self.frame_count <= self.min_hits):
+                ret[id_] = tracker.pos
+            if tracker.time_since_update > self.max_age:
+                self.trackers.pop(id_)
+        return ret
+
+    def _add_tracker(self, bbox):
+        self.trackers[self._next_id] = KalmanTracker(bbox, self._next_id,
+                                                     self.n_init,
+                                                     self.max_age)
+        self._next_id += 1
+
+
 class BatchTrack(object):
     def __init__(self, video_filename, output_filename, config_filename,
                  weights_filename, score_threshold, top_k,
-                 processes=4, batch_size=100, cuda=None):
+                 hmin, hmax, wmin, wmax, min_iou, min_hits, max_age,
+                 cuda=None):
         """
         Parameters
         -------------
@@ -159,18 +230,29 @@ class BatchTrack(object):
             threshold for detection score
         top_k: int
             keep only the top ``top_k`` detections by score
-        processes: int
-            number of processes to run in parallel. If ``None`` then it is one
-            less than the CPU count.
-        batch_size: int
-            each process receives this many frames in each round
+        min_iou: float
+            intersection over union of bboxes to consider same objects.
+        hmin: int
+            minimum height (longer side) of bounding box
+        hmax: int
+            maximum height (longer side) of bounding box
+        wmin: int
+            minimum width (shorter side) of bounding box
+        wmax: int
+            maximum width (shorter side) of bounding box
+        min_iou: float
+            minimum intersection over union of bboxes to be considered same object
+        min_hits: int
+            minimum number of detections before including object in track
+        max_age: int
+            maximum number of misses before discarding object        
         cuda: bool
             whether or not to use GPU. If ``None`` detect automatically.
         """
-        self.batch_size = batch_size
         self.video = cv2.VideoCapture(video_filename)
         if (self.video is None) or not self.video.isOpened():
             raise IOError('Could not open video')
+        self.frame_count = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
         self.output_filename = output_filename
         if cuda is None:
             self.cuda = torch.cuda.is_available()
@@ -180,10 +262,16 @@ class BatchTrack(object):
         self.top_k = top_k
         self.config_filename = config_filename
         self.weights_filename = weights_filename
-        if processes is None:
-            self.processes = mp.cpu_count() - 1
-        else:
-            self.processes = processes
+        init_yolact(self.config_filename, self.weights_filename, self.cuda)
+        # tracker
+        self.wmin = wmin
+        self.wmax = wmax
+        self.hmin = hmin
+        self.hmax = hmax
+        self.tracker = SORTracker()
+        self.tracker.min_dist = 1 - min_iou
+        self.tracker.max_age = max_age
+        self.tracker.n_init = min_hits
 
     def read_frame(self):
         if (self.video is None) or not self.video.isOpened():
@@ -193,73 +281,85 @@ class BatchTrack(object):
         logging.debug('Read frame no %d', frame_no)
         return (frame_no, frame)
 
-    def start(self):
-        vid_end = False
-        process_partial = partial(process, cuda=self.cuda,
-                                  score_threshold=self.score_threshold,
-                                  top_k=self.top_k)
+    def process(self):
         results = []
-        frame_count = 0
-        with mp.Pool(processes=self.processes, initializer=init_yolact,
-                     initargs=(self.config_filename, self.weights_filename,
-                               self.cuda)) as pool:
-            tic = time.perf_counter_ns()
-            vid_end = False
-            while not vid_end:
-                frames = []
-                t_0 = time.perf_counter_ns()
-                for ii in range(self.batch_size * self.processes):
-                    frame_no, frame = self.read_frame()
-                    if frame is None:
-                        vid_end = True
-                        break
-                    else:
-                        frames.append((frame_no, frame))
-                t_1 = time.perf_counter_ns()
-                logging.info(f'Read {len(frames)} frames in '
-                             f'{1e-9 * (t_1 - t_0)} seconds')
-                if len(frames) == 0:
-                    break
-                result = pool.map(process_partial, frames,
-                                             chunksize=self.batch_size)
-                for ret in result:
-                    results += [{'frame': ret[0], 'x': ret[1][ii, 0],
-                                 'y': ret[1][ii, 1],
-                                 'w': ret[1][ii, 2],
-                                 'h': ret[1][ii, 3]} for ii in
-                                range(ret[1].shape[0])]
-                frame_count += len(frames)
-                t_2 = time.perf_counter_ns()
-                logging.info(f'Processed {len(frames)} frames in '
-                             f'{1e-9 * (t_2 - t_1)} seconds using '
-                             f'{self.processes} processes.')
-            toc = time.perf_counter_ns()
-            logging.info(
-                f'Processed {frame_count} frames in {(toc - tic) * 1e-9} seconds.'
-                f' FPS={frame_count * 1e9 / (toc - tic)}')
-        tic = time.perf_counter_ns()
+        t0 = time.perf_counter_ns()
+        while True:
+            frame_no, frame = self.read_frame()
+            t1 = time.perf_counter_ns()
+            if frame is None:
+                break
+            bboxes = segment(frame,
+                             cuda=self.cuda,
+                             score_threshold=self.score_threshold,
+                             top_k=self.top_k)
+            t2 = time.perf_counter_ns()
+            bboxes = bboxes[(bboxes[:, 2] >= self.wmin) &
+                            (bboxes[:, 2] < self.wmax) &
+                            (bboxes[:, 3] >= self.hmin) &
+                            (bboxes[:, 3] < self.hmax)].copy()
+                                    
+            tracked = self.tracker.update(bboxes)
+            for tid, bbox in tracked.items():
+                results.append({'frame': frame_no,
+                                'trackid': tid,
+                                'x' : bbox[0],
+                                'y': bbox[1],
+                                'w': bbox[2],
+                                'h': bbox[3]})
+            t3 = time.perf_counter_ns()
+            if frame_no % 100 == 0:
+                logging.info(f'Processed till {frame_no} in {(t3 - t0) * 1e-9} seconds')
         results = pd.DataFrame(results)
         results = results.sort_values(by='frame')
         if self.output_filename.endswith('.csv'):
             results.to_csv(self.output_filename, index=False)
         elif self.output_filename.endswith(
                 '.h5') or self.output_filename.endswith('.hdf'):
-            results.to_hdf(self.output_filename, 'track')
-        toc = time.perf_counter_ns()
+            results.to_hdf(self.output_filename, 'tracked')
+        t4 = time.perf_counter_ns()
         logging.info(f'Saved {len(results)} bboxes '
-                     f'in {(toc - tic) * 1e-9} seconds.'
-                     f' At {len(results) * 1e9 / (toc - tic)}'
-                     f' rows (bboxes) per second.')
+                     f'in {(t4 - t3) * 1e-9} seconds.')
 
 
+def make_parser():
+    parser = argparse.ArgumentParser('Track objects in video in batch mode')
+    parser.add_argument('-i', '--input', type=str, help='input file')
+    parser.add_argument('-o', '--output', type=str, help='output file. extension .csv will create a text file with comma separated values, .h5 or .hdf will create an HDF file with data in the table `tracked`')
+    parser.add_argument('-c', '--config', type=str, help='YOLACT configuration file')
+    parser.add_argument('-w', '--weight', type=str, help='YOLACT trained weights file')
+    parser.add_argument('-s', '--score', type=float, default=0.3, help='score threshold for accepting a detected object')
+    parser.add_argument('-k', '--top_k', type=int, default=30, help='maximum number of objects above score threshold to keep')
+    parser.add_argument('--hmin', type=int, default=10, help='Minimum height (longer side) of bounding box in pixels')
+    parser.add_argument('--hmax', type=int, default=100, help='Maximum height (longer side) of bounding box in pixels')
+    parser.add_argument('--wmin', type=int, default=10, help='Minimum width (shorter side) of bounding box in pixels')
+    parser.add_argument('--wmax', type=int, default=100, help='Maximum width (shorter side) of bounding box in pixels')
+    parser.add_argument('-x', '--overlap', type=int, default=0.3, help='Minimum overlap between bounding boxes as a fraction of their total area.')
+    parser.add_argument('--min_hits', type=int, default=3, help='Minimum number of hits to accept a track')
+    parser.add_argument('--max_age', type=int, default=50, help='Maximum number of misses to exclude a track')
+    parser.add_argument('--cuda', type=bool, help='Whether to use CUDA')
+    return parser
+
+    
 if __name__ == '__main__':
-    # logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
     # 2 proc 40 / 124 fps
     # 5 proc 25 / 50 fps
-    track = BatchTrack(
-        video_filename='C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi',
-        output_filename='C:/Users/raysu/Documents/src/argos_data/dump/2020_02_20_00270.avi.parallel.track.csv',
-        config_filename='C:/Users/raysu/Documents/src/argos_data/yolact_annotations/yolact_config.yaml',
-        weights_filename='C:/Users/raysu/Documents/src/argos_data/yolact_annotations/babylocust_resnet101_119999_240000.pth',
-        score_threshold=0.15, top_k=10, cuda=False, processes=4, batch_size=20)
-    track.start()
+    parser = make_parser()
+    args = parser.parse_args()
+    tracker = BatchTrack(
+        video_filename=args.input,        
+        output_filename=args.output,
+        config_filename=args.config,
+        weights_filename=args.weight,
+        score_threshold=args.score,
+        top_k=args.top_k,
+        cuda=args.cuda,
+        hmin=args.hmin,
+        hmax=args.hmax,
+        wmin=args.wmin,
+        wmax=args.wmax,
+        min_iou=args.overlap,
+        min_hits=args.min_hits,
+        max_age=args.max_age)
+    tracker.process()
