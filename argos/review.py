@@ -84,6 +84,23 @@ class TrackReader(qc.QObject):
     def setHmax(self, val: int):
         self.hmax = val
 
+    def getTrackId(self, track_id, frame_no=None, hist=10):
+        """Get all entries for a track across frames.
+        frame_no: if specified, only entries around this frame are returned.
+        hist: at most these many past and future entries around `frame_no` are returned.
+        """
+        track = self.track_data[self.track_data.trackid == track_id].copy()
+        if frame_no is None:
+            return track
+        tgt = track[track.frame == frame_no]
+        if len(tgt) == 0:
+            return None
+        pos = track.index.get_loc(tgt.iloc[0].name)
+        pre = max(0, pos - hist)
+        post = min(len(track), pos + hist)
+        return track.iloc[pre: post].copy()
+        
+
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
             self.sigEnd.emit()
@@ -228,11 +245,18 @@ class ReviewScene(FrameScene):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
         self.hist_gradient = 1
+        self.tarck_hist = []
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
         self.hist_gradient = age
 
+    @qc.pyqtSlot(np.ndarray)
+    def showTrackHist(self, track: np.ndarray) -> None:
+        for item in self.track_hist:
+            self.removeItem(item)
+        self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+    
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
         """rects: a dict of id: (x, y, w, h, frame)
@@ -246,6 +270,7 @@ class ReviewScene(FrameScene):
         logging.debug(f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
         logging.debug(f'{self.objectName()} Rectangles: {rects}')
         self.clearItems()
+        self.track_hist = []
         logging.debug(f'{self.objectName()} cleared')
 
         for id_, tdata in rects.items():
@@ -414,6 +439,8 @@ class ReviewWidget(qw.QWidget):
     sigDiffMessage = qc.pyqtSignal(str)
     sigUndoCurrentChanges = qc.pyqtSignal(int)
     sigDataFile = qc.pyqtSignal(str)
+    sigProjectTrackHist = qc.pyqtSignal(np.ndarray)
+    sigProjectTrackHistAll = qc.pyqtSignal(np.ndarray)
 
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
@@ -524,8 +551,12 @@ class ReviewWidget(qw.QWidget):
         self.sigRightTrackList.connect(self.right_list.replaceAll)
         self.sigAllTracksList.connect(self.all_list.replaceAll)
         self.left_list.sigSelected.connect(self.left_view.sigSelected)
+        self.all_list.sigSelected.connect(self.projectTrackHist)
         self.all_list.sigSelected.connect(self.left_view.sigSelected)
         self.right_list.sigSelected.connect(self.right_view.sigSelected)
+        self.right_list.sigSelected.connect(self.projectTrackHist)
+        self.sigProjectTrackHist.connect(self.right_view.frame_scene.showTrackHist)
+        self.sigProjectTrackHistAll.connect(self.left_view.frame_scene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
         self.play_button.clicked.connect(self.playVideo)
         self.play_button.setCheckable(True)
@@ -534,6 +565,25 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.lineEdit().setEnabled(False)
         self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
         self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
+
+    @qc.pyqtSlot(list)
+    def projectTrackHist(self, selected: list) -> None:
+        if not self.showHistoryAction.isChecked():
+            return
+        
+        for sel in  selected:
+            if self.sender() == self.right_list:
+                track = self.track_reader.getTrackId(sel, self.frame_no, self.history_length)
+            else:
+                track = self.track_reader.getTrackId(sel, None)
+            if track is None:
+                return
+            track.loc[:, 'x'] += track.w / 2.0
+            track.loc[:, 'y'] += track.h / 2.0
+            if self.sender() == self.right_list:
+                self.sigProjectTrackHist.emit(track[['x', 'y']].values)
+            else:
+                self.sigProjectTrackHistAll.emit(track[['x', 'y']].values)
 
     @qc.pyqtSlot(Exception)
     def catchSeekError(self, err: Exception)-> None:
@@ -708,7 +758,7 @@ class ReviewWidget(qw.QWidget):
         self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
         self.curBreakpointAction = qw.QAction('Set breakpoint at current frame')
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
-        self.clearBreakpointAction = qw.QAction('Clear breakpoint')
+        self.clearBreakpointAction = qw.QAction('Clear frame breakpoint')
         self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
         self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance')
         self.entryBreakpointAction.triggered.connect(self.setBreakpointAtEntry)
@@ -730,6 +780,8 @@ class ReviewWidget(qw.QWidget):
         self.showNoneAction = qw.QAction('No popup message for tracks')
         self.showNoneAction.setCheckable(True)
         self.showNoneAction.setChecked(show_difference == 0)
+        self.showHistoryAction = qw.QAction('Show past & future pos of selected track')
+        self.showHistoryAction.setCheckable(True)
         self.swapTracksAction = qw.QAction('Swap tracks')
         self.swapTracksAction.triggered.connect(self.swapTracks)
         self.replaceTrackAction = qw.QAction('Replace track')
@@ -764,17 +816,26 @@ class ReviewWidget(qw.QWidget):
         self.sc_break.activated.connect(self.setBreakpoint)
         self.sc_break_cur = qw.QShortcut(qg.QKeySequence('Ctrl+B'), self)
         self.sc_break_cur.activated.connect(self.setBreakpointAtCurrent)
-        self.sc_clear_bp = qw.QShortcut(qg.QKeySequence('C'), self)
+        self.sc_clear_bp = qw.QShortcut(qg.QKeySequence('Shift+B'), self)
         self.sc_clear_bp.activated.connect(self.clearBreakpoint)
+        self.sc_break_appear = qw.QShortcut(qg.QKeySequence('A'), self)
+        self.sc_break_appear.activated.connect(self.setBreakpointAtEntry)
+        self.sc_break_disappear = qw.QShortcut(qg.QKeySequence('D'), self)
+        self.sc_break_disappear.activated.connect(self.setBreakpointAtExit)
+        self.sc_clear_appear = qw.QShortcut(qg.QKeySequence('Shift+A'), self)
+        self.sc_clear_appear.activated.connect(self.clearBreakpointAtEntry)
+        self.sc_clear_disappear = qw.QShortcut(qg.QKeySequence('Shift+D'), self)
+        self.sc_clear_disappear.activated.connect(self.clearBreakpointAtExit)
         self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
         self.sc_zoom_in.activated.connect(self.left_view.zoomIn)
         self.sc_zoom_in.activated.connect(self.right_view.zoomIn)
         self.sc_zoom_out = qw.QShortcut(qg.QKeySequence('-'), self)
         self.sc_zoom_out.activated.connect(self.left_view.zoomOut)
         self.sc_zoom_out.activated.connect(self.right_view.zoomOut)
-        self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('o'), self)
+        self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('O'), self)
         self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
-        
+        self.sc_hist = qw.QShortcut(qg.QKeySequence('T'), self)
+        self.sc_hist.activated.connect(self.showHistoryAction.toggle)
         self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
         self.sc_next.activated.connect(self.nextFrame)
         self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
@@ -1265,6 +1326,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
+        view_menu.addAction(self.review_widget.showHistoryAction)
         diffgrp = qw.QActionGroup(self)
         diffgrp.addAction(self.review_widget.showDifferenceAction)
         diffgrp.addAction(self.review_widget.showNewAction)
