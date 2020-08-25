@@ -334,7 +334,7 @@ def make_parser():
     parser.add_argument('--hmax', type=int, default=100, help='Maximum height (longer side) of bounding box in pixels')
     parser.add_argument('--wmin', type=int, default=10, help='Minimum width (shorter side) of bounding box in pixels')
     parser.add_argument('--wmax', type=int, default=100, help='Maximum width (shorter side) of bounding box in pixels')
-    parser.add_argument('-x', '--overlap', type=int, default=0.3, help='Minimum overlap between bounding boxes as a fraction of their total area.')
+    parser.add_argument('-x', '--overlap', type=float, default=0.3, help='Minimum overlap between bounding boxes as a fraction of their total area.')
     parser.add_argument('--min_hits', type=int, default=3, help='Minimum number of hits to accept a track')
     parser.add_argument('--max_age', type=int, default=50, help='Maximum number of misses to exclude a track')
     parser.add_argument('--cuda', type=bool, help='Whether to use CUDA')
