@@ -119,6 +119,7 @@ class TrainingWidget(qw.QMainWindow):
         self.seg_dock.setWidget(scroll)
         self.display_widget = SegDisplay()
         self.display_widget.setRoiMode()
+        self.display_widget.frame_scene.linewidth = 1
         self.setCentralWidget(self.display_widget)
         self._makeActions()
         self._makeFileDock()
@@ -152,15 +153,17 @@ class TrainingWidget(qw.QMainWindow):
 
     def _makeFileDock(self):
         self.file_dock = qw.QDockWidget('Files/Dirs')
-        layout = qw.QFormLayout()
+
+        dirlayout = qw.QFormLayout()
         self.out_dir_label = qw.QLabel('Output directory for training data')
         self.out_dir_name = qw.QLabel(self.out_dir)
-        layout.addRow(self.out_dir_label, self.out_dir_name)
+        dirlayout.addRow(self.out_dir_label, self.out_dir_name)
         self.image_dir_label = qw.QLabel('Input image directory')
         self.image_dir_name = qw.QLabel(self.image_dir)
-        layout.addRow(self.image_dir_label, self.image_dir_name)
+        dirlayout.addRow(self.image_dir_label, self.image_dir_name)
         self.dir_widget = qw.QWidget()
-        self.dir_widget.setLayout(layout)
+        self.dir_widget.setLayout(dirlayout)
+
         self.file_view = qw.QListView()
         self.file_view.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
         self.file_model = qw.QFileSystemModel()
@@ -168,14 +171,13 @@ class TrainingWidget(qw.QMainWindow):
         self.file_view.setModel(self.file_model)
         self.file_view.setRootIndex(self.file_model.setRootPath(self.image_dir))
         self.file_view.selectionModel().selectionChanged.connect(self.handleFileSelectionChanged)
+
+        self.fwidget = qw.QWidget()
         layout = qw.QVBoxLayout()
         layout.addWidget(self.dir_widget)
         layout.addWidget(self.file_view)
-        self.fwidget = qw.QWidget()
         self.fwidget.setLayout(layout)
-        scroll = qw.QScrollArea()
-        scroll.setWidget(self.fwidget)
-        self.file_dock.setWidget(scroll)
+        self.file_dock.setWidget(self.fwidget)
         self.file_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                        qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.file_dock)
@@ -246,7 +248,7 @@ class TrainingWidget(qw.QMainWindow):
         self.resegmentAction = qw.QAction('Re-segment current image (R)')
         self.resegmentAction.triggered.connect(
             self.resegmentCurrent)
-        self.clearCurrentAction = qw.QAction('&Clear current segmentation (Ctrl+C)')
+        self.clearCurrentAction = qw.QAction('&Clear current segmentation (C)')
         self.clearCurrentAction.triggered.connect(self.clearCurrent)
         self.clearAllAction = qw.QAction('Reset all segmentation')
         self.clearAllAction.triggered.connect(self.clearAllSegmentation)
@@ -255,8 +257,14 @@ class TrainingWidget(qw.QMainWindow):
         self.exportSegmentationAction.triggered.connect(self.exportSegmentation)
         self.saveSegmentationAction = qw.QAction('&Save segmentations (Ctrl+S)')
         self.saveSegmentationAction.triggered.connect(self.saveSegmentation)
-        self.loadSegmentationsAction = qw.QAction('&Open saved segmentations (Ctrl_O)')
+        self.loadSegmentationsAction = qw.QAction('&Open saved segmentations (Ctrl+O)')
         self.loadSegmentationsAction.triggered.connect(self.loadSegmentation)
+        self.debugAction = qw.QAction('Debug')
+        self.debugAction.setCheckable(True)
+        v = settings.value('ytrainer/debug', logging.INFO)
+        self.setDebug(v == logging.DEBUG)
+        self.debugAction.setChecked(v == logging.DEBUG)
+        self.debugAction.triggered.connect(self.setDebug)
 
     def _makeShortcuts(self):
         self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
@@ -282,7 +290,7 @@ class TrainingWidget(qw.QMainWindow):
         self.sc_keep_2.activated.connect(
             self.display_widget.keepSelectedAction.trigger)
 
-        self.sc_clear_current = qw.QShortcut(qg.QKeySequence('Ctrl+C'), self)
+        self.sc_clear_current = qw.QShortcut(qg.QKeySequence('C'), self)
         self.sc_clear_current.activated.connect(self.clearCurrent)
         self.sc_reseg_current = qw.QShortcut(qg.QKeySequence('R'), self)
         self.sc_reseg_current.activated.connect(self.resegmentCurrent)
@@ -314,6 +322,14 @@ class TrainingWidget(qw.QMainWindow):
         self.view_menu.addActions([self.display_widget.zoomInAction,
                                    self.display_widget.zoomOutAction,
                                    self.display_widget.autoColorAction])
+        self.advancedMenu = self.menuBar().addMenu('Advanced')
+        self.advancedMenu.addAction(self.debugAction)
+
+    @qc.pyqtSlot(bool)
+    def setDebug(self, val: bool):
+        level = logging.DEBUG if val else logging.INFO
+        logging.getLogger().setLevel(level)
+        settings.setValue('review/debug', level)
 
     def outlineStyleToBoundaryMode(self, style):
         if style == OutlineStyle.bbox:
@@ -394,7 +410,7 @@ class TrainingWidget(qw.QMainWindow):
     @qc.pyqtSlot(dict)
     def setSegmented(self, segdict: Dict[int, np.ndarray]) -> None:
         """Store the list of segmented objects for frame"""
-        logging.debug(f'Received segmentation {segdict} from {self.sender()}')
+        logging.debug(f'Received segmentated {len(segdict)} objects from {self.sender()}')
         self.seg_dict[self.image_index] = segdict
         self._waiting = False
 
@@ -621,7 +637,7 @@ class TrainingWidget(qw.QMainWindow):
             'images': [],
             'type': 'instances',
             'annotations': [],
-            'categoeroes': [
+            'categories': [
                 {'supercategory': None,
                  'id': 0,
                  'name': '_background_'},

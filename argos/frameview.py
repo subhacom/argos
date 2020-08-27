@@ -286,7 +286,7 @@ class FrameScene(qw.QGraphicsScene):
             logging.debug(f'Polygon {id_} poins shape: {poly.shape}')
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
-            item = self.addPolygon(polygon, qg.QPen(color, self.width()))
+            item = self.addPolygon(polygon, qg.QPen(color, self.linewidth))
             self.item_dict[id_] = item
             text = self.addText(str(id_), self.font)
             self.label_dict[id_] = text
@@ -392,6 +392,7 @@ class FrameScene(qw.QGraphicsScene):
 
 
 class FrameView(qw.QGraphicsView):
+    sigSetColormap = qc.pyqtSignal(str, int)
     sigSetRectangles = qc.pyqtSignal(dict)
     sigSetPolygons = qc.pyqtSignal(dict)
     sigPolygons = qc.pyqtSignal(dict)
@@ -405,6 +406,7 @@ class FrameView(qw.QGraphicsView):
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
         self._makeScene()
+        self.sigSetColormap.connect(self.frame_scene.setColormap)
         self.sigSetRectangles.connect(self.frame_scene.setRectangles)
         self.sigSetPolygons.connect(self.frame_scene.setPolygons)
         self.frame_scene.sigPolygons.connect(self.sigPolygons)
@@ -419,7 +421,11 @@ class FrameView(qw.QGraphicsView):
         self.zoomOutAction.triggered.connect(self.zoomOut)
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
+        self.autoColorAction.triggered.connect(self.setAutoColor)
         self.autoColorAction.triggered.connect(self.frame_scene.setAutoColor)
+        self.colormapAction = qw.QAction('Colormap')
+        self.colormapAction.triggered.connect(self.setColormap)
+        self.colormapAction.setCheckable(True)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
         self.setRoiPolygonMode.connect(self.frame_scene.setRoiPolygonMode)
@@ -441,6 +447,39 @@ class FrameView(qw.QGraphicsView):
         self.frame_scene.setFrame(frame)
         self.frame_scene.frameno = pos
         self.viewport().update()
+
+    @qc.pyqtSlot(bool)
+    def setColormap(self, checked):
+        if not checked:
+            self.sigSetColormap.emit(None, 0)
+            return
+        input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
+                                                'Colormap',
+                                                ['jet',
+                                                 'viridis',
+                                                 'rainbow',
+                                                 'autumn',
+                                                 'summer',
+                                                 'winter',
+                                                 'spring',
+                                                 'cool',
+                                                 'hot',
+                                                 'None'])
+        logging.debug(f'Setting colormap to {input}')
+        if (input == 'None') or (not accept):
+            self.colormapAction.setChecked(False)
+            return
+        max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
+                                                    'Number of colors', 10, 1,
+                                                    20)
+        self.autoColorAction.setChecked(False)
+        self.colormapAction.setChecked(True)
+        self.sigSetColormap.emit(input, max_colors)
+
+    @qc.pyqtSlot(bool)
+    def setAutoColor(self, checked):
+        if checked:
+            self.colormapAction.setChecked(False)
 
     @qc.pyqtSlot()
     def zoomIn(self):

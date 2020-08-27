@@ -563,8 +563,9 @@ class ReviewWidget(qw.QWidget):
         self.slider.valueChanged.connect(self.gotoFrame)
         self.pos_spin.valueChanged.connect(self.gotoFrame)
         self.pos_spin.lineEdit().setEnabled(False)
-        self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
-        self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
+        self.right_view.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
+        # self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
+        # self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
@@ -719,32 +720,29 @@ class ReviewWidget(qw.QWidget):
         self.tieViewsAction.triggered.connect(self.tieViews)
         self.tieViewsAction.setChecked(True)
         self.tieViews(True)
-        self.autoColorAction = qw.QAction('Automatic color')
-        self.autoColorAction.setCheckable(True)
+        self.autoColorAction = self.right_view.autoColorAction
         self.autoColorAction.triggered.connect(
             self.left_view.autoColorAction.trigger)
-        self.autoColorAction.triggered.connect(
-            self.right_view.autoColorAction.trigger)
-        self.autoColorAction.triggered.connect(self.setAutoColor)
-        self.colormapAction = qw.QAction('Use colormap')
-        self.colormapAction.triggered.connect(self.setColormap)
-        self.colormapAction.setCheckable(True)
+        # self.autoColorAction.triggered.connect(self.left_view.autoColorAction)
+        self.colormapAction = self.right_view.colormapAction
+        # self.colormapAction = qw.QAction('Colormap')
+        # self.colormapAction.triggered.connect(self.setColormap)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
-        self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
+        self.openAction = qw.QAction('Open tracked data (Ctrl+O)')
         self.openAction.triggered.connect(self.openTrackedData)
-        self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
+        self.saveAction = qw.QAction('Save reviewed data (Ctrl+S)')
         self.saveAction.triggered.connect(self.saveReviewedTracks)
-        self.speedUpAction = qw.QAction('Double speed (Up arrow)')
+        self.speedUpAction = qw.QAction('Double speed (Ctrl+Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
-        self.slowDownAction = qw.QAction('Half speed (Down arrow)')
+        self.slowDownAction = qw.QAction('Half speed (Ctrl+Down arrow)')
         self.slowDownAction.triggered.connect(self.slowDown)
         self.zoomInLeftAction = qw.QAction('Zoom-in left (+)')
         self.zoomInLeftAction.triggered.connect(self.left_view.zoomIn)
-        self.zoomInRightAction = qw.QAction('Zoom-in right (+)')
+        self.zoomInRightAction = qw.QAction('Zoom-in right (=)')
         self.zoomInRightAction.triggered.connect(self.right_view.zoomIn)
-        self.zoomOutLeftAction = qw.QAction('Zoom-out left (-)')
+        self.zoomOutLeftAction = qw.QAction('Zoom-out left (Underscore)')
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
         self.zoomOutRightAction = qw.QAction('Zoom-out right (-)')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
@@ -826,12 +824,14 @@ class ReviewWidget(qw.QWidget):
         self.sc_clear_appear.activated.connect(self.clearBreakpointAtEntry)
         self.sc_clear_disappear = qw.QShortcut(qg.QKeySequence('Shift+D'), self)
         self.sc_clear_disappear.activated.connect(self.clearBreakpointAtExit)
-        self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
-        self.sc_zoom_in.activated.connect(self.left_view.zoomIn)
-        self.sc_zoom_in.activated.connect(self.right_view.zoomIn)
-        self.sc_zoom_out = qw.QShortcut(qg.QKeySequence('-'), self)
-        self.sc_zoom_out.activated.connect(self.left_view.zoomOut)
-        self.sc_zoom_out.activated.connect(self.right_view.zoomOut)
+        self.sc_zoom_in_left = qw.QShortcut(qg.QKeySequence('+'), self)
+        self.sc_zoom_in_left.activated.connect(self.left_view.zoomIn)
+        self.sc_zoom_in_right = qw.QShortcut(qg.QKeySequence('='), self)
+        self.sc_zoom_in_right.activated.connect(self.right_view.zoomIn)
+        self.sc_zoom_out_right = qw.QShortcut(qg.QKeySequence('-'), self)
+        self.sc_zoom_out_right.activated.connect(self.right_view.zoomOut)
+        self.sc_zoom_out_left = qw.QShortcut(qg.QKeySequence('_'), self)
+        self.sc_zoom_out_left.activated.connect(self.left_view.zoomOut)
         self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('O'), self)
         self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
         self.sc_hist = qw.QShortcut(qg.QKeySequence('T'), self)
@@ -845,9 +845,9 @@ class ReviewWidget(qw.QWidget):
         self.sc_remove.activated.connect(self.deleteSelected)
         self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
         self.sc_remove_2.activated.connect(self.deleteSelected)
-        self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Up), self)
+        self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
         self.sc_speedup.activated.connect(self.speedUp)
-        self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Down), self)
+        self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Down), self)
         self.sc_slowdown.activated.connect(self.slowDown)
         self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
         self.sc_save.activated.connect(self.saveReviewedTracks)
@@ -1263,42 +1263,42 @@ class ReviewWidget(qw.QWidget):
         self.right_tracks = self._flag_tracks({}, tracks)
         self.sigRightTracks.emit(self.right_tracks)
 
-    @qc.pyqtSlot(bool)
-    def setColormap(self, checked):
-        if not checked:
-            self.sigSetColormap.emit(None, 0)
-            return
-        input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
-                                                'Colormap',
-                                                ['jet',
-                                                 'viridis',
-                                                 'rainbow',
-                                                 'autumn',
-                                                 'summer',
-                                                 'winter',
-                                                 'spring',
-                                                 'cool',
-                                                 'hot',
-                                                 'None'])
-        logging.debug(f'Setting colormap to {input}')
-        if input == 'None':
-            self.colormapAction.setChecked(False)
-            return
-        if not accept:
-            return
-        max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
-                                                    'Number of colors', 10, 1,
-                                                    20)
-        if not accept:
-            return
-        self.autoColorAction.setChecked(False)
-        self.colormapAction.setChecked(True)
-        self.sigSetColormap.emit(input, max_colors)
+    # @qc.pyqtSlot(bool)
+    # def setColormap(self, checked):
+    #     if not checked:
+    #         self.sigSetColormap.emit(None, 0)
+    #         return
+    #     input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
+    #                                             'Colormap',
+    #                                             ['jet',
+    #                                              'viridis',
+    #                                              'rainbow',
+    #                                              'autumn',
+    #                                              'summer',
+    #                                              'winter',
+    #                                              'spring',
+    #                                              'cool',
+    #                                              'hot',
+    #                                              'None'])
+    #     logging.debug(f'Setting colormap to {input}')
+    #     if input == 'None':
+    #         self.colormapAction.setChecked(False)
+    #         return
+    #     if not accept:
+    #         return
+    #     max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
+    #                                                 'Number of colors', 10, 1,
+    #                                                 20)
+    #     if not accept:
+    #         return
+    #     self.autoColorAction.setChecked(False)
+    #     self.colormapAction.setChecked(True)
+    #     self.sigSetColormap.emit(input, max_colors)
 
-    @qc.pyqtSlot(bool)
-    def setAutoColor(self, checked):
-        if checked:
-            self.colormapAction.setChecked(False)
+    # @qc.pyqtSlot(bool)
+    # def setAutoColor(self, checked):
+    #     if checked:
+    #         self.colormapAction.setChecked(False)
 
     @qc.pyqtSlot()
     def videoEnd(self):
