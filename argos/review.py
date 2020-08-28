@@ -1252,6 +1252,7 @@ class ReviewWidget(qw.QWidget):
             return
         self._wait_cond.set()
         self.playVideo(False)
+        self.play_button.setChecked(False)
         self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int, bool)
@@ -1268,6 +1269,7 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot()
     def videoEnd(self):
         self.playVideo(False)
+        self.play_button.setChecked(False)
         qw.QMessageBox.information(self, 'Finished processing', 'End of video reached.')
 
 
