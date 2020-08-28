@@ -82,6 +82,11 @@ class VideoReader(qc.QObject):
         # In short, jumping to a specific frame no is completely unreliable and depends on the video format and codec
         if self._waitCond is not None:
             self._waitCond.clear()
+        if frame_no >= self._vid.get(cv2.CAP_PROP_FRAME_COUNT):
+            logging.debug('Video at end')
+            self.mutex.unlock()
+            self.sigVideoEnd.emit()
+            return
         self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no) 
         pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
         if pos != frame_no:
@@ -109,11 +114,10 @@ class VideoReader(qc.QObject):
             self._ts_writer.writerow([self._frame_no, ts])
             logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
         self.sigFrameRead.emit(frame.copy(), pos)
-        logging.debug(f'Read frame {pos}')
         if self._waitCond is not None:
             self._waitCond.wait()
         # event.wait()
-        logging.debug('Finished waiting')
+        logging.debug(f'Finished waiting on frame {pos}')
 
     @qc.pyqtSlot()
     def read(self):

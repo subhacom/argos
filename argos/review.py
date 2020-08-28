@@ -103,6 +103,7 @@ class TrackReader(qc.QObject):
 
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
+            logging.debug(f'Reached last frame with tracks: frame no {frame_no}')
             self.sigEnd.emit()
             return
         self.frame_pos = frame_no
@@ -915,8 +916,8 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
         if self.track_reader is None or \
-                self.video_reader is None or \
-                frame_no >= self.track_reader.last_frame:
+                self.video_reader is None:  # or \
+#                frame_no > self.track_reader.last_frame:
             return
         if self.disableSeekAction.isChecked():
             self.sigNextFrame.emit()
@@ -1156,11 +1157,13 @@ class ReviewWidget(qw.QWidget):
             self.sigGotoFrame.connect(self.video_reader.gotoFrame)        
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.video_reader.sigSeekError.connect(self.catchSeekError)
+        self.video_reader.sigVideoEnd.connect(self.videoEnd)
         self.frame_interval = 1000.0 / self.video_reader.fps
         self.pos_spin.setRange(0, self.track_reader.last_frame)
         self.slider.setRange(0, self.track_reader.last_frame)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
         self.track_reader.sigChangeList.connect(self.changelist_widget.setChangeList)
+        self.track_reader.sigEnd.connect(self.trackEnd)
         self.sigUndoCurrentChanges.connect(self.track_reader.undoChangeTrack)
         self.sigDataFile.emit(self.track_filename)
         self.gotoFrame(0)
@@ -1272,6 +1275,12 @@ class ReviewWidget(qw.QWidget):
         self.play_button.setChecked(False)
         qw.QMessageBox.information(self, 'Finished processing', 'End of video reached.')
 
+    @qc.pyqtSlot()
+    def trackEnd(self):
+        self.playVideo(False)
+        self.play_button.setChecked(False)
+        qw.QMessageBox.information(self, 'Finished processing', 'End of tracks reached reached.')
+        
 
 class ReviewerMain(qw.QMainWindow):
     sigQuit = qc.pyqtSignal()
