@@ -728,7 +728,7 @@ class ReviewWidget(qw.QWidget):
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
         self.lineWidthAction = self.right_view.lineWidthAction
-        self.right_view.lineWidthAction.tri
+        self.right_view.sigLineWidth.connect(self.left_view.frame_scene.setLineWidth)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)

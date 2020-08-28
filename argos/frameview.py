@@ -199,6 +199,7 @@ class FrameScene(qw.QGraphicsScene):
         self.clearItems()
         self.invalidate(self.sceneRect())
 
+    @qc.pyqtSlot(int)
     def setLineWidth(self, width):
         self.linewidth = width
 
