@@ -159,7 +159,9 @@ class FrameScene(qw.QGraphicsScene):
             pen = qg.QPen(qg.QColor(*make_color(index)))
         elif self.colormap is not None:
             pen = qg.QPen(
-                qg.QColor(get_cmap_color(index % self.max_colors, self.max_colors, self.colormap)))
+                qg.QColor(*get_cmap_color(index % self.max_colors,
+                                          self.max_colors,
+                                          self.colormap)))
         else:
             pen = qg.QPen(self.color)
         pen.setWidth(self.linewidth)
@@ -294,7 +296,7 @@ class FrameScene(qw.QGraphicsScene):
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
             self.item_dict[id_] = item
-            logging.debug(f'Set {id_}: {poly}')
+            # logging.debug(f'Set {id_}: {poly}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
@@ -402,6 +404,7 @@ class FrameView(qw.QGraphicsView):
     setArenaMode = qc.pyqtSignal()
     setRoiRectMode = qc.pyqtSignal()
     setRoiPolygonMode = qc.pyqtSignal()
+    sigLineWidth = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
@@ -409,6 +412,7 @@ class FrameView(qw.QGraphicsView):
         self.sigSetColormap.connect(self.frame_scene.setColormap)
         self.sigSetRectangles.connect(self.frame_scene.setRectangles)
         self.sigSetPolygons.connect(self.frame_scene.setPolygons)
+        self.sigLineWidth.connect(self.frame_scene.setLineWidth)
         self.frame_scene.sigPolygons.connect(self.sigPolygons)
         self.frame_scene.sigPolygonsSet.connect(self.polygonsSet)
         self.frame_scene.sigArena.connect(self.sigArena)
@@ -426,6 +430,8 @@ class FrameView(qw.QGraphicsView):
         self.colormapAction = qw.QAction('Colormap')
         self.colormapAction.triggered.connect(self.setColormap)
         self.colormapAction.setCheckable(True)
+        self.lineWidthAction = qw.QAction('Line width')
+        self.lineWidthAction.triggered.connect(self.setLW)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
         self.setRoiPolygonMode.connect(self.frame_scene.setRoiPolygonMode)
@@ -447,6 +453,13 @@ class FrameView(qw.QGraphicsView):
         self.frame_scene.setFrame(frame)
         self.frame_scene.frameno = pos
         self.viewport().update()
+
+    @qc.pyqtSlot()
+    def setLW(self) -> None:
+        input, accept = qw.QInputDialog.getInt(self, 'Line-width of outline',
+                                               'pixels', 1, min=1, max=10)
+        if accept:
+            self.sigLineWidth.emit(input)
 
     @qc.pyqtSlot(bool)
     def setColormap(self, checked):
@@ -503,7 +516,7 @@ class FrameView(qw.QGraphicsView):
     @qc.pyqtSlot(dict, int)
     def setPolygons(self, poly: dict, pos: int) -> None:
         logging.debug(f'Received polygons from {self.sender()}, frame {pos}')
-        logging.debug(f'polygons: {poly}')
+        # logging.debug(f'polygons: {poly}')
         self.sigSetPolygons.emit(poly)
 
     @qc.pyqtSlot()

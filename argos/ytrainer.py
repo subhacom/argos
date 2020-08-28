@@ -26,6 +26,7 @@ from argos import utility as ut
 from argos import frameview
 from argos.frameview import FrameView
 from argos.segwidget import SegWidget
+from argos.limitswidget import LimitsWidget
 from yolact import config as yconfig
 
 settings = ut.init()
@@ -110,12 +111,18 @@ class TrainingWidget(qw.QMainWindow):
         self.seg_widget = SegWidget()
         self.seg_widget.outline_combo.setCurrentText('contour')
         self.seg_widget.setOutlineStyle('contour')
+        self.lim_widget = LimitsWidget()
         self.seg_dock = qw.QDockWidget('Segmentation settings')
         self.seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
                                       qc.Qt.RightDockWidgetArea)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.seg_dock)
+        layout = qw.QVBoxLayout()
+        layout.addWidget(self.seg_widget)
+        layout.addWidget(self.lim_widget)
+        widget = qw.QWidget()
+        widget.setLayout(layout)
         scroll = qw.QScrollArea()
-        scroll.setWidget(self.seg_widget)
+        scroll.setWidget(widget)
         self.seg_dock.setWidget(scroll)
         self.display_widget = SegDisplay()
         self.display_widget.setRoiMode()
@@ -131,6 +138,10 @@ class TrainingWidget(qw.QMainWindow):
             self.display_widget.sigSetPolygons)
         self.display_widget.sigPolygons.connect(self.setSegmented)
         self.seg_widget.sigProcessed.connect(self.display_widget.setBboxes)
+        self.lim_widget.sigWmin.connect(self.seg_widget.setWmin)
+        self.lim_widget.sigWmax.connect(self.seg_widget.setWmax)
+        self.lim_widget.sigHmin.connect(self.seg_widget.setHmin)
+        self.lim_widget.sigHmax.connect(self.seg_widget.setHmax)
         # Note the difference between `sigSegment` and `sigSegmented`
         # - this TrainingWidget's `sigSegment` sends the image to the
         #   segmentation widget
@@ -147,6 +158,7 @@ class TrainingWidget(qw.QMainWindow):
         #   displaywidget's `setPolygons` slot directly
         self.sigSegmented.connect(self.display_widget.setPolygons)
         self.sigQuit.connect(self.seg_widget.sigQuit)
+        self.sigQuit.connect(self.lim_widget.sigQuit)
         self._makeShortcuts()
         self.openImageDir()
         self.statusBar().showMessage('Press `Next image` to start segmenting')
@@ -321,7 +333,9 @@ class TrainingWidget(qw.QMainWindow):
         self.view_menu = self.menuBar().addMenu('View')
         self.view_menu.addActions([self.display_widget.zoomInAction,
                                    self.display_widget.zoomOutAction,
-                                   self.display_widget.autoColorAction])
+                                   self.display_widget.autoColorAction,
+                                   self.display_widget.colormapAction,
+                                   self.display_widget.lineWidthAction])
         self.advancedMenu = self.menuBar().addMenu('Advanced')
         self.advancedMenu.addAction(self.debugAction)
 
@@ -329,7 +343,7 @@ class TrainingWidget(qw.QMainWindow):
     def setDebug(self, val: bool):
         level = logging.DEBUG if val else logging.INFO
         logging.getLogger().setLevel(level)
-        settings.setValue('review/debug', level)
+        settings.setValue('ytrainer/debug', level)
 
     def outlineStyleToBoundaryMode(self, style):
         if style == OutlineStyle.bbox:
@@ -379,17 +393,24 @@ class TrainingWidget(qw.QMainWindow):
     def gotoFrame(self, index):
         if index >= len(self.image_files) or index < 0 or self._waiting:
             return
-        self.image_index = index
         fname = self.image_files[index]
+        if not os.path.exists(fname):
+            qw.QMessageBox.critical(self, 'File does not exist', f'No such file exists: {fname}')
+            del self.image_files[index]
+            self.seg_dict.pop(index, None)
+            return
         image = cv2.imread(fname)
+        if image is None:
+            return
+        self.image_index = index
         self.display_widget.resetArenaAction.trigger()
         self.sigImage.emit(image, index)
-        if index not in self.seg_dict:
+        if fname not in self.seg_dict:
             self.saved = False
             self.sigSegment.emit(image, index)
             self._waiting = True
         else:
-            self.sigSegmented.emit(self.seg_dict[index], index)
+            self.sigSegmented.emit(self.seg_dict[fname], index)
         self.statusBar().showMessage(
             f'Current image: {os.path.basename(fname)}. [Image {self.image_index + 1} of {len(self.image_files)}]')
 
@@ -411,7 +432,8 @@ class TrainingWidget(qw.QMainWindow):
     def setSegmented(self, segdict: Dict[int, np.ndarray]) -> None:
         """Store the list of segmented objects for frame"""
         logging.debug(f'Received segmentated {len(segdict)} objects from {self.sender()}')
-        self.seg_dict[self.image_index] = segdict
+        fname = self.image_files[self.image_index]
+        self.seg_dict[fname] = segdict
         self._waiting = False
 
     def cleanup(self):
@@ -439,11 +461,11 @@ class TrainingWidget(qw.QMainWindow):
         self.seg_dict = {}
 
     def resegmentCurrent(self):
-        self.seg_dict.pop(self.image_index, None)
+        self.seg_dict.pop(self.image_files[self.image_index], None)
         self.gotoFrame(self.image_index)
 
     def clearCurrent(self):
-        self.seg_dict.pop(self.image_index, None)
+        self.seg_dict.pop(self.image_files[self.image_index], None)
         self.display_widget.setPolygons({}, self.image_index)
 
     def _makeCocoDialog(self):
@@ -660,8 +682,7 @@ class TrainingWidget(qw.QMainWindow):
 
         for ii, fpath in enumerate(filepaths):
             indicator.setValue(ii)
-            findex = self.image_files.index(fpath)
-            if findex not in self.seg_dict or len(self.seg_dict[findex]) == 0:
+            if fpath not in self.seg_dict or len(self.seg_dict[fpath]) == 0:
                 continue
             img = cv2.imread(fpath)
             fname = os.path.basename(fpath)
@@ -689,25 +710,15 @@ class TrainingWidget(qw.QMainWindow):
                 sq_img[:h, :w, :] = img[y: y + h, x: x + w, :]
                 logging.debug(f'Processing: {prefix}: span ({x}, {y}, {x+h}, {y+h}')
                 fname = f'{prefix}_{jj}.png'
-                cv2.imwrite(os.path.join(imdir, fname),
-                            sq_img)
-                coco['images'].append({
-                    "license": 0,
-                    "url": None,
-                    "file_name": f"PNGImages/{fname}",
-                    "height": self.max_size,
-                    "width": self.max_size,
-                    "date_captured": None,
-                    "id": img_id
-                })
-
-                for seg in self.seg_dict[findex].values():
+                any_valid_seg = False
+                for seg in self.seg_dict[fpath].values():
                     tmp_seg = seg - [x, y]
                     tmp_seg = tmp_seg[np.all((tmp_seg >= 0) &
                                              (tmp_seg < self.max_size),
                                              axis=1)]
                     if tmp_seg.shape[0] < 3:
                         continue
+                    any_valid_seg = True
                     bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
                     if self.boundary_type == 'contour':
                         segmentation = [int(xx) for xx in tmp_seg.flatten()]
@@ -740,6 +751,19 @@ class TrainingWidget(qw.QMainWindow):
                     }
                     coco['annotations'].append(annotation)
                     seg_id += 1
+                if not any_valid_seg:
+                    continue
+                cv2.imwrite(os.path.join(imdir, fname),
+                            sq_img)
+                coco['images'].append({
+                    "license": 0,
+                    "url": None,
+                    "file_name": f"PNGImages/{fname}",
+                    "height": self.max_size,
+                    "width": self.max_size,
+                    "date_captured": None,
+                    "id": img_id
+                })
                 if self.display_coco:
                     winname = 'cvwin'
                     title = f'{fname}. Press `Esc` or `q` to hide. Any other key to fast forward.'
@@ -767,7 +791,7 @@ class TrainingWidget(qw.QMainWindow):
         if len(filename) == 0:
             return
         data = {'image_dir': self.image_dir,
-                'seg_dict': {self.image_files[index]: seg for index, seg in self.seg_dict.items()}}
+                'seg_dict': {fpath: seg for fpath, seg in self.seg_dict.items()}}
         with open(filename, 'wb') as fd:
             pickle.dump(data, fd)
         settings.setValue('training/savedir', os.path.dirname(filename))
@@ -784,11 +808,11 @@ class TrainingWidget(qw.QMainWindow):
             data = pickle.load(fd)
             self.image_dir = data['image_dir']
             seg_dict = data['seg_dict']
-            self.image_files = [entry.path for entry in os.scandir(self.image_dir)]
+            self.image_files = [entry.path for entry in os.scandir(self.image_dir) if os.path.isfile(entry.path)]
             for key in list(seg_dict.keys()):
                 if key not in self.image_files:
                     seg_dict.pop(key)
-            self.seg_dict = {self.image_files.index(key): seg for key, seg in seg_dict.items()}
+            self.seg_dict = {fpath: seg for fpath, seg in seg_dict.items()}
         settings.setValue('training/savedir', os.path.dirname(filename))
         self.gotoFrame(0)
 

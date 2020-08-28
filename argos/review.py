@@ -727,6 +727,8 @@ class ReviewWidget(qw.QWidget):
         self.colormapAction = self.right_view.colormapAction
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
+        self.lineWidthAction = self.right_view.lineWidthAction
+        self.right_view.lineWidthAction.tri
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
@@ -1263,43 +1265,6 @@ class ReviewWidget(qw.QWidget):
         self.right_tracks = self._flag_tracks({}, tracks)
         self.sigRightTracks.emit(self.right_tracks)
 
-    # @qc.pyqtSlot(bool)
-    # def setColormap(self, checked):
-    #     if not checked:
-    #         self.sigSetColormap.emit(None, 0)
-    #         return
-    #     input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
-    #                                             'Colormap',
-    #                                             ['jet',
-    #                                              'viridis',
-    #                                              'rainbow',
-    #                                              'autumn',
-    #                                              'summer',
-    #                                              'winter',
-    #                                              'spring',
-    #                                              'cool',
-    #                                              'hot',
-    #                                              'None'])
-    #     logging.debug(f'Setting colormap to {input}')
-    #     if input == 'None':
-    #         self.colormapAction.setChecked(False)
-    #         return
-    #     if not accept:
-    #         return
-    #     max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
-    #                                                 'Number of colors', 10, 1,
-    #                                                 20)
-    #     if not accept:
-    #         return
-    #     self.autoColorAction.setChecked(False)
-    #     self.colormapAction.setChecked(True)
-    #     self.sigSetColormap.emit(input, max_colors)
-
-    # @qc.pyqtSlot(bool)
-    # def setAutoColor(self, checked):
-    #     if checked:
-    #         self.colormapAction.setChecked(False)
-
     @qc.pyqtSlot()
     def videoEnd(self):
         self.playVideo(False)
@@ -1325,6 +1290,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.tieViewsAction)
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
+        view_menu.addAction(self.review_widget.lineWidthAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)
         diffgrp = qw.QActionGroup(self)

@@ -201,6 +201,8 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
                   f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
     minrects = [cv2.minAreaRect(points) for points in points_list]
     mr_size = np.array([mr[1] for mr in minrects])
+    if len(mr_size) == 0:
+        return []
     mr_size.sort(axis=1)
     p_size = np.array([len(points) for points in points_list])
     good = (p_size >= pmin) & (p_size < pmax) \
@@ -714,7 +716,7 @@ class SegWidget(qw.QWidget):
         layout.addRow(self._pmin_label, self._pmin_edit)
         self._pmax_label = qw.QLabel('Maximum pixels')
         self._pmax_edit = qw.QSpinBox()
-        self._pmax_edit.setRange(1, 1000)
+        self._pmax_edit.setRange(1, 10000)
         value = settings.value('segment/max_pixels',
                                self.worker.pmax,
                                type=int)
