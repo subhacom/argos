@@ -106,7 +106,7 @@ class ArgosMain(qw.QMainWindow):
         self._sort_action.setChecked(True)
         self._debug_action = qw.QAction('Debug')
         self._debug_action.setCheckable(True)
-        debug_level = settings.value('track/debug', logging.INFO)
+        debug_level = settings.value('track/debug', logging.INFO, type=int)
         self._debug_action.setChecked(debug_level == logging.DEBUG)
         logging.getLogger().setLevel(debug_level)
         self._debug_action.triggered.connect(self.setDebug)

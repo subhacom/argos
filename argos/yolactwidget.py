@@ -41,6 +41,7 @@ class YolactWorker(qc.QObject):
     # with the bounding boxes
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
     sigInitialized = qc.pyqtSignal()
+    sigError = qc.pyqtSignal(YolactException)
 
     def __init__(self):
         super(YolactWorker, self).__init__()
@@ -129,7 +130,8 @@ class YolactWorker(qc.QObject):
         """
         logging.debug(f'Received frame {pos}')
         if self.net is None:
-            raise YolactException('Network not initialized')
+            self.sigError.emit(YolactException('Network not initialized'))
+            return
         # Partly follows yolact eval.py
         tic = time.perf_counter_ns()
         _ = qc.QMutexLocker(self.mutex)
@@ -189,6 +191,7 @@ class YolactWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(YolactWidget, self).__init__(*args, **kwargs)
         self.worker = YolactWorker()
+        self.initialized = False
         self.indicator = None
         self.load_config_action = qw.QAction('Load YOLACT configuration', self)
         self.load_config_action.setToolTip('Load YOLACT configuration. This '
@@ -260,7 +263,9 @@ class YolactWidget(qw.QWidget):
         # Setup connections
         ######################################################
         self.sigProcess.connect(self.worker.process)
+        self.worker.sigError.connect(self.showYolactError)
         self.worker.sigProcessed.connect(self.sigProcessed)
+        self.worker.sigInitialized.connect(self.setInitialized)
         self.sigScoreThresh.connect(self.worker.setScoreThresh)
         self.sigConfigFile.connect(self.worker.setConfig)
         self.sigWeightsFile.connect(self.worker.setWeights)
@@ -268,6 +273,10 @@ class YolactWidget(qw.QWidget):
         self.sigQuit.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
+
+    @qc.pyqtSlot(YolactException)
+    def showYolactError(self, err: YolactException) -> None:
+        qw.QMessageBox.critical(self, 'Yolact error', str(err))
 
     @qc.pyqtSlot()
     def setTopK(self):
@@ -280,11 +289,11 @@ class YolactWidget(qw.QWidget):
     @qc.pyqtSlot()
     def loadConfig(self):
         directory = settings.value('yolact/configdir', '.')
-        filename, _ = qw.QFileDialog.getOpenFileName(
+        filename, ok = qw.QFileDialog.getOpenFileName(
             self,
             'Open YOLACT configuration file',
             directory=directory, filter='YAML file (*.yml *.yaml)')
-        if len(filename) == 0:
+        if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
         self.sigConfigFile.emit(filename)
@@ -292,12 +301,13 @@ class YolactWidget(qw.QWidget):
     @qc.pyqtSlot()
     def loadWeights(self):
         directory = settings.value('yolact/configdir', '.')
-        filename, _ = qw.QFileDialog.getOpenFileName(self, 'Open trained model',
+        filename, ok = qw.QFileDialog.getOpenFileName(self, 'Open trained model',
                                                      directory=directory,
                                                      filter='Weights file (*.pth)')
-        if len(filename) == 0:
+        if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
+        self.initialized = False
         self.sigWeightsFile.emit(filename)
         if self.indicator is None:
             self.indicator = qw.QProgressDialog('Setting up neural net', 'Cancel', 0, 0, self)
@@ -307,6 +317,7 @@ class YolactWidget(qw.QWidget):
         except TypeError:
             pass
         self.worker.sigInitialized.connect(self.indicator.reset)
+        self.worker.sigInitialized.connect(self.setInitialized)
         self.indicator.show()
 
     @qc.pyqtSlot()
@@ -328,7 +339,8 @@ class YolactWidget(qw.QWidget):
             except YolactException as err:
                 qw.QMessageBox.critical(self, 'Could not open file', str(err))
                 return
-        self.sigProcess.emit(image, pos)
+        if self.initialized:
+            self.sigProcess.emit(image, pos)
 
     def __del__(self):
         settings = qc.QSettings()
