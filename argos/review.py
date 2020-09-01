@@ -246,7 +246,7 @@ class ReviewScene(FrameScene):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
         self.hist_gradient = 1
-        self.tarck_hist = []
+        self.track_hist = []
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
@@ -256,7 +256,11 @@ class ReviewScene(FrameScene):
     def showTrackHist(self, track: np.ndarray) -> None:
         for item in self.track_hist:
             self.removeItem(item)
-        self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+        self.track_hist = []
+        for ii, t in enumerate(track):
+            color = qg.QColor(*get_cmap_color(ii, len(track), 'viridis'))
+            self.track_hist.append(self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(color)))
+        # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
     
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -388,6 +392,7 @@ class TrackList(qw.QListWidget):
 
     @qc.pyqtSlot()
     def sendSelected(self):
+        """Intermediate slot to convert text labels into integer track ids"""
         items = [int(item.text()) for item in self.selectedItems()]
         self.sigSelected.emit(items)
 
@@ -591,6 +596,7 @@ class ReviewWidget(qw.QWidget):
     def catchSeekError(self, err: Exception)-> None:
         qw.QMessageBox.critical(self, 'Error jumping frames', str(err))
         self.disableSeek(True)
+        self.pos_spin.lineEdit().setEnabled(False)
         self.disableSeekAction.setChecked(True)
 
     @qc.pyqtSlot()
@@ -699,6 +705,10 @@ class ReviewWidget(qw.QWidget):
                 self.right_view.setViewportRect)
             self.right_view.sigViewportAreaChanged.connect(
                 self.left_view.setViewportRect)
+            self.right_view.horizontalScrollBar().valueChanged.connect(
+                self.left_view.horizontalScrollBar().setValue)
+            self.right_view.verticalScrollBar().valueChanged.connect(
+                self.left_view.verticalScrollBar().setValue)
         else:
             try:
                 self.left_view.sigViewportAreaChanged.disconnect()
@@ -706,6 +716,16 @@ class ReviewWidget(qw.QWidget):
                 pass
             try:
                 self.right_view.sigViewportAreaChanged.disconnect()
+            except TypeError:
+                pass
+            try:
+                self.right_view.horizontalScrollBar().valueChanged.disconnect(
+                  self.left_view.horizontalScrollBar().setValue)
+            except TypeError:
+                pass
+            try:
+                self.right_view.verticalScrollBar().valueChanged.disconnect(
+                    self.left_view.verticalScrollBar().setValue)
             except TypeError:
                 pass
 
@@ -761,6 +781,8 @@ class ReviewWidget(qw.QWidget):
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
         self.clearBreakpointAction = qw.QAction('Clear frame breakpoint')
         self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
+        self.jumpToBreakpointAction = qw.QAction('Jump to breakpoint frame')
+        self.jumpToBreakpointAction.triggered.connect(self.jumpToBreakpoint)
         self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance')
         self.entryBreakpointAction.triggered.connect(self.setBreakpointAtEntry)
         self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance')
@@ -781,7 +803,7 @@ class ReviewWidget(qw.QWidget):
         self.showNoneAction = qw.QAction('No popup message for tracks')
         self.showNoneAction.setCheckable(True)
         self.showNoneAction.setChecked(show_difference == 0)
-        self.showHistoryAction = qw.QAction('Show past & future pos of selected track')
+        self.showHistoryAction = qw.QAction('Show track positions')
         self.showHistoryAction.setCheckable(True)
         self.swapTracksAction = qw.QAction('Swap tracks')
         self.swapTracksAction.triggered.connect(self.swapTracks)
@@ -819,6 +841,8 @@ class ReviewWidget(qw.QWidget):
         self.sc_break_cur.activated.connect(self.setBreakpointAtCurrent)
         self.sc_clear_bp = qw.QShortcut(qg.QKeySequence('Shift+B'), self)
         self.sc_clear_bp.activated.connect(self.clearBreakpoint)
+        self.sc_jump_bp = qw.QShortcut(qg.QKeySequence('J'), self)
+        self.sc_jump_bp.activated.connect(self.jumpToBreakpoint)
         self.sc_break_appear = qw.QShortcut(qg.QKeySequence('A'), self)
         self.sc_break_appear.activated.connect(self.setBreakpointAtEntry)
         self.sc_break_disappear = qw.QShortcut(qg.QKeySequence('D'), self)
@@ -861,6 +885,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot(bool)
     def disableSeek(self, checked: bool) -> None:
+        self.pos_spin.lineEdit().setEnabled(not checked)
         if checked:
             try:
                 self.sigGotoFrame.disconnect()
@@ -875,6 +900,7 @@ class ReviewWidget(qw.QWidget):
                 pass
             if self.video_reader is not None:
                 self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+
 
     @qc.pyqtSlot()
     def deleteSelected(self) -> None:
@@ -927,6 +953,11 @@ class ReviewWidget(qw.QWidget):
             if self.frame_no > 0:
                 self.sigGotoFrame.emit(self.frame_no - 1)
             self.sigGotoFrame.emit(self.frame_no)
+
+    @qc.pyqtSlot()
+    def jumpToBreakpoint(self):
+        if self.breakpoint >= 0 and not self.disableSeekAction.isChecked():
+            self.gotoFrame(self.breakpoint)
 
     @qc.pyqtSlot()
     def gotoEditedPos(self):
@@ -1168,6 +1199,7 @@ class ReviewWidget(qw.QWidget):
         self.sigDataFile.emit(self.track_filename)
         self.gotoFrame(0)
         self.updateGeometry()
+        self.tieViews(self.tieViewsAction.isChecked())
         return True
 
     @qc.pyqtSlot()
@@ -1331,6 +1363,8 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.clearBreakpointAction)
         play_menu.addAction(self.review_widget.clearEntryBreakpointAction)
         play_menu.addAction(self.review_widget.clearExitBreakpointAction)
+
+        play_menu.addAction(self.review_widget.jumpToBreakpointAction)
 
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
