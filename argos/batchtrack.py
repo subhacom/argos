@@ -251,7 +251,7 @@ class BatchTrack(object):
         """
         self.video = cv2.VideoCapture(video_filename)
         if (self.video is None) or not self.video.isOpened():
-            raise IOError('Could not open video')
+            raise IOError(f'Could not open video "{video_filename}"')
         self.frame_count = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
         self.output_filename = output_filename
         if cuda is None:
@@ -347,6 +347,8 @@ if __name__ == '__main__':
     # 5 proc 25 / 50 fps
     parser = make_parser()
     args = parser.parse_args()
+    print('ARGS:')
+    print(args)
     tracker = BatchTrack(
         video_filename=args.input,        
         output_filename=args.output,
