@@ -354,6 +354,8 @@ if __name__ == '__main__':
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.INFO)
+    print('ARGS:')
+    print(args)
     tracker = BatchTrack(
         video_filename=args.input,        
         output_filename=args.output,

@@ -246,7 +246,7 @@ class ReviewScene(FrameScene):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
         self.hist_gradient = 1
-        self.tarck_hist = []
+        self.track_hist = []
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
@@ -256,7 +256,11 @@ class ReviewScene(FrameScene):
     def showTrackHist(self, track: np.ndarray) -> None:
         for item in self.track_hist:
             self.removeItem(item)
-        self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+        self.track_hist = []
+        for ii, t in enumerate(track):
+            color = qg.QColor(*get_cmap_color(ii, len(track), 'viridis'))
+            self.track_hist.append(self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(color)))
+        # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
     
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -388,6 +392,7 @@ class TrackList(qw.QListWidget):
 
     @qc.pyqtSlot()
     def sendSelected(self):
+        """Intermediate slot to convert text labels into integer track ids"""
         items = [int(item.text()) for item in self.selectedItems()]
         self.sigSelected.emit(items)
 
@@ -591,6 +596,7 @@ class ReviewWidget(qw.QWidget):
     def catchSeekError(self, err: Exception)-> None:
         qw.QMessageBox.critical(self, 'Error jumping frames', str(err))
         self.disableSeek(True)
+        self.pos_spin.lineEdit().setEnabled(False)
         self.disableSeekAction.setChecked(True)
 
     @qc.pyqtSlot()
@@ -699,6 +705,10 @@ class ReviewWidget(qw.QWidget):
                 self.right_view.setViewportRect)
             self.right_view.sigViewportAreaChanged.connect(
                 self.left_view.setViewportRect)
+            self.right_view.horizontalScrollBar().valueChanged.connect(
+                self.left_view.horizontalScrollBar().setValue)
+            self.right_view.verticalScrollBar().valueChanged.connect(
+                self.left_view.verticalScrollBar().setValue)
         else:
             try:
                 self.left_view.sigViewportAreaChanged.disconnect()
@@ -706,6 +716,16 @@ class ReviewWidget(qw.QWidget):
                 pass
             try:
                 self.right_view.sigViewportAreaChanged.disconnect()
+            except TypeError:
+                pass
+            try:
+                self.right_view.horizontalScrollBar().valueChanged.disconnect(
+                  self.left_view.horizontalScrollBar().setValue)
+            except TypeError:
+                pass
+            try:
+                self.right_view.verticalScrollBar().valueChanged.disconnect(
+                    self.left_view.verticalScrollBar().setValue)
             except TypeError:
                 pass
 
@@ -733,9 +753,9 @@ class ReviewWidget(qw.QWidget):
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
-        self.openAction = qw.QAction('Open tracked data (Ctrl+O)')
+        self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
-        self.saveAction = qw.QAction('Save reviewed data (Ctrl+S)')
+        self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
         self.saveAction.triggered.connect(self.saveReviewedTracks)
         self.speedUpAction = qw.QAction('Double speed (Ctrl+Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
@@ -749,25 +769,30 @@ class ReviewWidget(qw.QWidget):
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
         self.zoomOutRightAction = qw.QAction('Zoom-out right (-)')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
-        self.showOldTracksAction = qw.QAction('Show old tracks')
+        self.showOldTracksAction = qw.QAction('Show old tracks (o)')
         self.showOldTracksAction.setCheckable(True)
         # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
         self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
-        self.frameBreakpointAction = qw.QAction('Set breakpoint at frame')
+        self.gotoFrameAction = qw.QAction('Jump to frame (g)')
+        self.gotoFrameAction.triggered.connect(self.gotoFrameDialog)
+    
+        self.frameBreakpointAction = qw.QAction('Set breakpoint at frame (b)')
         self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
-        self.curBreakpointAction = qw.QAction('Set breakpoint at current frame')
+        self.curBreakpointAction = qw.QAction('Set breakpoint at current frame (Ctrl+b)')
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
-        self.clearBreakpointAction = qw.QAction('Clear frame breakpoint')
+        self.clearBreakpointAction = qw.QAction('Clear frame breakpoint (Shift+b)')
         self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
-        self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance')
+        self.jumpToBreakpointAction = qw.QAction('Jump to breakpoint frame (j)')
+        self.jumpToBreakpointAction.triggered.connect(self.jumpToBreakpoint)
+        self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance (a)')
         self.entryBreakpointAction.triggered.connect(self.setBreakpointAtEntry)
-        self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance')
+        self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance (d)')
         self.exitBreakpointAction.triggered.connect(self.setBreakpointAtExit)
-        self.clearEntryBreakpointAction = qw.QAction('Clear breakpoint on appearance')
+        self.clearEntryBreakpointAction = qw.QAction('Clear breakpoint on appearance (Shift+a)')
         self.clearEntryBreakpointAction.triggered.connect(self.clearBreakpointAtEntry)
-        self.clearExitBreakpointAction = qw.QAction('Clear breakpoint on disappearance')
+        self.clearExitBreakpointAction = qw.QAction('Clear breakpoint on disappearance (Shift+d)')
         self.clearExitBreakpointAction.triggered.connect(self.clearBreakpointAtExit)
 
         self.resetAction.triggered.connect(self.reset)
@@ -781,15 +806,15 @@ class ReviewWidget(qw.QWidget):
         self.showNoneAction = qw.QAction('No popup message for tracks')
         self.showNoneAction.setCheckable(True)
         self.showNoneAction.setChecked(show_difference == 0)
-        self.showHistoryAction = qw.QAction('Show past & future pos of selected track')
+        self.showHistoryAction = qw.QAction('Show track positions (t)')
         self.showHistoryAction.setCheckable(True)
-        self.swapTracksAction = qw.QAction('Swap tracks')
+        self.swapTracksAction = qw.QAction('Swap tracks (drag n drop with right mouse button)')
         self.swapTracksAction.triggered.connect(self.swapTracks)
-        self.replaceTrackAction = qw.QAction('Replace track')
+        self.replaceTrackAction = qw.QAction('Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
         self.deleteTrackAction = qw.QAction('Delete track (Delete/x')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
-        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+Z)')
+        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+z)')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
         self.showLimitsAction = qw.QAction('Size limits')
         self.showLimitsAction.setCheckable(True)
@@ -813,12 +838,16 @@ class ReviewWidget(qw.QWidget):
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
         self.sc_play.activated.connect(self.togglePlay)
+        self.sc_goto = qw.QShortcut(qg.QKeySequence('G'), self)
+        self.sc_goto.activated.connect(self.gotoFrameDialog)
         self.sc_break = qw.QShortcut(qg.QKeySequence('B'), self)
         self.sc_break.activated.connect(self.setBreakpoint)
         self.sc_break_cur = qw.QShortcut(qg.QKeySequence('Ctrl+B'), self)
         self.sc_break_cur.activated.connect(self.setBreakpointAtCurrent)
         self.sc_clear_bp = qw.QShortcut(qg.QKeySequence('Shift+B'), self)
         self.sc_clear_bp.activated.connect(self.clearBreakpoint)
+        self.sc_jump_bp = qw.QShortcut(qg.QKeySequence('J'), self)
+        self.sc_jump_bp.activated.connect(self.jumpToBreakpoint)
         self.sc_break_appear = qw.QShortcut(qg.QKeySequence('A'), self)
         self.sc_break_appear.activated.connect(self.setBreakpointAtEntry)
         self.sc_break_disappear = qw.QShortcut(qg.QKeySequence('D'), self)
@@ -861,6 +890,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot(bool)
     def disableSeek(self, checked: bool) -> None:
+        self.pos_spin.lineEdit().setEnabled(not checked)
         if checked:
             try:
                 self.sigGotoFrame.disconnect()
@@ -875,6 +905,7 @@ class ReviewWidget(qw.QWidget):
                 pass
             if self.video_reader is not None:
                 self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+
 
     @qc.pyqtSlot()
     def deleteSelected(self) -> None:
@@ -927,6 +958,20 @@ class ReviewWidget(qw.QWidget):
             if self.frame_no > 0:
                 self.sigGotoFrame.emit(self.frame_no - 1)
             self.sigGotoFrame.emit(self.frame_no)
+
+    @qc.pyqtSlot()
+    def gotoFrameDialog(self):
+        val, ok = qw.QInputDialog.getInt(self, 'Goto frame',
+                                         'Jump to frame #',
+                                         value=self.frame_no,
+                                         min=0)
+        if ok and val >= 0:
+            self.gotoFrame(val)        
+
+    @qc.pyqtSlot()
+    def jumpToBreakpoint(self):
+        if self.breakpoint >= 0 and not self.disableSeekAction.isChecked():
+            self.gotoFrame(self.breakpoint)
 
     @qc.pyqtSlot()
     def gotoEditedPos(self):
@@ -1168,6 +1213,7 @@ class ReviewWidget(qw.QWidget):
         self.sigDataFile.emit(self.track_filename)
         self.gotoFrame(0)
         self.updateGeometry()
+        self.tieViews(self.tieViewsAction.isChecked())
         return True
 
     @qc.pyqtSlot()
@@ -1323,6 +1369,7 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
 
+        play_menu.addAction(self.review_widget.gotoFrameAction)
         play_menu.addAction(self.review_widget.frameBreakpointAction)
         play_menu.addAction(self.review_widget.curBreakpointAction)
         play_menu.addAction(self.review_widget.entryBreakpointAction)
@@ -1331,6 +1378,8 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.clearBreakpointAction)
         play_menu.addAction(self.review_widget.clearEntryBreakpointAction)
         play_menu.addAction(self.review_widget.clearExitBreakpointAction)
+
+        play_menu.addAction(self.review_widget.jumpToBreakpointAction)
 
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
