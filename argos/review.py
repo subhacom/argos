@@ -456,6 +456,7 @@ class ReviewWidget(qw.QWidget):
         self.breakpoint = -1
         self.entry_break = -1
         self.exit_break = -1
+        self.jump_step = 10
         self.history_length = 1
         self.all_tracks = OrderedDict()
         self.left_frame = None
@@ -777,7 +778,10 @@ class ReviewWidget(qw.QWidget):
         self.resetAction = qw.QAction('Reset')
         self.gotoFrameAction = qw.QAction('Jump to frame (g)')
         self.gotoFrameAction.triggered.connect(self.gotoFrameDialog)
-    
+        self.jumpForwardAction = qw.QAction('Jump forward (Ctrl+Page down)')
+        self.jumpForwardAction.triggered.connect(self.jumpForward)
+        self.jumpBackwardAction = qw.QAction('Jump backward (Ctrl+Page up)')
+        self.jumpBackwardAction.triggered.connect(self.jumpBackward)        
         self.frameBreakpointAction = qw.QAction('Set breakpoint at frame (b)')
         self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
         self.curBreakpointAction = qw.QAction('Set breakpoint at current frame (Ctrl+b)')
@@ -848,6 +852,10 @@ class ReviewWidget(qw.QWidget):
         self.sc_clear_bp.activated.connect(self.clearBreakpoint)
         self.sc_jump_bp = qw.QShortcut(qg.QKeySequence('J'), self)
         self.sc_jump_bp.activated.connect(self.jumpToBreakpoint)
+        self.sc_jump_fwd = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_PageDown), self)
+        self.sc_jump_fwd.activated.connect(self.jumpForward)
+        self.sc_jump_back = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_PageUp), self)
+        self.sc_jump_back.activated.connect(self.jumpBackward)
         self.sc_break_appear = qw.QShortcut(qg.QKeySequence('A'), self)
         self.sc_break_appear.activated.connect(self.setBreakpointAtEntry)
         self.sc_break_disappear = qw.QShortcut(qg.QKeySequence('D'), self)
@@ -972,6 +980,14 @@ class ReviewWidget(qw.QWidget):
     def jumpToBreakpoint(self):
         if self.breakpoint >= 0 and not self.disableSeekAction.isChecked():
             self.gotoFrame(self.breakpoint)
+
+    @qc.pyqtSlot()
+    def jumpForward(self):
+        self.gotoFrame(self.frame_no + self.jump_step)
+        
+    @qc.pyqtSlot()
+    def jumpBackward(self):
+        self.gotoFrame(self.frame_no - self.jump_step)
 
     @qc.pyqtSlot()
     def gotoEditedPos(self):
@@ -1370,6 +1386,8 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.resetAction)
 
         play_menu.addAction(self.review_widget.gotoFrameAction)
+        play_menu.addAction(self.review_widget.jumpForwardAction)
+        play_menu.addAction(self.review_widget.jumpBackwardAction)
         play_menu.addAction(self.review_widget.frameBreakpointAction)
         play_menu.addAction(self.review_widget.curBreakpointAction)
         play_menu.addAction(self.review_widget.entryBreakpointAction)
