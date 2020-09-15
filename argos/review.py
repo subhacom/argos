@@ -43,10 +43,17 @@ class TrackReader(qc.QObject):
     op_assign = 0
     op_swap = 1
     op_delete = 2
+    op_assign_cur = 3  # Assign trackid only for current frame
+    op_swap_cur = 4
+    op_delete_cur = 5
+    
 
     change_code = {op_assign: 'assign',
                    op_swap: 'swap',
-                   op_delete: 'delete'}
+                   op_delete: 'delete',
+                   op_assign_cur: 'assign at current',
+                   op_swap_cur: 'swap at current',
+                   op_delete_cur: 'delete at current'}
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
@@ -119,27 +126,30 @@ class TrackReader(qc.QObject):
         return tracks
 
     @qc.pyqtSlot(int, int, int)
-    def changeTrack(self, frame_no, orig_id, new_id):
+    def changeTrack(self, frame_no, orig_id, new_id, current=False):
         """When user assigns `new_id` to `orig_id` keep it in undo buffer"""
-        change = Change(frame=frame_no, change=self.op_assign,
-                                       orig=orig_id, new=new_id)
+        change_code = self.op_assign_cur if current else self.op_assign
+        change = Change(frame=frame_no, change=change_code,
+                        orig=orig_id, new=new_id)            
         self.change_list.add(change)
         self.sigChangeList.emit(self.change_list)
         logging.debug(
             f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
     @qc.pyqtSlot(int, int, int)
-    def swapTrack(self, frame_no, orig_id, new_id):
+    def swapTrack(self, frame_no, orig_id, new_id, current=False):
         """When user swaps `new_id` with `orig_id` keep it in swap buffer"""
-        change = Change(frame=frame_no, change=self.op_swap,
+        change_code = self.op_swap_cur if current else self.op_swap  
+        change = Change(frame=frame_no, change=change_code,
                                        orig=orig_id, new=new_id)
         self.change_list.add(change)
         logging.debug(
             f'Swap track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
-    def deleteTrack(self, frame_no, orig_id):
-        change = Change(frame=frame_no, change=self.op_delete,
-                                       orig=orig_id, new=None)
+    def deleteTrack(self, frame_no, orig_id, cur=False):
+        change_code = self.op_delete_cur if cur else self.op_delete
+        change = Change(frame=frame_no, change=change_code,
+                        orig=orig_id, new=None)
         self.change_list.add(change)
 
     @qc.pyqtSlot(int)
@@ -170,19 +180,23 @@ class TrackReader(qc.QObject):
             if change.frame in self.undone_changes:
                 continue
             orig_trk = tracks.pop(change.orig, None)
-            if change.change == self.op_swap:
+            if (change.change == self.op_swap) or  \
+               (change.change == self.op_swap_cur and change.frame == frameno):
                 new_trk = tracks.pop(change.new, None)
                 if orig_trk is not None:
                     tracks[change.new] = orig_trk
                 if new_trk is not None:
                     tracks[change.orig] = new_trk
-            elif change.change == self.op_assign:
-                if orig_trk is not None:
-                    tracks[change.new] = orig_trk
-            elif change.change != self.op_delete:  # it must be delete, so leave the orig_trk popped
-                raise ValueError(
-                    f'Frame: {frameno}: Only alternative operation is '
-                    f'`delete`({self.op_delete}) but found {change.change}')
+            elif (orig_trk is not None) and  \
+                 ((change.change == self.op_assign) or  \
+                  (change.change == self.op_assign_cur and  \
+                   change.frame == frameno)):
+                tracks[change.new] = orig_trk
+            elif (change.change == self.op_assign_cur or  \
+                  change.change == self.op_delete_cur or  \
+                  change.change == self.op_swap_cur)  and   \
+                 change.frame != frameno:  # Undelete (unpop) if single frame delete/swap and this is not that frame
+                tracks[change.orig] = orig_trk
         return tracks
 
     def saveChanges(self, filepath):
@@ -332,7 +346,7 @@ class TrackView(FrameView):
 
 
 class TrackList(qw.QListWidget):
-    sigMapTracks = qc.pyqtSignal(int, int, bool)
+    sigMapTracks = qc.pyqtSignal(int, int, bool, bool)
     sigSelected = qc.pyqtSignal(list)
 
     def __init__(self, *args, **kwargs):
@@ -370,6 +384,12 @@ class TrackList(qw.QListWidget):
         super(TrackList, self).dragMoveEvent(e)
 
     def dropEvent(self, event: qg.QDropEvent) -> None:
+        """If dragged with left button, assign dropped trackid to the target
+        trackid, if right button, swap the two.  If Shift key was
+        pressed, then apply these only for the current frame,
+        otherwise also all future frames.
+
+        """
         # items = self.decode_item_data(event.mimeData())
         # assert  len(items) == 1, 'Only allowed to drop a single item'
         # item = items[0]
@@ -380,8 +400,11 @@ class TrackList(qw.QListWidget):
         if target is None:
             event.ignore()
             return
-        self.sigMapTracks.emit(int(source.text()), int(target.text()),
-                               self._drag_button == qc.Qt.RightButton )
+        current = qw.QApplication.keyboardModifiers() == qc.Qt.ShiftModifier
+        self.sigMapTracks.emit(int(source.text()),
+                               int(target.text()),
+                               self._drag_button == qc.Qt.RightButton,
+                               current)
         event.accept()
 
     @qc.pyqtSlot(list)
@@ -813,12 +836,15 @@ class ReviewWidget(qw.QWidget):
         self.showHistoryAction = qw.QAction('Show track positions (t)')
         self.showHistoryAction.setCheckable(True)
         self.swapTracksAction = qw.QAction('Swap tracks (drag n drop with right mouse button)')
+        self.swapTracksAction.setToolTip('Keep Shift key pressed to swap only for current frame')
         self.swapTracksAction.triggered.connect(self.swapTracks)
         self.replaceTrackAction = qw.QAction('Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
+        self.replaceTrackAction.setToolTip('Keep Shift key pressed to assign only for current frame')
         self.renameTrackAction = qw.QAction('Rename track (r)')
         self.renameTrackAction.triggered.connect(self.renameTrack)
-        self.deleteTrackAction = qw.QAction('Delete track (Delete/x')
+        self.deleteTrackAction = qw.QAction('Delete track (Delete/x)')
+        self.deleteTrackAction.setToolTip('Keep Ctrl key pressed for only current frame')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+z)')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
@@ -884,9 +910,14 @@ class ReviewWidget(qw.QWidget):
         self.sc_prev.activated.connect(self.prevFrame)
 
         self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
-        self.sc_remove.activated.connect(self.deleteSelected)
+        self.sc_remove.activated.connect(self.deleteSelectedFut)
         self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
-        self.sc_remove_2.activated.connect(self.deleteSelected)
+        self.sc_remove_2.activated.connect(self.deleteSelectedFut)
+        self.sc_remove_cur = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Delete), self)
+        self.sc_remove.activated.connect(self.deleteSelectedCur)
+        self.sc_remove_cur_2 = qw.QShortcut(qg.QKeySequence('Ctrl+X'), self)
+        self.sc_remove_cur_2.activated.connect(self.deleteSelectedCur)
+
         self.sc_rename = qw.QShortcut(qg.QKeySequence('R'), self)
         self.sc_rename.activated.connect(self.renameTrack)
         self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
@@ -919,8 +950,7 @@ class ReviewWidget(qw.QWidget):
                 self.sigGotoFrame.connect(self.video_reader.gotoFrame)
 
 
-    @qc.pyqtSlot()
-    def deleteSelected(self) -> None:
+    def deleteSelected(self, cur=False) -> None:
         widget = qw.QApplication.focusWidget()
         if isinstance(widget, TrackList):
             items = widget.selectedItems()
@@ -930,7 +960,7 @@ class ReviewWidget(qw.QWidget):
         self.right_view.scene().setSelected(selected)
         self.right_view.scene().removeSelected()
         for sel in selected:
-            self.track_reader.deleteTrack(self.frame_no, sel)
+            self.track_reader.deleteTrack(self.frame_no, sel, cur)
             if sel not in self.right_tracks:
                 continue
             self.right_tracks.pop(sel)
@@ -938,6 +968,14 @@ class ReviewWidget(qw.QWidget):
                                                     qc.Qt.MatchExactly)
             for item in right_items:
                 self.right_list.takeItem(self.right_list.row(item))
+
+    @qc.pyqtSlot()
+    def deleteSelectedFut(self) -> None:
+        self.deleteSelectedFut(cur=False)
+
+    @qc.pyqtSlot()
+    def deleteSelectedCur(self) -> None:
+        self.deleteSelectedFut(cur=True)
 
     @qc.pyqtSlot()
     def renameTrack(self):
@@ -950,7 +988,7 @@ class ReviewWidget(qw.QWidget):
                                          value=tid)
         if ok:
             print(f'Renaming track {tid} to {val}')
-            self.mapTracks(val, tid, False) 
+            self.mapTracks(val, tid, False, False) 
 
     @qc.pyqtSlot()
     def swapTracks(self):
@@ -959,7 +997,7 @@ class ReviewWidget(qw.QWidget):
         if len(source) == 0 or len(target) == 0:
             return
         self.mapTracks(int(source[0].text()), int(target[0].text()),
-                               True)
+                               True, False)
 
     @qc.pyqtSlot()
     def replaceTrack(self):
@@ -967,7 +1005,26 @@ class ReviewWidget(qw.QWidget):
         target = self.right_list.selectedItems()
         if len(source) == 0 or len(target) == 0:
             return
-        self.mapTracks(int(source[0].text()), int(target[0].text()), False)
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       False, False)
+
+    @qc.pyqtSlot()
+    def swapTracksCur(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                               True, True)
+
+    @qc.pyqtSlot()
+    def replaceTrackCur(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       False, True)
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
@@ -1337,12 +1394,12 @@ class ReviewWidget(qw.QWidget):
         self.play_button.setChecked(False)
         self.setupReading(self.video_filename, self.track_filename)
 
-    @qc.pyqtSlot(int, int, bool)
-    def mapTracks(self, cur: int, tgt: int, swap: bool) -> None:
+    @qc.pyqtSlot(int, int, bool, bool)
+    def mapTracks(self, new_id: int, orig_id: int, swap: bool, cur: bool) -> None:
         if swap:
-            self.track_reader.swapTrack(self.frame_no, tgt, cur)
+            self.track_reader.swapTrack(self.frame_no, orig_id, new_id, cur)
         else:
-            self.track_reader.changeTrack(self.frame_no, tgt, cur)
+            self.track_reader.changeTrack(self.frame_no, orig_id, new_id, cur)
         tracks = self.track_reader.getTracks(self.frame_no)
         self.sigRightTrackList.emit(list(tracks.keys()))
         self.right_tracks = self._flag_tracks({}, tracks)
