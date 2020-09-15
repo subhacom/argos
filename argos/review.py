@@ -816,6 +816,8 @@ class ReviewWidget(qw.QWidget):
         self.swapTracksAction.triggered.connect(self.swapTracks)
         self.replaceTrackAction = qw.QAction('Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
+        self.renameTrackAction = qw.QAction('Rename track (r)')
+        self.renameTrackAction.triggered.connect(self.renameTrack)
         self.deleteTrackAction = qw.QAction('Delete track (Delete/x')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+z)')
@@ -885,6 +887,8 @@ class ReviewWidget(qw.QWidget):
         self.sc_remove.activated.connect(self.deleteSelected)
         self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
         self.sc_remove_2.activated.connect(self.deleteSelected)
+        self.sc_rename = qw.QShortcut(qg.QKeySequence('R'), self)
+        self.sc_rename.activated.connect(self.renameTrack)
         self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
         self.sc_speedup.activated.connect(self.speedUp)
         self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Down), self)
@@ -934,6 +938,19 @@ class ReviewWidget(qw.QWidget):
                                                     qc.Qt.MatchExactly)
             for item in right_items:
                 self.right_list.takeItem(self.right_list.row(item))
+
+    @qc.pyqtSlot()
+    def renameTrack(self):
+        target = self.right_list.selectedItems()
+        if len(target) == 0:
+            return
+        tid = int(target[0].text())
+        val, ok = qw.QInputDialog.getInt(self, 'Rename track',
+                                         'New track id:',
+                                         value=tid)
+        if ok:
+            print(f'Renaming track {tid} to {val}')
+            self.mapTracks(val, tid, False) 
 
     @qc.pyqtSlot()
     def swapTracks(self):
@@ -1355,6 +1372,13 @@ class ReviewerMain(qw.QMainWindow):
         file_menu.addAction(self.review_widget.saveAction)
         file_menu.addAction(self.review_widget.loadChangeListAction)
         file_menu.addAction(self.review_widget.saveChangeListAction)
+
+        self.sc_quit = qw.QShortcut(qg.QKeySequence('Ctrl+Q'), self)
+        self.sc_quit.activated.connect(self.close)
+        self.quitAction = qw.QAction('Quit (Ctrl+Q)')
+        self.quitAction.triggered.connect(self.close)
+        file_menu.addAction(self.quitAction)
+
         view_menu = self.menuBar().addMenu('&View')
         view_menu.addAction(self.review_widget.zoomInLeftAction)
         view_menu.addAction(self.review_widget.zoomInRightAction)
@@ -1402,6 +1426,7 @@ class ReviewerMain(qw.QMainWindow):
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
+                                self.review_widget.renameTrackAction,
                                 self.review_widget.deleteTrackAction,
                                 self.review_widget.undoCurrentChangesAction,
                                 self.review_widget.right_view.resetArenaAction])
