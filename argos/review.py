@@ -195,7 +195,7 @@ class TrackReader(qc.QObject):
             elif (change.change == self.op_assign_cur or  \
                   change.change == self.op_delete_cur or  \
                   change.change == self.op_swap_cur)  and   \
-                 change.frame != frameno:  # Undelete (unpop) if single frame delete/swap and this is not that frame
+                 change.frame != frameno and orig_trk is not None:  # Undelete (unpop) if single frame delete/swap and this is not that frame
                 tracks[change.orig] = orig_trk
         return tracks
 
@@ -971,11 +971,11 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def deleteSelectedFut(self) -> None:
-        self.deleteSelectedFut(cur=False)
+        self.deleteSelected(cur=False)
 
     @qc.pyqtSlot()
     def deleteSelectedCur(self) -> None:
-        self.deleteSelectedFut(cur=True)
+        self.deleteSelected(cur=True)
 
     @qc.pyqtSlot()
     def renameTrack(self):
