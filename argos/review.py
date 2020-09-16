@@ -105,7 +105,7 @@ class TrackReader(qc.QObject):
         if frame_no > self.last_frame:
             logging.debug(f'Reached last frame with tracks: frame no {frame_no}')
             self.sigEnd.emit()
-            return
+            return {}
         self.frame_pos = frame_no
         tracks = self.track_data[self.track_data.frame == frame_no]
         # Filter bboxes violating size constraints
