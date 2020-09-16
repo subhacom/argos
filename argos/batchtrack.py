@@ -251,7 +251,7 @@ class BatchTrack(object):
         """
         self.video = cv2.VideoCapture(video_filename)
         if (self.video is None) or not self.video.isOpened():
-            raise IOError('Could not open video')
+            raise IOError(f'Could not open video "{video_filename}"')
         self.frame_count = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
         self.output_filename = output_filename
         if cuda is None:
@@ -294,6 +294,8 @@ class BatchTrack(object):
                              score_threshold=self.score_threshold,
                              top_k=self.top_k)
             t2 = time.perf_counter_ns()
+            if len(bboxes) == 0:
+                continue
             bboxes = bboxes[(bboxes[:, 2] >= self.wmin) &
                             (bboxes[:, 2] < self.wmax) &
                             (bboxes[:, 3] >= self.hmin) &
@@ -337,7 +339,8 @@ def make_parser():
     parser.add_argument('-x', '--overlap', type=float, default=0.3, help='Minimum overlap between bounding boxes as a fraction of their total area.')
     parser.add_argument('--min_hits', type=int, default=3, help='Minimum number of hits to accept a track')
     parser.add_argument('--max_age', type=int, default=50, help='Maximum number of misses to exclude a track')
-    parser.add_argument('--cuda', type=bool, help='Whether to use CUDA')
+    parser.add_argument('--cuda', type=bool, default=True, help='Whether to use CUDA')
+    parser.add_argument('--debug', action='store_true', help='Print debug info')
     return parser
 
     
@@ -347,6 +350,12 @@ if __name__ == '__main__':
     # 5 proc 25 / 50 fps
     parser = make_parser()
     args = parser.parse_args()
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+    print('ARGS:')
+    print(args)
     tracker = BatchTrack(
         video_filename=args.input,        
         output_filename=args.output,

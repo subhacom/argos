@@ -134,6 +134,7 @@ class ArgosMain(qw.QMainWindow):
         self._advanced_menu.addAction(self._debug_action)
         self._advanced_menu.addAction(self._clear_settings_action)
 
+        self.makeShortcuts()
         ##########################
         # Connections
         self._video_widget.sigVideoFile.connect(self.updateTitle)
@@ -165,6 +166,13 @@ class ArgosMain(qw.QMainWindow):
         self.sigQuit.connect(self._lim_widget.sigQuit)
         self.sigQuit.connect(self._sort_widget.sigQuit)
         self.sigQuit.connect(self._csrt_widget.sigQuit)
+
+    def makeShortcuts(self):
+        self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
+        self.sc_play.activated.connect(self._video_widget.playAction.trigger)
+        self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
+        self.sc_open.activated.connect(self._video_widget.openVideo)
+
 
     @qc.pyqtSlot(bool)
     def setDebug(self, state):

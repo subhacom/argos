@@ -43,10 +43,17 @@ class TrackReader(qc.QObject):
     op_assign = 0
     op_swap = 1
     op_delete = 2
+    op_assign_cur = 3  # Assign trackid only for current frame
+    op_swap_cur = 4
+    op_delete_cur = 5
+    
 
     change_code = {op_assign: 'assign',
                    op_swap: 'swap',
-                   op_delete: 'delete'}
+                   op_delete: 'delete',
+                   op_assign_cur: 'assign at current',
+                   op_swap_cur: 'swap at current',
+                   op_delete_cur: 'delete at current'}
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
@@ -119,27 +126,30 @@ class TrackReader(qc.QObject):
         return tracks
 
     @qc.pyqtSlot(int, int, int)
-    def changeTrack(self, frame_no, orig_id, new_id):
+    def changeTrack(self, frame_no, orig_id, new_id, current=False):
         """When user assigns `new_id` to `orig_id` keep it in undo buffer"""
-        change = Change(frame=frame_no, change=self.op_assign,
-                                       orig=orig_id, new=new_id)
+        change_code = self.op_assign_cur if current else self.op_assign
+        change = Change(frame=frame_no, change=change_code,
+                        orig=orig_id, new=new_id)            
         self.change_list.add(change)
         self.sigChangeList.emit(self.change_list)
         logging.debug(
             f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
     @qc.pyqtSlot(int, int, int)
-    def swapTrack(self, frame_no, orig_id, new_id):
+    def swapTrack(self, frame_no, orig_id, new_id, current=False):
         """When user swaps `new_id` with `orig_id` keep it in swap buffer"""
-        change = Change(frame=frame_no, change=self.op_swap,
+        change_code = self.op_swap_cur if current else self.op_swap  
+        change = Change(frame=frame_no, change=change_code,
                                        orig=orig_id, new=new_id)
         self.change_list.add(change)
         logging.debug(
             f'Swap track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
 
-    def deleteTrack(self, frame_no, orig_id):
-        change = Change(frame=frame_no, change=self.op_delete,
-                                       orig=orig_id, new=None)
+    def deleteTrack(self, frame_no, orig_id, cur=False):
+        change_code = self.op_delete_cur if cur else self.op_delete
+        change = Change(frame=frame_no, change=change_code,
+                        orig=orig_id, new=None)
         self.change_list.add(change)
 
     @qc.pyqtSlot(int)
@@ -170,19 +180,23 @@ class TrackReader(qc.QObject):
             if change.frame in self.undone_changes:
                 continue
             orig_trk = tracks.pop(change.orig, None)
-            if change.change == self.op_swap:
+            if (change.change == self.op_swap) or  \
+               (change.change == self.op_swap_cur and change.frame == frameno):
                 new_trk = tracks.pop(change.new, None)
                 if orig_trk is not None:
                     tracks[change.new] = orig_trk
                 if new_trk is not None:
                     tracks[change.orig] = new_trk
-            elif change.change == self.op_assign:
-                if orig_trk is not None:
-                    tracks[change.new] = orig_trk
-            elif change.change != self.op_delete:  # it must be delete, so leave the orig_trk popped
-                raise ValueError(
-                    f'Frame: {frameno}: Only alternative operation is '
-                    f'`delete`({self.op_delete}) but found {change.change}')
+            elif (orig_trk is not None) and  \
+                 ((change.change == self.op_assign) or  \
+                  (change.change == self.op_assign_cur and  \
+                   change.frame == frameno)):
+                tracks[change.new] = orig_trk
+            elif (change.change == self.op_assign_cur or  \
+                  change.change == self.op_delete_cur or  \
+                  change.change == self.op_swap_cur)  and   \
+                 change.frame != frameno:  # Undelete (unpop) if single frame delete/swap and this is not that frame
+                tracks[change.orig] = orig_trk
         return tracks
 
     def saveChanges(self, filepath):
@@ -332,7 +346,7 @@ class TrackView(FrameView):
 
 
 class TrackList(qw.QListWidget):
-    sigMapTracks = qc.pyqtSignal(int, int, bool)
+    sigMapTracks = qc.pyqtSignal(int, int, bool, bool)
     sigSelected = qc.pyqtSignal(list)
 
     def __init__(self, *args, **kwargs):
@@ -370,6 +384,12 @@ class TrackList(qw.QListWidget):
         super(TrackList, self).dragMoveEvent(e)
 
     def dropEvent(self, event: qg.QDropEvent) -> None:
+        """If dragged with left button, assign dropped trackid to the target
+        trackid, if right button, swap the two.  If Shift key was
+        pressed, then apply these only for the current frame,
+        otherwise also all future frames.
+
+        """
         # items = self.decode_item_data(event.mimeData())
         # assert  len(items) == 1, 'Only allowed to drop a single item'
         # item = items[0]
@@ -380,8 +400,11 @@ class TrackList(qw.QListWidget):
         if target is None:
             event.ignore()
             return
-        self.sigMapTracks.emit(int(source.text()), int(target.text()),
-                               self._drag_button == qc.Qt.RightButton )
+        current = qw.QApplication.keyboardModifiers() == qc.Qt.ShiftModifier
+        self.sigMapTracks.emit(int(source.text()),
+                               int(target.text()),
+                               self._drag_button == qc.Qt.RightButton,
+                               current)
         event.accept()
 
     @qc.pyqtSlot(list)
@@ -456,6 +479,7 @@ class ReviewWidget(qw.QWidget):
         self.breakpoint = -1
         self.entry_break = -1
         self.exit_break = -1
+        self.jump_step = 10
         self.history_length = 1
         self.all_tracks = OrderedDict()
         self.left_frame = None
@@ -753,9 +777,9 @@ class ReviewWidget(qw.QWidget):
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
-        self.openAction = qw.QAction('Open tracked data (Ctrl+O)')
+        self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
-        self.saveAction = qw.QAction('Save reviewed data (Ctrl+S)')
+        self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
         self.saveAction.triggered.connect(self.saveReviewedTracks)
         self.speedUpAction = qw.QAction('Double speed (Ctrl+Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
@@ -769,27 +793,33 @@ class ReviewWidget(qw.QWidget):
         self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
         self.zoomOutRightAction = qw.QAction('Zoom-out right (-)')
         self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
-        self.showOldTracksAction = qw.QAction('Show old tracks')
+        self.showOldTracksAction = qw.QAction('Show old tracks (o)')
         self.showOldTracksAction.setCheckable(True)
         # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
         self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
-        self.frameBreakpointAction = qw.QAction('Set breakpoint at frame')
+        self.gotoFrameAction = qw.QAction('Jump to frame (g)')
+        self.gotoFrameAction.triggered.connect(self.gotoFrameDialog)
+        self.jumpForwardAction = qw.QAction('Jump forward (Ctrl+Page down)')
+        self.jumpForwardAction.triggered.connect(self.jumpForward)
+        self.jumpBackwardAction = qw.QAction('Jump backward (Ctrl+Page up)')
+        self.jumpBackwardAction.triggered.connect(self.jumpBackward)        
+        self.frameBreakpointAction = qw.QAction('Set breakpoint at frame (b)')
         self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
-        self.curBreakpointAction = qw.QAction('Set breakpoint at current frame')
+        self.curBreakpointAction = qw.QAction('Set breakpoint at current frame (Ctrl+b)')
         self.curBreakpointAction.triggered.connect(self.setBreakpointAtCurrent)
-        self.clearBreakpointAction = qw.QAction('Clear frame breakpoint')
+        self.clearBreakpointAction = qw.QAction('Clear frame breakpoint (Shift+b)')
         self.clearBreakpointAction.triggered.connect(self.clearBreakpoint)
-        self.jumpToBreakpointAction = qw.QAction('Jump to breakpoint frame')
+        self.jumpToBreakpointAction = qw.QAction('Jump to breakpoint frame (j)')
         self.jumpToBreakpointAction.triggered.connect(self.jumpToBreakpoint)
-        self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance')
+        self.entryBreakpointAction = qw.QAction('Set breakpoint on appearance (a)')
         self.entryBreakpointAction.triggered.connect(self.setBreakpointAtEntry)
-        self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance')
+        self.exitBreakpointAction = qw.QAction('Set breakpoint on disappearance (d)')
         self.exitBreakpointAction.triggered.connect(self.setBreakpointAtExit)
-        self.clearEntryBreakpointAction = qw.QAction('Clear breakpoint on appearance')
+        self.clearEntryBreakpointAction = qw.QAction('Clear breakpoint on appearance (Shift+a)')
         self.clearEntryBreakpointAction.triggered.connect(self.clearBreakpointAtEntry)
-        self.clearExitBreakpointAction = qw.QAction('Clear breakpoint on disappearance')
+        self.clearExitBreakpointAction = qw.QAction('Clear breakpoint on disappearance (Shift+d)')
         self.clearExitBreakpointAction.triggered.connect(self.clearBreakpointAtExit)
 
         self.resetAction.triggered.connect(self.reset)
@@ -803,15 +833,20 @@ class ReviewWidget(qw.QWidget):
         self.showNoneAction = qw.QAction('No popup message for tracks')
         self.showNoneAction.setCheckable(True)
         self.showNoneAction.setChecked(show_difference == 0)
-        self.showHistoryAction = qw.QAction('Show track positions')
+        self.showHistoryAction = qw.QAction('Show track positions (t)')
         self.showHistoryAction.setCheckable(True)
-        self.swapTracksAction = qw.QAction('Swap tracks')
+        self.swapTracksAction = qw.QAction('Swap tracks (drag n drop with right mouse button)')
+        self.swapTracksAction.setToolTip('Keep Shift key pressed to swap only for current frame')
         self.swapTracksAction.triggered.connect(self.swapTracks)
-        self.replaceTrackAction = qw.QAction('Replace track')
+        self.replaceTrackAction = qw.QAction('Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
-        self.deleteTrackAction = qw.QAction('Delete track (Delete/x')
+        self.replaceTrackAction.setToolTip('Keep Shift key pressed to assign only for current frame')
+        self.renameTrackAction = qw.QAction('Rename track (r)')
+        self.renameTrackAction.triggered.connect(self.renameTrack)
+        self.deleteTrackAction = qw.QAction('Delete track (Delete/x)')
+        self.deleteTrackAction.setToolTip('Keep Ctrl key pressed for only current frame')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
-        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+Z)')
+        self.undoCurrentChangesAction = qw.QAction('Undo changes in current frame (Ctrl+z)')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
         self.showLimitsAction = qw.QAction('Size limits')
         self.showLimitsAction.setCheckable(True)
@@ -835,6 +870,8 @@ class ReviewWidget(qw.QWidget):
     def makeShortcuts(self):
         self.sc_play = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Space), self)
         self.sc_play.activated.connect(self.togglePlay)
+        self.sc_goto = qw.QShortcut(qg.QKeySequence('G'), self)
+        self.sc_goto.activated.connect(self.gotoFrameDialog)
         self.sc_break = qw.QShortcut(qg.QKeySequence('B'), self)
         self.sc_break.activated.connect(self.setBreakpoint)
         self.sc_break_cur = qw.QShortcut(qg.QKeySequence('Ctrl+B'), self)
@@ -843,6 +880,10 @@ class ReviewWidget(qw.QWidget):
         self.sc_clear_bp.activated.connect(self.clearBreakpoint)
         self.sc_jump_bp = qw.QShortcut(qg.QKeySequence('J'), self)
         self.sc_jump_bp.activated.connect(self.jumpToBreakpoint)
+        self.sc_jump_fwd = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_PageDown), self)
+        self.sc_jump_fwd.activated.connect(self.jumpForward)
+        self.sc_jump_back = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_PageUp), self)
+        self.sc_jump_back.activated.connect(self.jumpBackward)
         self.sc_break_appear = qw.QShortcut(qg.QKeySequence('A'), self)
         self.sc_break_appear.activated.connect(self.setBreakpointAtEntry)
         self.sc_break_disappear = qw.QShortcut(qg.QKeySequence('D'), self)
@@ -869,9 +910,16 @@ class ReviewWidget(qw.QWidget):
         self.sc_prev.activated.connect(self.prevFrame)
 
         self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
-        self.sc_remove.activated.connect(self.deleteSelected)
+        self.sc_remove.activated.connect(self.deleteSelectedFut)
         self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
-        self.sc_remove_2.activated.connect(self.deleteSelected)
+        self.sc_remove_2.activated.connect(self.deleteSelectedFut)
+        self.sc_remove_cur = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Delete), self)
+        self.sc_remove.activated.connect(self.deleteSelectedCur)
+        self.sc_remove_cur_2 = qw.QShortcut(qg.QKeySequence('Ctrl+X'), self)
+        self.sc_remove_cur_2.activated.connect(self.deleteSelectedCur)
+
+        self.sc_rename = qw.QShortcut(qg.QKeySequence('R'), self)
+        self.sc_rename.activated.connect(self.renameTrack)
         self.sc_speedup = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
         self.sc_speedup.activated.connect(self.speedUp)
         self.sc_slowdown = qw.QShortcut(qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Down), self)
@@ -902,8 +950,7 @@ class ReviewWidget(qw.QWidget):
                 self.sigGotoFrame.connect(self.video_reader.gotoFrame)
 
 
-    @qc.pyqtSlot()
-    def deleteSelected(self) -> None:
+    def deleteSelected(self, cur=False) -> None:
         widget = qw.QApplication.focusWidget()
         if isinstance(widget, TrackList):
             items = widget.selectedItems()
@@ -913,7 +960,7 @@ class ReviewWidget(qw.QWidget):
         self.right_view.scene().setSelected(selected)
         self.right_view.scene().removeSelected()
         for sel in selected:
-            self.track_reader.deleteTrack(self.frame_no, sel)
+            self.track_reader.deleteTrack(self.frame_no, sel, cur)
             if sel not in self.right_tracks:
                 continue
             self.right_tracks.pop(sel)
@@ -923,13 +970,34 @@ class ReviewWidget(qw.QWidget):
                 self.right_list.takeItem(self.right_list.row(item))
 
     @qc.pyqtSlot()
+    def deleteSelectedFut(self) -> None:
+        self.deleteSelectedFut(cur=False)
+
+    @qc.pyqtSlot()
+    def deleteSelectedCur(self) -> None:
+        self.deleteSelectedFut(cur=True)
+
+    @qc.pyqtSlot()
+    def renameTrack(self):
+        target = self.right_list.selectedItems()
+        if len(target) == 0:
+            return
+        tid = int(target[0].text())
+        val, ok = qw.QInputDialog.getInt(self, 'Rename track',
+                                         'New track id:',
+                                         value=tid)
+        if ok:
+            print(f'Renaming track {tid} to {val}')
+            self.mapTracks(val, tid, False, False) 
+
+    @qc.pyqtSlot()
     def swapTracks(self):
         source = self.all_list.selectedItems()
         target = self.right_list.selectedItems()
         if len(source) == 0 or len(target) == 0:
             return
         self.mapTracks(int(source[0].text()), int(target[0].text()),
-                               True)
+                               True, False)
 
     @qc.pyqtSlot()
     def replaceTrack(self):
@@ -937,7 +1005,26 @@ class ReviewWidget(qw.QWidget):
         target = self.right_list.selectedItems()
         if len(source) == 0 or len(target) == 0:
             return
-        self.mapTracks(int(source[0].text()), int(target[0].text()), False)
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       False, False)
+
+    @qc.pyqtSlot()
+    def swapTracksCur(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                               True, True)
+
+    @qc.pyqtSlot()
+    def replaceTrackCur(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       False, True)
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
@@ -955,9 +1042,26 @@ class ReviewWidget(qw.QWidget):
             self.sigGotoFrame.emit(self.frame_no)
 
     @qc.pyqtSlot()
+    def gotoFrameDialog(self):
+        val, ok = qw.QInputDialog.getInt(self, 'Goto frame',
+                                         'Jump to frame #',
+                                         value=self.frame_no,
+                                         min=0)
+        if ok and val >= 0:
+            self.gotoFrame(val)        
+
+    @qc.pyqtSlot()
     def jumpToBreakpoint(self):
         if self.breakpoint >= 0 and not self.disableSeekAction.isChecked():
             self.gotoFrame(self.breakpoint)
+
+    @qc.pyqtSlot()
+    def jumpForward(self):
+        self.gotoFrame(self.frame_no + self.jump_step)
+        
+    @qc.pyqtSlot()
+    def jumpBackward(self):
+        self.gotoFrame(self.frame_no - self.jump_step)
 
     @qc.pyqtSlot()
     def gotoEditedPos(self):
@@ -1290,12 +1394,12 @@ class ReviewWidget(qw.QWidget):
         self.play_button.setChecked(False)
         self.setupReading(self.video_filename, self.track_filename)
 
-    @qc.pyqtSlot(int, int, bool)
-    def mapTracks(self, cur: int, tgt: int, swap: bool) -> None:
+    @qc.pyqtSlot(int, int, bool, bool)
+    def mapTracks(self, new_id: int, orig_id: int, swap: bool, cur: bool) -> None:
         if swap:
-            self.track_reader.swapTrack(self.frame_no, tgt, cur)
+            self.track_reader.swapTrack(self.frame_no, orig_id, new_id, cur)
         else:
-            self.track_reader.changeTrack(self.frame_no, tgt, cur)
+            self.track_reader.changeTrack(self.frame_no, orig_id, new_id, cur)
         tracks = self.track_reader.getTracks(self.frame_no)
         self.sigRightTrackList.emit(list(tracks.keys()))
         self.right_tracks = self._flag_tracks({}, tracks)
@@ -1325,6 +1429,13 @@ class ReviewerMain(qw.QMainWindow):
         file_menu.addAction(self.review_widget.saveAction)
         file_menu.addAction(self.review_widget.loadChangeListAction)
         file_menu.addAction(self.review_widget.saveChangeListAction)
+
+        self.sc_quit = qw.QShortcut(qg.QKeySequence('Ctrl+Q'), self)
+        self.sc_quit.activated.connect(self.close)
+        self.quitAction = qw.QAction('Quit (Ctrl+Q)')
+        self.quitAction.triggered.connect(self.close)
+        file_menu.addAction(self.quitAction)
+
         view_menu = self.menuBar().addMenu('&View')
         view_menu.addAction(self.review_widget.zoomInLeftAction)
         view_menu.addAction(self.review_widget.zoomInRightAction)
@@ -1355,6 +1466,9 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.review_widget.slowDownAction)
         play_menu.addAction(self.review_widget.resetAction)
 
+        play_menu.addAction(self.review_widget.gotoFrameAction)
+        play_menu.addAction(self.review_widget.jumpForwardAction)
+        play_menu.addAction(self.review_widget.jumpBackwardAction)
         play_menu.addAction(self.review_widget.frameBreakpointAction)
         play_menu.addAction(self.review_widget.curBreakpointAction)
         play_menu.addAction(self.review_widget.entryBreakpointAction)
@@ -1369,6 +1483,7 @@ class ReviewerMain(qw.QMainWindow):
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.review_widget.swapTracksAction,
                                 self.review_widget.replaceTrackAction,
+                                self.review_widget.renameTrackAction,
                                 self.review_widget.deleteTrackAction,
                                 self.review_widget.undoCurrentChangesAction,
                                 self.review_widget.right_view.resetArenaAction])
