@@ -13,6 +13,7 @@ import threading
 from collections import defaultdict, OrderedDict
 from operator import attrgetter
 import numpy as np
+from datetime import datetime
 import cv2
 import pandas as pd
 from sortedcontainers import SortedKeyList
@@ -221,8 +222,10 @@ class TrackReader(qc.QObject):
         if filepath.endswith('.csv'):
             data.to_csv(filepath, index=False)
         else:
-            data.to_hdf(filepath, 'tracked', mode='w')
-            
+            data.to_hdf(filepath, 'tracked', mode='a')
+            changes = pd.DataFrame(data=self.change_list, columns=Change._fields)
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            changes.to_hdf(filepath, f'changes/changelist_{ts}', mode='a')
         self.track_data = data
         self.change_list.clear()
         self.sigChangeList.emit(self.change_list)
@@ -438,6 +441,10 @@ class ChangeWindow(qw.QMainWindow):
         self.table = qw.QTableWidget()
         self.table.setColumnCount(len(self.cols))
         self.table.setHorizontalHeaderLabels(self.cols)
+        header = self.table.horizontalHeader()
+        for ii in range(4):
+            # header.setSectionResizeMode(0, qw.QHeaderView.Stretch)
+            header.setSectionResizeMode(ii, qw.QHeaderView.ResizeToContents)
         self.setCentralWidget(self.table)
 
     @qc.pyqtSlot(SortedKeyList)
@@ -646,7 +653,7 @@ class ReviewWidget(qw.QWidget):
         val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint at entry',
                                          'Pause at appearance of trackid #',
                                          value=-1,
-                                         min=-1)
+                                         min=-1000)
         if ok:
             self.entry_break = val
 
@@ -655,7 +662,7 @@ class ReviewWidget(qw.QWidget):
         val, ok = qw.QInputDialog.getInt(self, 'Set breakpoint on exit',
                                          'Pause at disappearance of trackid #',
                                          value=-1,
-                                         min=-1)
+                                         min=-1000)
         if ok:
             self.exit_break = val
 
@@ -835,6 +842,7 @@ class ReviewWidget(qw.QWidget):
         self.showNoneAction.setChecked(show_difference == 0)
         self.showHistoryAction = qw.QAction('Show track positions (t)')
         self.showHistoryAction.setCheckable(True)
+        self.showHistoryAction.setChecked(True)
         self.swapTracksAction = qw.QAction('Swap tracks (drag n drop with right mouse button)')
         self.swapTracksAction.setToolTip('Keep Shift key pressed to swap only for current frame')
         self.swapTracksAction.triggered.connect(self.swapTracks)
@@ -858,7 +866,8 @@ class ReviewWidget(qw.QWidget):
         self.histlenAction.triggered.connect(self.setHistLen)
         self.histGradientAction = qw.QAction('Set oldest tracks to display')
         self.histGradientAction.triggered.connect(self.setHistGradient)
-        self.showChangeListAction = qw.QAction('Show list of changes')
+        self.showChangeListAction = qw.QAction('Show list of changes (Alt+C)')
+        self.showChangeListAction.setCheckable(True)
         self.showChangeListAction.triggered.connect(self.showChangeList)
         self.loadChangeListAction = qw.QAction('Load list of changes')
         self.loadChangeListAction.triggered.connect(self.loadChangeList)
@@ -908,6 +917,9 @@ class ReviewWidget(qw.QWidget):
         self.sc_next.activated.connect(self.nextFrame)
         self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
         self.sc_prev.activated.connect(self.prevFrame)
+
+        self.sc_changewin = qw.QShortcut(qg.QKeySequence('Alt+C'), self)
+        self.sc_changewin.activated.connect(self.showChangeListAction.trigger)
 
         self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
         self.sc_remove.activated.connect(self.deleteSelectedFut)
@@ -1092,9 +1104,12 @@ class ReviewWidget(qw.QWidget):
             ret[tid] = np.array(rect)
         return ret
 
-    @qc.pyqtSlot()
-    def showChangeList(self):
+    @qc.pyqtSlot(bool)
+    def showChangeList(self, checked):
         if self.track_reader is None:
+            return
+        if not checked:
+            self.changelist_widget.setVisible(False)
             return
         change_list = [change for change in self.track_reader.change_list
                         if change.frame not in self.track_reader.undone_changes]
