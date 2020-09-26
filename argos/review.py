@@ -601,6 +601,7 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.valueChanged.connect(self.gotoFrame)
         self.pos_spin.lineEdit().setEnabled(False)
         self.right_view.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
+        self.right_view.sigSetColor.connect(self.left_view.frame_scene.setColor)
         # self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
         # self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
@@ -772,6 +773,9 @@ class ReviewWidget(qw.QWidget):
         self.tieViewsAction.triggered.connect(self.tieViews)
         self.tieViewsAction.setChecked(True)
         self.tieViews(True)
+        self.showGrayscaleAction = self.right_view.showGrayscaleAction
+        self.showGrayscaleAction.triggered.connect(self.left_view.showGrayscaleAction.trigger)
+        self.setColorAction = self.right_view.setColorAction
         self.autoColorAction = self.right_view.autoColorAction
         self.autoColorAction.triggered.connect(
             self.left_view.autoColorAction.trigger)
@@ -1457,6 +1461,8 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.zoomOutLeftAction)
         view_menu.addAction(self.review_widget.zoomOutRightAction)
         view_menu.addAction(self.review_widget.tieViewsAction)
+        view_menu.addAction(self.review_widget.showGrayscaleAction)
+        view_menu.addAction(self.review_widget.setColorAction)
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.lineWidthAction)

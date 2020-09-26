@@ -96,6 +96,10 @@ class VideoWidget(qw.QWidget):
         self.openCamAction.triggered.connect(self.openCamera)
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction.triggered.connect(self.resetVideo)
+        self.showGrayscaleAction = qw.QAction('Show in grayscale')
+        self.showGrayscaleAction.setCheckable(True)
+        self.setColorAction = qw.QAction('Set color')
+        self.setColorAction.triggered.connect(self.setColor)
         self.autoColorAction = qw.QAction('Automatic color')
         self.autoColorAction.setCheckable(True)
         self.colormapAction = qw.QAction('Use colormap')
@@ -139,6 +143,11 @@ class VideoWidget(qw.QWidget):
             return
         self.video_filename = fname
         self._initIO()
+
+    @qc.pyqtSlot()
+    def setColor(self):
+        self.autoColorAction.setChecked(False)
+        self.colormapAction.setChecked(False)
 
     @qc.pyqtSlot(bool)
     def setColormap(self, check):
@@ -234,6 +243,10 @@ class VideoWidget(qw.QWidget):
         if self.display_widget is None:
             self.display_widget = FrameView()
             self.display_widget.frame_scene.setArenaMode()
+            self.showGrayscaleAction.triggered.connect(
+                self.display_widget.showGrayscaleAction.trigger)
+            self.setColorAction.triggered.connect(
+                self.display_widget.setColorAction.trigger)
             self.autoColorAction.triggered.connect(
                 self.display_widget.autoColorAction.trigger)
             self.sigSetColormap.connect(

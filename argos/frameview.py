@@ -35,6 +35,7 @@ class FrameScene(qw.QGraphicsScene):
         self.label_dict = {}
         self._frame = None
         self.geom = DrawingGeom.arena
+        self.grayscale = False  # frame will be converted to grayscale
         self.autocolor = False
         self.colormap = None
         self.max_colors = 100
@@ -142,10 +143,15 @@ class FrameScene(qw.QGraphicsScene):
     def setRoiPolygonMode(self):
         self.geom = DrawingGeom.polygon
 
+    @qc.pyqtSlot(bool)
+    def setGrayScale(self, grayscale: bool) -> None:
+        self.grayscale = grayscale
+
     def setFrame(self, frame: np.ndarray) -> None:
         self._frame = cv2qimage(frame)
-        # self.clear()
-        logging.debug(f'Diagonal sum of image: {frame.diagonal().sum()}')
+        if self.grayscale:
+            self._frame = self._frame.convertToFormat(
+                qg.QImage.Format_Grayscale8)
 
     def _addItem(self, item: np.ndarray) -> None:
         index = 0 if len(self.polygons) == 0 else max(self.polygons.keys()) + 1
@@ -203,6 +209,7 @@ class FrameScene(qw.QGraphicsScene):
     def setLineWidth(self, width):
         self.linewidth = width
 
+    @qc.pyqtSlot(qg.QColor)
     def setColor(self, color: qg.QColor) -> None:
         """Color of completed rectangles"""
         self.color = color
@@ -395,6 +402,7 @@ class FrameScene(qw.QGraphicsScene):
 
 
 class FrameView(qw.QGraphicsView):
+    sigSetColor = qc.pyqtSignal(qg.QColor)
     sigSetColormap = qc.pyqtSignal(str, int)
     sigSetRectangles = qc.pyqtSignal(dict)
     sigSetPolygons = qc.pyqtSignal(dict)
@@ -424,6 +432,11 @@ class FrameView(qw.QGraphicsView):
         self.zoomInAction.triggered.connect(self.zoomIn)
         self.zoomOutAction = qw.QAction('Zoom out')
         self.zoomOutAction.triggered.connect(self.zoomOut)
+        self.showGrayscaleAction = qw.QAction('Show in grayscale')
+        self.showGrayscaleAction.setCheckable(True)
+        self.showGrayscaleAction.triggered.connect(self.frame_scene.setGrayScale)
+        self.setColorAction = qw.QAction('Set color')
+        self.setColorAction.triggered.connect(self.chooseColor)
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(self.setAutoColor)
@@ -433,6 +446,7 @@ class FrameView(qw.QGraphicsView):
         self.colormapAction.setCheckable(True)
         self.lineWidthAction = qw.QAction('Line width')
         self.lineWidthAction.triggered.connect(self.setLW)
+        self.sigSetColor.connect(self.frame_scene.setColor)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
         self.setRoiPolygonMode.connect(self.frame_scene.setRoiPolygonMode)
@@ -489,6 +503,14 @@ class FrameView(qw.QGraphicsView):
         self.autoColorAction.setChecked(False)
         self.colormapAction.setChecked(True)
         self.sigSetColormap.emit(input, max_colors)
+
+    @qc.pyqtSlot()
+    def chooseColor(self):
+        color = qw.QColorDialog.getColor(initial=self.frame_scene.color,
+                                         parent=self)
+        self.sigSetColor.emit(color)
+        self.colormapAction.setChecked(False)
+        self.autoColorAction.setChecked(False)
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, checked):
