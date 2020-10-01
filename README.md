@@ -150,26 +150,26 @@ python -m argos.batchtrack -i {input_file} -o {output_file} -c {yolact_config} -
 where every entry inside braces ({}) is to be replaced by the appropriate
 value. The arguments are described below (full list can be obtained by
 the command `python -m argos.batchtrack -h`)
-- input_file: path of input video file
-- output_file: path of output data
-- yolact_config: path of yolact configuration file (as described above
+- `input_file`: path of input video file
+- `output_file`: path of output data
+- `yolact_config`: path of yolact configuration file (as described above
   in step 10)
-- yolact_weights: path of yolact trained weights/network file (as
+- `yolact_weights`: path of yolact trained weights/network file (as
   described above in step 10.3)
-- score: a decimal fraction between 0 and 1 specifying acceptable detection
+- `score`: a decimal fraction between 0 and 1 specifying acceptable detection
   score. 0.15 is more lenient and 0.75 is more strict. For weights
   trained to detect a single object 0.15 to 0.3 can be usable.
-- max_objects: maximum number of object to retain. This keeps at most top k
+- `max_objects`: maximum number of object to retain. This keeps at most top k
   objects with maximum detection score.
-- minimum_height: an integer - filter out detected objects whose
+- `minimum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels less than this number.
-- maximum_height: an integer - filter out detected objects whose
+- `maximum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels larger than this number.
-- minimum_width: an integer - filter out detected objects whose
+- `minimum_width`: an integer - filter out detected objects whose
   bounding box has width in pixels less than this number.
-- maximum_width: an integer - filter out detected objects whose
+- `maximum_width`: an integer - filter out detected objects whose
   bounding box has width in pixels larger than this number.
-- minimum_overlap: a decimal fraction between 0 and 1 - the minimum
+- `minimum_overlap`: a decimal fraction between 0 and 1 - the minimum
   overlap between two overlapping objects in successive frames to
   consider them the same object. This overlap is measured as the ratio
   of intersection to union of their bounding boxes. Smaller value will
