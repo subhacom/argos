@@ -41,11 +41,11 @@ class TrackReader(qc.QObject):
     sigSavedFrames = qc.pyqtSignal(int)
     sigChangeList = qc.pyqtSignal(SortedKeyList)
 
-    op_assign = 0
-    op_swap = 1
-    op_delete = 2
+    op_swap = 0
+    op_swap_cur = 1
+    op_assign = 2
     op_assign_cur = 3  # Assign trackid only for current frame
-    op_swap_cur = 4
+    op_delete = 4
     op_delete_cur = 5
     
 
@@ -69,7 +69,10 @@ class TrackReader(qc.QObject):
         self.wmax = 1000
         self.hmin = 0
         self.hmax = 1000
-        self.change_list = SortedKeyList(key=attrgetter('frame'))
+        def keyfn(change):
+            return (change.frame, change.idx)
+        self.change_list = SortedKeyList(key=keyfn)
+        self._change_idx = 0
         self.undone_changes = set()
 
     @property
@@ -131,7 +134,9 @@ class TrackReader(qc.QObject):
         """When user assigns `new_id` to `orig_id` keep it in undo buffer"""
         change_code = self.op_assign_cur if current else self.op_assign
         change = Change(frame=frame_no, change=change_code,
-                        orig=orig_id, new=new_id)            
+                        orig=orig_id, new=new_id,
+                        idx=self._change_idx)
+        self._change_idx += 1
         self.change_list.add(change)
         self.sigChangeList.emit(self.change_list)
         logging.debug(
@@ -142,7 +147,9 @@ class TrackReader(qc.QObject):
         """When user swaps `new_id` with `orig_id` keep it in swap buffer"""
         change_code = self.op_swap_cur if current else self.op_swap  
         change = Change(frame=frame_no, change=change_code,
-                                       orig=orig_id, new=new_id)
+                        orig=orig_id, new=new_id,
+                        idx=self._change_idx)
+        self._change_idx += 1
         self.change_list.add(change)
         logging.debug(
             f'Swap track: frame: {frame_no}, old: {orig_id}, new: {new_id}')
@@ -150,7 +157,9 @@ class TrackReader(qc.QObject):
     def deleteTrack(self, frame_no, orig_id, cur=False):
         change_code = self.op_delete_cur if cur else self.op_delete
         change = Change(frame=frame_no, change=change_code,
-                        orig=orig_id, new=None)
+                        orig=orig_id, new=None,
+                        idx=self._change_idx)
+        self._change_idx += 1
         self.change_list.add(change)
 
     @qc.pyqtSlot(int)
@@ -158,7 +167,7 @@ class TrackReader(qc.QObject):
         """This puts the specified frame in a blacklist so all changes applied
         on it are ignored"""
         while True:
-            loc = self.change_list.bisect_key_left(frame_no)
+            loc = self.change_list.bisect_key_left((frame_no, 0))
             if loc < len(self.change_list) and \
                self.change_list[loc].frame == frame_no:
                 self.change_list.pop(loc)
@@ -172,32 +181,27 @@ class TrackReader(qc.QObject):
         """
         if len(tdata) == 0:
             return {}
-        tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
-                  for row in tdata.itertuples()}
+        tracks = tdata[['trackid', 'x', 'y', 'w', 'h', 'frame']].copy()
+        # tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
+        #           for row in tdata.itertuples()}
         frameno = tdata.frame.values[0]
         for change in self.change_list:
             if change.frame > frameno:
                 break
             if change.frame in self.undone_changes:
                 continue
-            orig_trk = tracks.pop(change.orig, None)
             if (change.change == self.op_swap) or  \
                (change.change == self.op_swap_cur and change.frame == frameno):
-                new_trk = tracks.pop(change.new, None)
-                if orig_trk is not None:
-                    tracks[change.new] = orig_trk
-                if new_trk is not None:
-                    tracks[change.orig] = new_trk
-            elif (orig_trk is not None) and  \
-                 ((change.change == self.op_assign) or  \
+                new_loc = tracks[tracks.trackid == change.new].index
+                orig_loc = tracks[tracks.trackid == change.orig].index
+                tracks.loc[new_loc, 'trackid'] = change.orig
+                tracks.loc[orig_loc, 'trackid'] = change.new
+            elif ((change.change == self.op_assign) or  \
                   (change.change == self.op_assign_cur and  \
                    change.frame == frameno)):
-                tracks[change.new] = orig_trk
-            elif (change.change == self.op_assign_cur or  \
-                  change.change == self.op_delete_cur or  \
-                  change.change == self.op_swap_cur)  and   \
-                 change.frame != frameno and orig_trk is not None:  # Undelete (unpop) if single frame delete/swap and this is not that frame
-                tracks[change.orig] = orig_trk
+                tracks.loc[tracks.trackid == change.orig, 'trackid'] = change.new
+        tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
+                  for row in tracks.itertuples()}
         return tracks
 
     def saveChanges(self, filepath):
@@ -1044,6 +1048,8 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
+        if frame_no < 0:
+            frame_no = 0
         if self.track_reader is None or \
                 self.video_reader is None:  # or \
 #                frame_no > self.track_reader.last_frame:
@@ -1262,10 +1268,14 @@ class ReviewWidget(qw.QWidget):
             'Open tracked data',
             datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
+        if len(track_filename) == 0:
+            return
         viddir = settings.value('video/directory', '.')
         vid_filename, vfilter = qw.QFileDialog.getOpenFileName(
             self, 'Open video', viddir)
         logging.debug(f'filename:{vid_filename}\nselected filter:{vfilter}')
+        if len(vid_filename) == 0:
+            return
         fmt = 'csv' if filter.startswith('Text') else 'hdf'
         self.setupReading(vid_filename, track_filename)
 
@@ -1313,8 +1323,12 @@ class ReviewWidget(qw.QWidget):
         self.video_reader.sigSeekError.connect(self.catchSeekError)
         self.video_reader.sigVideoEnd.connect(self.videoEnd)
         self.frame_interval = 1000.0 / self.video_reader.fps
+        self.pos_spin.blockSignals(True)
         self.pos_spin.setRange(0, self.track_reader.last_frame)
+        self.pos_spin.blockSignals(False)
+        self.slider.blockSignals(True)
         self.slider.setRange(0, self.track_reader.last_frame)
+        self.slider.blockSignals(False)
         self.sigChangeTrack.connect(self.track_reader.changeTrack)
         self.track_reader.sigChangeList.connect(self.changelist_widget.setChangeList)
         self.track_reader.sigEnd.connect(self.trackEnd)
@@ -1327,6 +1341,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def saveReviewedTracks(self):
+        self.playVideo(False)
         datadir = settings.value('data/directory', '.')
         track_filename, filter = qw.QFileDialog.getSaveFileName(
             self,
@@ -1342,17 +1357,17 @@ class ReviewWidget(qw.QWidget):
 
                 self.save_indicator.setWindowModality(qc.Qt.WindowModal)
                 self.save_indicator.resize(400, 200)
-                self.track_reader.sigSavedFrames.connect(self.save_indicator.setValue)
+                # self.track_reader.sigSavedFrames.connect(self.save_indicator.setValue)
             else:                
                 self.save_indicator.setRange(0,
                                              self.track_reader.last_frame + 1)
                 self.save_indicator.setValue(0)
-                try: # make sure same track reader is not connected multiple times
-                    self.track_reader.sigSavedFrames.disconnect()
-                    self.track_reader.sigSavedFrames.connect(
-                        self.save_indicator.setValue)
-                except TypeError:
-                    pass
+            try: # make sure same track reader is not connected multiple times
+                self.track_reader.sigSavedFrames.disconnect()
+            except TypeError:
+                pass
+            self.track_reader.sigSavedFrames.connect(
+                    self.save_indicator.setValue)
             self.save_indicator.show()
             try:
                 self.track_reader.saveChanges(track_filename)
