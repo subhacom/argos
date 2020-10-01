@@ -383,7 +383,8 @@ def capture(params):
         cap.release()
         if out is not None:
             out.release()
-        tsout.close()
+        if tsout is not None:
+            tsout.close()
         cv2.destroyAllWindows()
 
 
