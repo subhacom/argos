@@ -82,22 +82,19 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    export PYTHONPATH=.:$PYTHONPATH
    ```
-9. Run `argos` main script on the Anaconda prompt:
+#### Interactive tracking
+9. Run `argos` tracking script on the Anaconda prompt:
+   
+   ```
+   python -m argos.track
+   ```
 
-   on Windows: 
-   
-   
-   ```
-   python argos\amain.py
-   ```
-   
-   and on Linux/Unix/Mac:
-   
-   ```
-   python argos/amain.py
-   ```
-10. Open the video file using either the `File` menu. After selecting the video
-   file, you will be prompted to:
+   This will start the Graphical User Interface for the
+   tracker. Follow the steps below in the GUI to track objects while
+   visualizing the tracking.
+
+10. Open the video file using either the `File` menu. After selecting
+    the video file, you will be prompted to:
    1. Select output data directory. 
    2. Select Yolact configuration file, go to the `config` directory inside 
       argos directory and select `yolact.yml`.
@@ -140,31 +137,117 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
     The initial segmentation is further refined by specifying limits on object 
     size by specifying `minimum pixels`, `maximum pixels`, `minimum width`, 
     `maximum width`, `minimum length` and `maximum length`.
+	
+#### Batch tracking 
+You can also run the tracking in batch mode from the command
+line. This is useful for processing a number of files from a shell
+script.
+
+```
+python -m argos.batchtrack -i {input_file} -o {output_file} -c {yolact_config} -w {yolact_weights} -s {score} -k {max_objects} --hmin {minimum_height} --hmax {maximum_height} --wmin {minimum_width} --wmax {maximum_width} --overlap {minimum_overlap} --max_age {maximum_misses}
+```	
+
+where every entry inside braces ({}) is to be replaced by the appropriate
+value. The arguments are described below (full list can be obtained by
+the command `python -m argos.batchtrack -h`)
+- input_file: path of input video file
+- output_file: path of output data
+- yolact_config: path of yolact configuration file (as described above
+  in step 10)
+- yolact_weights: path of yolact trained weights/network file (as
+  described above in step 10.3)
+- score: a decimal fraction between 0 and 1 specifying acceptable detection
+  score. 0.15 is more lenient and 0.75 is more strict. For weights
+  trained to detect a single object 0.15 to 0.3 can be usable.
+- max_objects: maximum number of object to retain. This keeps at most top k
+  objects with maximum detection score.
+- minimum_height: an integer - filter out detected objects whose
+  bounding box has length in pixels less than this number.
+- maximum_height: an integer - filter out detected objects whose
+  bounding box has length in pixels larger than this number.
+- minimum_width: an integer - filter out detected objects whose
+  bounding box has width in pixels less than this number.
+- maximum_width: an integer - filter out detected objects whose
+  bounding box has width in pixels larger than this number.
+- minimum_overlap: a decimal fraction between 0 and 1 - the minimum
+  overlap between two overlapping objects in successive frames to
+  consider them the same object. This overlap is measured as the ratio
+  of intersection to union of their bounding boxes. Smaller value will
+  be lenient, larger value will be stricter. 
+  
+  Imagine object A in frame 1 has moved in frame 2 to A'. If the area
+  of overlap of the bounding boxes of A and A' is half their combined
+  area, and the specified minimum overlap is 0.3, then A' will be
+  correctly labeled the same as A. If the specified minimum overlap is
+  0.7, then A' will be considered a different object and will receive
+  a new label.
+  
+  Thus with a larger value for overlap, a small movement may cause the
+  object to be labeled as a new object. A smaller value of overlap may
+  cause different objects coming close together to be confused as the
+  same object.
+  
+- maximum_misses: if an object cannot be detected in these many
+  successive frames, it is considered lost. It can be smaller when
+  detection is good and the video is recorded at high FPS.
+  
+Example:
+
+For detecting animals that should be within 5 and 50 pixels wide and
+between 10 and 100 pixels long, with the yolact configuration file in
+`config/yolact_config.yml` and weights of a network trained to detect
+these animals in `config/weights.pth`, the recorded video in
+`myvideo.avi`, where we know that no more than 20 animals (including
+misdetection of other objects as the animal, e.g. a scratch in the
+arena) should be detected in the video, the following command may
+work:
+
+```
+python -m argos.batchtrack -i myvideo.avi -o myvideo.h5 -c config/yolact.yml -w config/weights.pth -s 0.3 -k 20 --hmin 10 --hmax 100 --wmin 5 --wmax 50 --overlap 0.3 --max_age 20
+```
+
+This will give a new label to an object if it is missing for 20 frames
+or more. If there are misdetections, they can be corrected manually by
+the `review` tool described below.
+
+Before embarking on processing a series of similar videos in batch
+mode, it is a good idea to track a few of them in interactive mode
+described earlier in order to estimate, by trial and error, the
+command line arguments like minimum and maximum height and width,
+overlap and maximum number of objects.
+
 
 ## Additional utilities
 ### Capture video with timestamp for each frame
-- `capture.py` : a python script to record from a webcam or convert an existing 
-   video based on movement. For very long recordings it may be wasteful to 
-   record video when there is nothing happening. You can use this script to 
-   record or convert video so only parts where there is some minimum change of 
-   pixels (for example due to movement) are stored. Alongside the output video, 
-   it keeps a `.csv` file with the time of each frame. Check the source code or 
-   enter `python argos/capture.py -h` to find the command line arguments.
+- `capture.py` : a python script to record from a webcam or convert an
+   existing video based on movement. For very long recordings it may
+   be wasteful to record video when there is nothing happening. You
+   can use this script to record or convert video so only parts where
+   there is some minimum change of pixels (for example due to
+   movement) are stored. Alongside the output video, it keeps a `.csv`
+   file with the time of each frame. Check the source code or enter
+   `python argos/capture.py -h` to find the command line arguments.
 
 ### Review tracks to manually correct mislabelings
 `review.py` : a Python/Qt GUI to go through the automatically detected
 tracks and correct mistakes.
 
-- TODO: Complete its own user-guide.
+1. Follow steps 7 and 8 above after installation to prepare for running the reviewer.
+2. Start the GUI using the command
 
-- From the File menu open the track generated by `argos.track` and it
-  will ask for the corresponding video file.
+  ```
+  python -m argos.review
+  ```
 
-- Once both are selected, you will see the current frame in the right
-  pane and the previous frame in the left pane (initially empty).
+3. From the File menu open the track generated by `argos.track` and it
+   will ask for the corresponding video file.
+   
+   Once both are selected, you will see the current frame in the right
+   pane and the previous frame in the left pane (initially empty).
 
-- Press Play (keyboard shortcut: `space bar`) to start going through the video.
+4. Press Play (keyboard shortcut: `space bar`) to start going through the video.
 
+### Important items in Menu/Toolbar
 - `Scroll views together` - zooming will work simultaneously on both
    left and right pane, scrolling right pane will scroll the left one
    too. Useful for comparing the same regions in a zoomed in video.
@@ -181,17 +264,17 @@ tracks and correct mistakes.
    colors of bboxes and labels are too similar to the colors in the
    video.
 
--   If the `Show popup message for left/right mismatch` button is checked (default), then
+- If the `Show popup message for left/right mismatch` button is checked (default), then
    it will show a popup message each time the track ids in the current
    frame do not match those on the left frame and the video will pause.
    
--   If `Show popup message for new track` button is checked, then only
+- If `Show popup message for new track` button is checked, then only
    when a new track appears on the right pane, the video will pause a
    popup message will inform you about it.
    
--   If `No popup message for tracks` button is checked, then the video will run silently.
+- If `No popup message for tracks` button is checked, then the video will run silently.
    
--   Whenever there is a left-right mismatch in track labels, there will
+- Whenever there is a left-right mismatch in track labels, there will
    be a message in the status bar (a status message) pointing out the
    differences. In the message text, new track labels will be in bold.
 
@@ -237,31 +320,30 @@ tracks and correct mistakes.
   this will undo all operations (swap, assignment, deletion)
   specified in the current frame.
 
-- By default the reviewer only shows the current tracks on the
-     right and previous frame's tracks on the left. In order to
-     display tracks from past frames, check the `Show old tracks`
-     button in the toolbar or the item in *View* menu.
+- By default the reviewer only shows the current tracks on the right
+  and previous frame's tracks on the left. In order to display tracks
+  from past frames, check the `Show old tracks` button in the toolbar
+  or the item in *View* menu.
 
 - You can select `View->Show list of changes` (keyboard `Alt+C`) to
-     display all the delete, assign and swap operations you suggested
-     till the current frame. These are applied during the display of
-     tracks, and when you save the data from `File->Save reviewed
-     data`, the data will be saved after applying all these
-     changes. You can also save the changes in a text file. This is
-     useful if you are unsure of the changes you are making, and do
-     not want to make permanent modifications or go through relatively
-     slow full save of all track data. You can load the original track
-     file later and load the change list, and these changes will be
-     applied when you play the video.
+  display all the delete, assign and swap operations you suggested
+  till the current frame. These are applied during the display of
+  tracks, and when you save the data from `File->Save reviewed data`,
+  the data will be saved after applying all these changes. You can
+  also save the changes in a text file. This is useful if you are
+  unsure of the changes you are making, and do not want to make
+  permanent modifications or go through relatively slow full save of
+  all track data. You can load the original track file later and load
+  the change list, and these changes will be applied when you play the
+  video.
 
-- `View->Set old track age limit` will allow you to enter the
-     number of past frames from which old tracks will be shown when
-     the `Show old tracks` menu item is selected. This helps avoid
-     visual clutter, but if too short, you will miss a track id that
-     was lost from detection for longer than these many frames. The
-     optimal number will depend on the quality of the original
-     tracking, but starting with something between 200 and 500 may
-     help.
+- `View->Set old track age limit` will allow you to enter the number
+  of past frames from which old tracks will be shown when the `Show
+  old tracks` menu item is selected. This helps avoid visual clutter,
+  but if too short, you will miss a track id that was lost from
+  detection for longer than these many frames. The optimal number will
+  depend on the quality of the original tracking, but starting with
+  something between 200 and 500 may help.
 
 - Selecting a trackid in the right track list will show the positions
   of this track label across the entire dataset in the right pane
@@ -291,9 +373,9 @@ tracks and correct mistakes.
   interest and any object whose bounding box is entirely outside this
   region of interest will be excluded.
 
-- Filtering out bad tracks by size: if your objects of interest
-     have a specific size range, you can filter out bad detections by
-     setting a size limit via `View->Size limits`.
+- Filtering out bad tracks by size: if your objects of interest have a
+  specific size range, you can filter out bad detections by setting a
+  size limit via `View->Size limits`.
 	 
 - `plot_tracks.py` : a python script with functions to display the tracks.
 

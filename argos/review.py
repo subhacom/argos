@@ -181,29 +181,43 @@ class TrackReader(qc.QObject):
         """
         if len(tdata) == 0:
             return {}
-        tracks = tdata[['trackid', 'x', 'y', 'w', 'h', 'frame']].copy()
-        # tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
-        #           for row in tdata.itertuples()}
+        tracks = []
+        idx_dict = {}
+        for ii, row in enumerate(tdata.itertuples()):
+            tracks.append([row.trackid, row.x, row.y, row.w, row.h, row.frame])
+            idx_dict[row.trackid] = ii
         frameno = tdata.frame.values[0]
+        delete_idx = set()
         for change in self.change_list:
             if change.frame > frameno:
                 break
             if change.frame in self.undone_changes:
                 continue
-            if (change.change == self.op_swap) or  \
-               (change.change == self.op_swap_cur and change.frame == frameno):
-                new_loc = tracks[tracks.trackid == change.new].index
-                orig_loc = tracks[tracks.trackid == change.orig].index
-                tracks.loc[new_loc, 'trackid'] = change.orig
-                tracks.loc[orig_loc, 'trackid'] = change.new
-            elif ((change.change == self.op_assign) or  \
-                  (change.change == self.op_assign_cur and  \
-                   change.frame == frameno)):
-                tracks.loc[tracks.trackid == change.orig, 'trackid'] = change.new
-            elif (change.change == self.op_delete) or (change.change == self.op_delete_cur and change.frame == frameno):
-                tracks.drop(index=tracks[tracks.trackid == change.orig].index, inplace=True)
-        tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
-                  for row in tracks.itertuples()}
+            orig_idx = idx_dict.get(change.orig, None)
+            if (change.change == self.op_swap) or \
+                    (change.change == self.op_swap_cur and
+                     change.frame == frameno):
+                new_idx = idx_dict.get(change.new, None)
+                if new_idx is not None:
+                    tracks[new_idx][0] = change.orig
+                    idx_dict[change.orig] = new_idx
+                if orig_idx is not None:
+                    tracks[orig_idx][0] = change.new
+                    idx_dict[change.new] = orig_idx
+            elif (orig_idx is not None) and \
+                    ((change.change == self.op_assign) or \
+                     (change.change == self.op_assign_cur and \
+                      change.frame == frameno)):
+                tracks[orig_idx][0] = change.new
+                new_idx = idx_dict.get(change.new, None)
+                idx_dict[change.new] = orig_idx
+                if new_idx is not None:
+                    delete_idx.add(new_idx)
+            elif (change.change == self.op_delete or \
+                  (change.change == self.op_delete_cur and
+                   change.frame == frameno)) and orig_idx is not None:
+                delete_idx.add(orig_idx)
+        tracks = {t[0]: t[1:] for ii, t in enumerate(tracks) if ii not in delete_idx}
         return tracks
 
     def saveChanges(self, filepath):
