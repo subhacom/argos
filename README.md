@@ -61,7 +61,9 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    pip install pycocotools
    ```
+   
 ### Usage
+
 7. In the Anaconda prompt, go to where `argos` is unpacked:
 
    ```
@@ -82,7 +84,15 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    export PYTHONPATH=.:$PYTHONPATH
    ```
+   
 #### Interactive tracking
+
+The main tracking program is `argos/track.py`. It provides a graphical
+interface to set the parameters, choose algorithms for detection
+(instance segmentation) and tracking, and to view the performance as
+tracking proceeds. Follow the steps below to start and use this
+program.
+
 9. Run `argos` tracking script on the Anaconda prompt:
    
    ```
@@ -95,22 +105,38 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
 
 10. Open the video file using either the `File` menu. After selecting
     the video file, you will be prompted to:
-   1. Select output data directory. 
-   2. Select Yolact configuration file, go to the `config` directory inside 
-      argos directory and select `yolact.yml`.
-   3. File containing trained network weights, and here you should select the 
-      `babylocust_resnet101_119999_240000.pth` file.
-11. Start tracking: click the `play/pause` button and you should see the 
-    tracked locusts. The data will be saved in the directory you chose in step 
-    above.
+	  1. Select output data directory/file. You have a choice of CSV
+         (text) or HDF5 (binary) format. HDF5 is recommended.
+	  2. Select Yolact configuration file, go to the `config`
+         directory inside argos directory and select `yolact.yml`.
+	  3. File containing trained network weights, and here you should
+         select the `babylocust_resnet101_119999_240000.pth` file.
+	  
+11. Start tracking: click the `play/pause` button and you should see
+    the tracked locusts. The data will be saved in the filename you
+    entered in step above.
 
-    The bounding boxes of the segmented objects will be saved in 
-    `{videofile}.seg.csv` with each row containing `frame-no,x,y,w,h` where 
-    (x, y) is the coordinate of the top left corner of the bounding box and 
-    `w` and `h` are its width and height respectively.
+    If you choose CSV above, the bounding boxes of the segmented
+    objects will be saved in `{videofile}.seg.csv` with each row
+    containing `frame-no,x,y,w,h` where (x, y) is the coordinate of
+    the top left corner of the bounding box and `w` and `h` are its
+    width and height respectively.
     
     The tracks will be saved in `{videofile}.trk.csv`. Each row in this file 
     contains `frame-no,track-id,x,y,w,h`.
+	
+	If you choose HDF5 in step 10.1 above, the same data will be saved
+    in a single file compatible with the Pandas library. The
+    segementation data will be saved in the group `/segmented` and
+    tracks will be saved in the group `/tracked`. The actual values
+    are in the dataset named `table` inside each group, with columns
+    in same order as described above for CSV file. You can load the
+    tracks in a Pandas data frame in python with the code fragment:
+
+	```
+	tracks = pandas.read_hdf(tracked_filename, 'tracked')
+	```
+
      
 12. Classical segmentation: Using the `Segmentation method` menu you can switch
     from YOLACT to classical image segmentation for detecting target objects. 
@@ -138,37 +164,49 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
     size by specifying `minimum pixels`, `maximum pixels`, `minimum width`, 
     `maximum width`, `minimum length` and `maximum length`.
 	
+	
 #### Batch tracking 
 You can also run the tracking in batch mode from the command
 line. This is useful for processing a number of files from a shell
-script.
+script. This uses YOLACT for decteting objects and SORT for tracking.
 
 ```
 python -m argos.batchtrack -i {input_file} -o {output_file} -c {yolact_config} -w {yolact_weights} -s {score} -k {max_objects} --hmin {minimum_height} --hmax {maximum_height} --wmin {minimum_width} --wmax {maximum_width} --overlap {minimum_overlap} --max_age {maximum_misses}
 ```	
 
-where every entry inside braces ({}) is to be replaced by the appropriate
+where every entry inside braces is to be replaced by the appropriate
 value. The arguments are described below (full list can be obtained by
 the command `python -m argos.batchtrack -h`)
+
 - `input_file`: path of input video file
+
 - `output_file`: path of output data
+
 - `yolact_config`: path of yolact configuration file (as described above
   in step 10)
+
 - `yolact_weights`: path of yolact trained weights/network file (as
   described above in step 10.3)
+
 - `score`: a decimal fraction between 0 and 1 specifying acceptable detection
   score. 0.15 is more lenient and 0.75 is more strict. For weights
   trained to detect a single object 0.15 to 0.3 can be usable.
+
 - `max_objects`: maximum number of object to retain. This keeps at most top k
   objects with maximum detection score.
+
 - `minimum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels less than this number.
+  
 - `maximum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels larger than this number.
+  
 - `minimum_width`: an integer - filter out detected objects whose
   bounding box has width in pixels less than this number.
+
 - `maximum_width`: an integer - filter out detected objects whose
   bounding box has width in pixels larger than this number.
+
 - `minimum_overlap`: a decimal fraction between 0 and 1 - the minimum
   overlap between two overlapping objects in successive frames to
   consider them the same object. This overlap is measured as the ratio
@@ -232,7 +270,8 @@ overlap and maximum number of objects.
 `review.py` : a Python/Qt GUI to go through the automatically detected
 tracks and correct mistakes.
 
-1. Follow steps 7 and 8 above after installation to prepare for running the reviewer.
+1. Follow steps under `Usage` above after installation to prepare for
+   running the reviewer.
 2. Start the GUI using the command
 
   ```
@@ -252,9 +291,11 @@ tracks and correct mistakes.
    left and right pane, scrolling right pane will scroll the left one
    too. Useful for comparing the same regions in a zoomed in video.
    
--  `Set color` button for selecting a single color for all bounding boxes and track label text.
+-  `Set color` button for selecting a single color for all bounding
+   boxes and track label text.
 
--  `Autocolor` button when checked, will automatically pick random colors.
+-  `Autocolor` button when checked, will automatically pick random
+   colors.
    
    `Colormap` button for selecting a colormap and number of different
    values to use from this colormap for the bounding boxes and track
@@ -264,24 +305,26 @@ tracks and correct mistakes.
    colors of bboxes and labels are too similar to the colors in the
    video.
 
-- If the `Show popup message for left/right mismatch` button is checked (default), then
-   it will show a popup message each time the track ids in the current
-   frame do not match those on the left frame and the video will pause.
+- If the `Show popup message for left/right mismatch` button is
+  checked (default), then it will show a popup message each time the
+  track ids in the current frame do not match those on the left frame
+  and the video will pause.
    
 - If `Show popup message for new track` button is checked, then only
-   when a new track appears on the right pane, the video will pause a
-   popup message will inform you about it.
+  when a new track appears on the right pane, the video will pause a
+  popup message will inform you about it.
    
-- If `No popup message for tracks` button is checked, then the video will run silently.
+- If `No popup message for tracks` button is checked, then the video
+  will run silently.
    
 - Whenever there is a left-right mismatch in track labels, there will
-   be a message in the status bar (a status message) pointing out the
-   differences. In the message text, new track labels will be in bold.
+  be a message in the status bar (a status message) pointing out the
+  differences. In the message text, new track labels will be in bold.
 
 - In case a track has been mislabeled, you can drag and drop the
-     correct label pressing the left mouse button from the list of all tracks in
-     the middle to the corresponding track id in the list of current tracks in 
-     the right list.
+  correct label pressing the left mouse button from the list of all
+  tracks in the middle to the corresponding track id in the list of
+  current tracks in the right list.
      
 - To apply this for just the current frame, keep the `Shift` key
   pressed when dragging and dropping.
