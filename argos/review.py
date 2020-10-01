@@ -200,6 +200,8 @@ class TrackReader(qc.QObject):
                   (change.change == self.op_assign_cur and  \
                    change.frame == frameno)):
                 tracks.loc[tracks.trackid == change.orig, 'trackid'] = change.new
+            elif (change.change == self.op_delete) or (change.change == self.op_delete_cur and change.frame == frameno):
+                tracks.drop(index=tracks[tracks.trackid == change.orig].index, inplace=True)
         tracks = {row.trackid: [row.x, row.y, row.w, row.h, row.frame]
                   for row in tracks.itertuples()}
         return tracks
