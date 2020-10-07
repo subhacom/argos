@@ -193,11 +193,11 @@ class TrackReader(qc.QObject):
                 break
             if change.frame in self.undone_changes:
                 continue
-            orig_idx = idx_dict.get(change.orig, None)
+            orig_idx = idx_dict.pop(change.orig, None)
             if (change.change == self.op_swap) or \
                     (change.change == self.op_swap_cur and
                      change.frame == frameno):
-                new_idx = idx_dict.get(change.new, None)
+                new_idx = idx_dict.pop(change.new, None)
                 if new_idx is not None:
                     tracks[new_idx][0] = change.orig
                     idx_dict[change.orig] = new_idx
@@ -209,7 +209,7 @@ class TrackReader(qc.QObject):
                      (change.change == self.op_assign_cur and \
                       change.frame == frameno)):
                 tracks[orig_idx][0] = change.new
-                new_idx = idx_dict.get(change.new, None)
+                new_idx = idx_dict.pop(change.new, None)
                 idx_dict[change.new] = orig_idx
                 if new_idx is not None:
                     delete_idx.add(new_idx)
