@@ -213,23 +213,27 @@ class YolactWidget(qw.QWidget):
             self.cuda_action.setEnabled(False)
             self.cuda_action.setToolTip('PyTorch on this system does not '
                                         'support CUDA')
-        self.top_k_edit = qw.QLineEdit()
+        self.top_k_edit = qw.QSpinBox()
+        self.top_k_edit.setRange(1, 1000)
         saved_val = settings.value('yolact/topk', '10')
-        self.top_k_edit.setText(saved_val)
+        self.top_k_edit.setValue(int(saved_val))
         self.worker.top_k = int(saved_val)
 
-        self.top_k_edit.editingFinished.connect(self.setTopK)
+        self.top_k_edit.valueChanged.connect(self.setTopK)
         self.top_k_edit.setToolTip('Include only this many objects'
                                    ' from all that are detected, ordered'
                                    ' by their classification score')
         self.top_k_label = qw.QLabel('Number of objects to include')
         self.top_k_label.setToolTip(self.top_k_edit.toolTip())
-        self.score_thresh_edit = qw.QLineEdit()
+        self.score_thresh_edit = qw.QDoubleSpinBox()
         saved_val = settings.value('yolact/scorethreshold', '0.15')
-        self.score_thresh_edit.setText(saved_val)
+        self.score_thresh_edit.setRange(0.01, 1.0)
+        self.score_thresh_edit.setStepType(qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        self.score_thresh_edit.setSingleStep(0.05)
+        self.score_thresh_edit.setValue(float(saved_val))
         self.worker.score_threshold = float(saved_val)
 
-        self.score_thresh_edit.editingFinished.connect(self.setScoreThresh)
+        self.score_thresh_edit.valueChanged.connect(self.setScoreThresh)
         self.score_thresh_edit.setToolTip('a number > 0 and < 1. Higher score'
                                           ' is more stringent criterion for'
                                           ' classifying objects')
@@ -278,13 +282,13 @@ class YolactWidget(qw.QWidget):
     def showYolactError(self, err: YolactException) -> None:
         qw.QMessageBox.critical(self, 'Yolact error', str(err))
 
-    @qc.pyqtSlot()
-    def setTopK(self):
-        self.sigTopK.emit(int(self.top_k_edit.text()))
+    @qc.pyqtSlot(int)
+    def setTopK(self, value):
+        self.sigTopK.emit(value)
 
-    @qc.pyqtSlot()
-    def setScoreThresh(self):
-        self.sigScoreThresh.emit(float(self.score_thresh_edit.text()))
+    @qc.pyqtSlot(float)
+    def setScoreThresh(self, value):
+        self.sigScoreThresh.emit(value)
 
     @qc.pyqtSlot()
     def loadConfig(self):
