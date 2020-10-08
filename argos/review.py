@@ -217,6 +217,8 @@ class TrackReader(qc.QObject):
                   (change.change == self.op_delete_cur and
                    change.frame == frameno)) and orig_idx is not None:
                 delete_idx.add(orig_idx)
+            elif orig_idx is not None:  # push the orig index back
+                idx_dict[change.orig] = orig_idx
         tracks = {t[0]: t[1:] for ii, t in enumerate(tracks) if ii not in delete_idx}
         return tracks
 
@@ -1362,7 +1364,7 @@ class ReviewWidget(qw.QWidget):
         track_filename, filter = qw.QFileDialog.getSaveFileName(
             self,
             'Save reviewed data',
-            datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
+            self.track_filename, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) > 0:
             if self.save_indicator is None:
@@ -1387,6 +1389,9 @@ class ReviewWidget(qw.QWidget):
             self.save_indicator.show()
             try:
                 self.track_reader.saveChanges(track_filename)
+                self.track_reader.data_path = track_filename
+                self.track_filename = track_filename
+                self.sigDataFile.emit(track_filename)
                 self.save_indicator.setValue(self.track_reader.last_frame + 1)
             except OSError as err:
                 qw.QMessageBox.critical(
