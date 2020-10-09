@@ -23,7 +23,7 @@ from PyQt5 import (
     QtGui as qg
 )
 
-from argos.constants import Change
+from argos.constants import Change, ColorMode
 from argos import utility as ut
 from argos.utility import make_color, get_cmap_color, rect2points
 from argos.frameview import FrameScene, FrameView
@@ -320,9 +320,9 @@ class ReviewScene(FrameScene):
         for id_, tdata in rects.items():
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
-            if self.autocolor:
+            if self.color_mode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.colormap is not None:
+            elif self.color_mode == ColorMode.cmap:
                 color = qg.QColor(
                     *get_cmap_color(id_ % self.max_colors, self.max_colors,
                                     self.colormap))
@@ -520,6 +520,7 @@ class ReviewWidget(qw.QWidget):
         self.timer.setSingleShot(True)
         self.video_reader = None
         self.track_reader = None
+        self.track_filename = None
         self.vid_info = VidInfo()
         self.left_tracks = {}
         self.right_tracks = {}
@@ -1361,10 +1362,12 @@ class ReviewWidget(qw.QWidget):
     def saveReviewedTracks(self):
         self.playVideo(False)
         datadir = settings.value('data/directory', '.')
+        default_file = datadir if self.track_filename is None else self.track_filename
         track_filename, filter = qw.QFileDialog.getSaveFileName(
             self,
             'Save reviewed data',
-            self.track_filename, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
+            default_file,
+            filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) > 0:
             if self.save_indicator is None:

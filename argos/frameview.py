@@ -16,7 +16,7 @@ from PyQt5 import (
 )
 
 import argos.utility as util
-from argos.constants import DrawingGeom
+from argos.constants import DrawingGeom, ColorMode
 from argos.utility import cv2qimage, make_color, get_cmap_color
 
 
@@ -36,8 +36,9 @@ class FrameScene(qw.QGraphicsScene):
         self._frame = None
         self.geom = DrawingGeom.arena
         self.grayscale = False  # frame will be converted to grayscale
-        self.autocolor = False
-        self.colormap = None
+        self.color_mode = ColorMode.single
+        # self.autocolor = False
+        self.colormap = 'viridis'
         self.max_colors = 100
         self.color = qg.QColor(qc.Qt.green)
         self.selected_color = qg.QColor(qc.Qt.blue)
@@ -74,9 +75,9 @@ class FrameScene(qw.QGraphicsScene):
         self.selected = selected
         for key in self.item_dict:
             if key in selected:
-                if self.autocolor:
+                if self.color_mode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
-                elif self.colormap is not None:
+                elif self.color_mode == ColorMode.cmap:
                     color = qg.QColor(
                         *get_cmap_color(key % self.max_colors, self.max_colors,
                                         self.colormap))
@@ -89,9 +90,9 @@ class FrameScene(qw.QGraphicsScene):
                 self.label_dict[key].setDefaultTextColor(color)
                 self.label_dict[key].setZValue(1)
             else:
-                if self.autocolor:
+                if self.color_mode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
-                elif self.colormap is not None:
+                elif self.color_mode == ColorMode.cmap:
                     color = qg.QColor(
                         *get_cmap_color(key % self.max_colors, self.max_colors,
                                         self.colormap))
@@ -161,9 +162,9 @@ class FrameScene(qw.QGraphicsScene):
         elif self.geom == DrawingGeom.polygon:
             poly = qg.QPolygonF([qc.QPointF(*p) for p in item])
             item = qw.QGraphicsPolygonItem(poly)
-        if self.autocolor:
+        if self.color_mode == ColorMode.auto:
             pen = qg.QPen(qg.QColor(*make_color(index)))
-        elif self.colormap is not None:
+        elif self.color_mode == ColorMode.cmap:
             pen = qg.QPen(
                 qg.QColor(*get_cmap_color(index % self.max_colors,
                                           self.max_colors,
@@ -213,6 +214,7 @@ class FrameScene(qw.QGraphicsScene):
     def setColor(self, color: qg.QColor) -> None:
         """Color of completed rectangles"""
         self.color = color
+        self.color_mode = ColorMode.single
 
     def setSelectedColor(self, color: qg.QColor) -> None:
         """Color of selected rectangle"""
@@ -220,10 +222,11 @@ class FrameScene(qw.QGraphicsScene):
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
-        self.autocolor = auto
         if auto:
+            self.color_mode = ColorMode.auto
             self.linestyle_selected = qc.Qt.DotLine
         else:
+            self.color_mode = ColorMode.single
             self.linestyle_selected = qc.Qt.SolidLine
 
     @qc.pyqtSlot(str, int)
@@ -231,19 +234,20 @@ class FrameScene(qw.QGraphicsScene):
         """Set a colormap `cmap` to use for getting unique color for each
         item where maximum number of items is `max_colors`"""
         if max_items < 1:
-            self.colormap = None
-            self.max_colors = -1
+            self.color_mode = ColorMode.single
+            # self.colormap = None
+            self.max_colors = 10
             self.linestyle_selected = qc.Qt.SolidLine
             return
         try:
             get_cmap_color(0, max_items, cmap)
             self.colormap = cmap
             self.max_colors = max_items
-            self.autocolor = False
             self.linestyle_selected = qc.Qt.DotLine
+            self.color_mode = ColorMode.cmap
         except ValueError:
-            self.colormap = None
-            self.max_colors = -1
+            self.max_colors = 10
+            self.color_mode = ColorMode.single
             self.linestyle_selected = qc.Qt.SolidLine
 
     def setIncompleteColor(self, color: qg.QColor) -> None:
@@ -258,9 +262,9 @@ class FrameScene(qw.QGraphicsScene):
         self.clearItems()
         self.polygons = rects
         for id_, rect in rects.items():
-            if self.autocolor:
+            if self.color_mode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.colormap is not None:
+            elif self.color_mode  == ColorMode.cmap:
                 color = qg.QColor(
                     *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
             else:
@@ -285,9 +289,9 @@ class FrameScene(qw.QGraphicsScene):
         for id_, poly in polygons.items():
             if len(poly.shape) != 2 or poly.shape[0] < 3:
                 continue
-            if self.autocolor:
+            if self.color_mode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.colormap is not None:
+            elif self.color_mode == ColorMode.cmap:
                 color = qg.QColor(
                     *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
             else:

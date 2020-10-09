@@ -45,6 +45,11 @@ class DrawingGeom(enum.Enum):
     polygon = enum.auto()
     arena = enum.auto()
 
+class ColorMode(enum.Enum):
+    single = enum.auto()
+    cmap = enum.auto()
+    auto = enum.auto()
+
 # A change is defined by frame:int, change: int - change code, orig: int - original trackid, new: int - new trackid, idx:int index of change within same frame
 # idx allows maintaining sequence of changes defined within same frame
 Change = namedtuple('Change', ['frame', 'change', 'orig', 'new', 'idx'])
