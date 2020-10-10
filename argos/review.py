@@ -47,9 +47,11 @@ class TrackReader(qc.QObject):
     op_assign_cur = 3  # Assign trackid only for current frame
     op_delete = 4
     op_delete_cur = 5
+    op_merge = 6
     
 
     change_code = {op_assign: 'assign',
+                   op_merge: 'merge',
                    op_swap: 'swap',
                    op_delete: 'delete',
                    op_assign_cur: 'assign at current',
@@ -207,7 +209,13 @@ class TrackReader(qc.QObject):
             elif (orig_idx is not None) and \
                     ((change.change == self.op_assign) or \
                      (change.change == self.op_assign_cur and \
-                      change.frame == frameno)):
+                      change.frame == frameno) or \
+                     (change.change == self.op_merge)):
+                # TODO - assign is same as merge now - but maybe in future
+                #  differentiate between assign, which should remove
+                #  pre-existing change.new item if change.orig is not present
+                #  in current tracks, and merge, which should keep
+                #  change.new even if change.orig is not present
                 tracks[orig_idx][0] = change.new
                 new_idx = idx_dict.pop(change.new, None)
                 idx_dict[change.new] = orig_idx
@@ -639,13 +647,15 @@ class ReviewWidget(qw.QWidget):
             else:
                 track = self.track_reader.getTrackId(sel, None)
             if track is None:
-                return
-            track.loc[:, 'x'] += track.w / 2.0
-            track.loc[:, 'y'] += track.h / 2.0
-            if self.sender() == self.right_list:
-                self.sigProjectTrackHist.emit(track[['x', 'y']].values)
+                track = np.empty(0)
             else:
-                self.sigProjectTrackHistAll.emit(track[['x', 'y']].values)
+                track.loc[:, 'x'] += track.w / 2.0
+                track.loc[:, 'y'] += track.h / 2.0
+                track = track[['x', 'y']].values
+            if self.sender() == self.right_list:
+                self.sigProjectTrackHist.emit(track)
+            else:
+                self.sigProjectTrackHistAll.emit(track)
 
     @qc.pyqtSlot(Exception)
     def catchSeekError(self, err: Exception)-> None:
@@ -1289,7 +1299,7 @@ class ReviewWidget(qw.QWidget):
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) == 0:
             return
-        viddir = settings.value('video/directory', '.')
+        viddir = os.path.dirname(track_filename)
         vid_filename, vfilter = qw.QFileDialog.getOpenFileName(
             self, 'Open video', viddir)
         logging.debug(f'filename:{vid_filename}\nselected filter:{vfilter}')
