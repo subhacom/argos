@@ -50,7 +50,8 @@ class VidInfo(qw.QMainWindow):
 class VideoWidget(qw.QWidget):
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
     sigSetTracked = qc.pyqtSignal(dict, int)
-    sigSetSegmented = qc.pyqtSignal(np.ndarray, int)
+    sigSetBboxes = qc.pyqtSignal(np.ndarray, int)
+    sigSetSegmented = qc.pyqtSignal(dict, int)
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
@@ -237,7 +238,7 @@ class VideoWidget(qw.QWidget):
         self.video_reader.sigVideoEnd.connect(self.writer.close)
         self.sigReset.connect(self.writer.reset)
         self.sigQuit.connect(self.writer.close)
-        self.sigSetSegmented.connect(self.writer.appendSegmented)
+        self.sigSetBboxes.connect(self.writer.appendBboxes)
         self.sigSetTracked.connect(self.writer.appendTracked)
 
         if self.display_widget is None:
@@ -252,6 +253,7 @@ class VideoWidget(qw.QWidget):
             self.sigSetColormap.connect(
                 self.display_widget.frame_scene.setColormap)
             self.sigSetFrame.connect(self.display_widget.setFrame)
+            self.sigSetSegmented.connect(self.display_widget.sigSetPolygons)
             self.sigSetTracked.connect(
                 self.display_widget.setRectangles)
             self.display_widget.sigPolygonsSet.connect(self.startTimer)

@@ -563,21 +563,21 @@ class SegWorker(qc.QObject):
             self.sigIntermediate.emit(
                 cv2.applyColorMap(binary, self.cmap),
                 pos)
+        bboxes = [cv2.boundingRect(points) for points in seg]
         if self.outline_style == ut.OutlineStyle.bbox:
-            bboxes = [cv2.boundingRect(points) for points in seg]
-            self.sigProcessed.emit(np.array(bboxes), pos)
             logging.debug(f'Emitted bboxes for frame {pos}: {bboxes}')
         elif self.outline_style == ut.OutlineStyle.contour:
             contours = get_bounding_poly(seg, ut.OutlineStyle.contour)
-            bboxes = {ii: contour for ii, contour in enumerate(contours)}
-            self.sigSegPolygons.emit(bboxes, pos)
+            contours = {ii: contour for ii, contour in enumerate(contours)}
+            self.sigSegPolygons.emit(contours, pos)
         elif self.outline_style == ut.OutlineStyle.minrect:
             minrects = [cv2.boxPoints(cv2.minAreaRect(points)) for points in seg]
             minrects = {ii: box for ii, box in enumerate(minrects)}
             self.sigSegPolygons.emit(minrects, pos)
         elif self.outline_style == ut.OutlineStyle.fill:
-            bboxes = {ii: points for ii, points in enumerate(seg)}
-            self.sigSegPolygons.emit(bboxes, pos)
+            filled = {ii: points for ii, points in enumerate(seg)}
+            self.sigSegPolygons.emit(filled, pos)
+        self.sigProcessed.emit(np.array(bboxes), pos)
 
 
 class SegWidget(qw.QWidget):
@@ -863,6 +863,10 @@ class SegWidget(qw.QWidget):
 
     def setOutlineStyle(self, style: str) -> None:
         self.sigSetOutlineStyle.emit(outline_dict[style])
+
+    def fixBboxOutline(self) -> None:
+        self.outline_combo.setCurrentText('bbox')
+        self.outline_combo.setEnabled(False)
 
     @qc.pyqtSlot(str)
     def setThresholdMethod(self, text) -> None:
