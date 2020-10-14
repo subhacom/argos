@@ -298,10 +298,15 @@ class ReviewScene(FrameScene):
         self.historic_track_ls = qc.Qt.DashLine
         self.hist_gradient = 1
         self.track_hist = []
+        self.path_cmap = 'viridis'
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
         self.hist_gradient = age
+
+    @qc.pyqtSlot(str)
+    def setPathCmap(self, color: str) -> None:
+        self.path_cmap = color
 
     @qc.pyqtSlot(np.ndarray)
     def showTrackHist(self, track: np.ndarray) -> None:
@@ -309,7 +314,7 @@ class ReviewScene(FrameScene):
             self.removeItem(item)
         self.track_hist = []
         for ii, t in enumerate(track):
-            color = qg.QColor(*get_cmap_color(ii, len(track), 'viridis'))
+            color = qg.QColor(*get_cmap_color(ii, len(track), self.path_cmap))
             self.track_hist.append(self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(color)))
         # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
     
@@ -627,6 +632,7 @@ class ReviewWidget(qw.QWidget):
         self.all_list.sigSelected.connect(self.left_view.sigSelected)
         self.right_list.sigSelected.connect(self.right_view.sigSelected)
         self.right_list.sigSelected.connect(self.projectTrackHist)
+        self.left_list.sigSelected.connect(self.projectTrackHist)
         self.sigProjectTrackHist.connect(self.right_view.frame_scene.showTrackHist)
         self.sigProjectTrackHistAll.connect(self.left_view.frame_scene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
@@ -818,6 +824,8 @@ class ReviewWidget(qw.QWidget):
             self.left_view.autoColorAction.trigger)
         # self.autoColorAction.triggered.connect(self.left_view.autoColorAction)
         self.colormapAction = self.right_view.colormapAction
+        self.pathCmapAction = qw.QAction('Set colormap for path')
+        self.pathCmapAction.triggered.connect(self.setPathColormap)
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
         self.lineWidthAction = self.right_view.lineWidthAction
@@ -1344,6 +1352,25 @@ class ReviewWidget(qw.QWidget):
             return ''
 
     @qc.pyqtSlot()
+    def setPathColormap(self):
+        input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
+                                                'Colormap',
+                                                ['jet',
+                                                 'viridis',
+                                                 'rainbow',
+                                                 'autumn',
+                                                 'summer',
+                                                 'winter',
+                                                 'spring',
+                                                 'cool',
+                                                 'hot'])
+        logging.debug(f'Setting colormap to {input}')
+        if not accept:
+            return
+        self.left_view.frame_scene.setPathCmap(input)
+        self.right_view.frame_scene.setPathCmap(input)
+
+    @qc.pyqtSlot()
     def openTrackedData(self):
         datadir = settings.value('data/directory', '.')
         track_filename, filter = qw.QFileDialog.getOpenFileName(
@@ -1568,6 +1595,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.setColorAction)
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
+        view_menu.addAction(self.review_widget.pathCmapAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)
