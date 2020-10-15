@@ -76,6 +76,8 @@ CV2_MINOR = int(CV2_MINOR)
 #     else:
 #         logger.addHandler(file_handler)
 
+LARGE_FRAME_SIZE = 10000
+
 
 def parse_interval(tstr):
     h = 0
@@ -395,10 +397,15 @@ def get_camera_fps(devid, width, height, nframes=120):
         cap = cv2.VideoCapture(devid)
     start = datetime.now()
     assert cap.isOpened(), 'Could not open camera'
-    if width > 0:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    if height > 0:
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    if width < 0 or height < 0:
+        width = LARGE_FRAME_SIZE
+        height = LARGE_FRAME_SIZE
+        print('Trying maximum possible resolution')
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
     for ii in range(nframes):
         ret, frame = cap.read()
     cap.release()
@@ -406,7 +413,7 @@ def get_camera_fps(devid, width, height, nframes=120):
     delta = end - start
     interval = delta.seconds + delta.microseconds * 1e-6
     fps = nframes / interval
-    return fps
+    return fps, width, height
 
 
 def get_video_fps(fname):
@@ -430,8 +437,11 @@ def check_params(args):
     camera = isinstance(input_, int)  # recording from camera
     if params['fps'] <= 0:
         if camera:
-            params['fps'] = get_camera_fps(input_, params['width'],
+            fps, width, height = get_camera_fps(input_, params['width'],
                                            params['height'], 33)
+            params['fps'] = fps
+            params['width'] = width
+            params['height'] = height
         else:
             params['fps'] = get_video_fps(input_)
         print(f'Found FPS = {params["fps"]}')

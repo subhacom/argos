@@ -55,6 +55,8 @@ class VideoWidget(qw.QWidget):
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
+    sigClose = qc.pyqtSignal()  # separate out closing the video reader and files from thread end
+    sigThreadQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
     sigSetColormap = qc.pyqtSignal(str, int)
     sigArena = qc.pyqtSignal(qg.QPolygonF)
@@ -109,7 +111,7 @@ class VideoWidget(qw.QWidget):
         self.infoAction = qw.QAction('Video information')
         self.infoAction.triggered.connect(self.vid_info.show)
         self.reader_thread = qc.QThread()
-        self.sigQuit.connect(self.reader_thread.quit)
+        self.sigThreadQuit.connect(self.reader_thread.quit)
         self.sigQuit.connect(self.quit)
         self.reader_thread.finished.connect(self.reader_thread.deleteLater)
 
@@ -120,6 +122,14 @@ class VideoWidget(qw.QWidget):
                                                  'Webcam no.', 0)
         if not accept:
             return
+        width, accept = qw.QInputDialog.getInt(self, 'Frame width',
+                                                 'Frame width (pixels)', -1)
+        if not accept:
+            width = -1
+        height, accept = qw.QInputDialog.getInt(self, 'Frame height',
+                                                 'Frame height (pixels)', -1)
+        if not accept:
+            height = -1
         self.video_filename = str(cam_idx)
         directory = settings.value('video/directory', '.')
         fourcc, accept = qw.QInputDialog.getText(
@@ -131,7 +141,7 @@ class VideoWidget(qw.QWidget):
         fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save video as',
                                                   directory,
                                                   filter='AVI (*.avi)')
-        self._initIO(fname, fourcc)
+        self._initIO(fname, fourcc, width=width, height=height)
 
     @qc.pyqtSlot()
     def openVideo(self):
@@ -181,10 +191,11 @@ class VideoWidget(qw.QWidget):
         self.colormapAction.setChecked(True)
         self.sigSetColormap.emit(input, max_colors)
 
-    def _initIO(self, outfpath=None, codec=None):
+    def _initIO(self, outfpath=None, codec=None, width=-1, height=-1):
         # Open input
         try:
-            self.video_reader = VideoReader(self.video_filename)
+            self.video_reader = VideoReader(self.video_filename, width=width,
+                                            height=height)
             if self.video_reader.is_webcam and \
                     outfpath is not None and codec is not None:
                 self.video_reader.setVideoOutFile(outfpath, codec)
@@ -227,17 +238,24 @@ class VideoWidget(qw.QWidget):
         self.vid_info.fps.setText(f'{self.video_reader.fps}')
         self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
         self.vid_info.frame_height.setText(f'{self.video_reader.frame_height}')
+
         self.sigVideoFile.emit(self.video_filename)
 
         settings.setValue('data/directory', os.path.dirname(self.outfile))
+        ## Move the video reader to separate thread
         self.video_reader.moveToThread(self.reader_thread)
+
         self.timer.timeout.connect(self.video_reader.read)
-        self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+        self.sigClose.connect(self.video_reader.close)
+
+        if not self.video_reader.is_webcam:
+            self.sigGotoFrame.connect(self.video_reader.gotoFrame)
+
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.video_reader.sigVideoEnd.connect(self.videoEnd)
         self.video_reader.sigVideoEnd.connect(self.writer.close)
         self.sigReset.connect(self.writer.reset)
-        self.sigQuit.connect(self.writer.close)
+        self.sigClose.connect(self.writer.close)
         self.sigSetBboxes.connect(self.writer.appendBboxes)
         self.sigSetTracked.connect(self.writer.appendTracked)
 
@@ -290,10 +308,18 @@ class VideoWidget(qw.QWidget):
             layout.addWidget(self.display_widget)
             layout.addLayout(ctrl_layout)
             self.setLayout(layout)
-        self.slider.setRange(0, self.video_reader.frame_count - 1)
-        self.spinbox.setRange(0, self.video_reader.frame_count - 1)
+        if self.video_reader.is_webcam:
+            max_frames = 1000000  # arbitrarily set maximum number of frames
+        else:
+            max_frames = self.video_reader.frame_count - 1
+        self.spinbox.setRange(0, max_frames)
+        self.slider.setRange(0, max_frames)
+
         self.reader_thread.start()
-        self.sigGotoFrame.emit(0)
+        if self.video_reader.is_webcam:
+            self.timer.start(10)
+        else:
+            self.sigGotoFrame.emit(0)
         self.sigReset.emit()
 
     @qc.pyqtSlot()
@@ -357,6 +383,8 @@ class VideoWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def quit(self):
+        self.sigClose.emit()
+        self.sigThreadQuit.emit()
         self.reader_thread.wait()
 
 

@@ -24,7 +24,7 @@ class VideoReader(qc.QObject):
     sigSeekError = qc.pyqtSignal(Exception)
     sigVideoEnd = qc.pyqtSignal()
 
-    def __init__(self, path: str, waitCond: threading.Event=None):
+    def __init__(self, path: str, width=-1, height=-1, waitCond: threading.Event=None):
         super(VideoReader, self).__init__()
         # TODO check if I really need the mutex just for reading
         self.mutex = qc.QMutex()
@@ -35,17 +35,18 @@ class VideoReader(qc.QObject):
         self._ts_file = None
         self._waitCond = waitCond
         self._frame_no = -1
+        self.frame_width = width
+        self.frame_height = height
         if self.is_webcam:
             # Camera FPS opens a temporary VideoCapture with the camera
             # - so do that before initializing current VideoCapture
-            self.fps = cu.get_camera_fps(int(path))
-            self._vid = cv2.VideoCapture(int(path))
-            self.frame_count = -1
             self.mutex.lock()
-            ret, frame = self._vid.read()
+            self.fps, self.frame_width, self.frame_height = cu.get_camera_fps(int(path), width, height)
             self.mutex.unlock()
-            logging.debug(f'Read frame: {frame.shape}')
-            self.frame_height, self.frame_width = frame.shape[:2]
+            self._vid = cv2.VideoCapture(int(path))
+            self._vid.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+            self._vid.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            self.frame_count = -1
             self._outpath = f'{path}.avi'
         else:
             self._vid = cv2.VideoCapture(path)
@@ -82,20 +83,23 @@ class VideoReader(qc.QObject):
         # In short, jumping to a specific frame no is completely unreliable and depends on the video format and codec
         if self._waitCond is not None:
             self._waitCond.clear()
-        if frame_no >= self._vid.get(cv2.CAP_PROP_FRAME_COUNT):
-            logging.debug('Video at end')
-            self.mutex.unlock()
-            self.sigVideoEnd.emit()
-            return
-        self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no) 
-        pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
-        if pos != frame_no:
-            self.mutex.unlock()
-            self.sigSeekError.emit(RuntimeError(
-                f'This video format does not allow correct seek: '
-                f'tried {frame_no}, got {pos}'))
-            return
-        self._frame_no = pos
+        if not self.is_webcam:
+            if frame_no >= self._vid.get(cv2.CAP_PROP_FRAME_COUNT):
+                logging.debug('Video at end')
+                self.mutex.unlock()
+                self.sigVideoEnd.emit()
+                return
+            self._vid.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+            pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
+            if pos != frame_no:
+                self.mutex.unlock()
+                self.sigSeekError.emit(RuntimeError(
+                    f'This video format does not allow correct seek: '
+                    f'tried {frame_no}, got {pos}'))
+                return
+            self._frame_no = pos
+        else:
+            self._frame_no += 1
         ret, frame = self._vid.read()
         self.mutex.unlock()
         if not ret:
@@ -139,6 +143,7 @@ class VideoReader(qc.QObject):
         # event = threading.Event()
         self._frame_no += 1
         if self.is_webcam and self._outfile is not None:
+            assert self.frame_width == frame.shape[1] and self.frame_height == frame.shape[0]
             self._outfile.write(frame)
             ts = datetime.now()
             self._ts_writer.writerow([self._frame_no, ts])
@@ -150,12 +155,16 @@ class VideoReader(qc.QObject):
         # event.wait()
         logging.debug('Finished waiting')
 
-    def __del__(self):
-        # self.mutex.unlock() # this causes crash
+    @qc.pyqtSlot()
+    def close(self):
+        print('VideoReader: Quitting')
         if self._vid.isOpened():
             self._vid.release()
         if self._outfile is not None and self._outfile.isOpened():
             self._outfile.release()
             self._ts_file.close()
-        # logging.debug('Destructor of video reader')
-
+        if self._vid.isOpened():
+            self._vid.release()
+        if self._outfile is not None and self._outfile.isOpened():
+            self._outfile.release()
+            self._ts_file.close()

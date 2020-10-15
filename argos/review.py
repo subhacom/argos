@@ -516,6 +516,7 @@ class ReviewWidget(qw.QWidget):
     sigDataFile = qc.pyqtSignal(str)
     sigProjectTrackHist = qc.pyqtSignal(np.ndarray)
     sigProjectTrackHistAll = qc.pyqtSignal(np.ndarray)
+    sigQuit = qc.pyqtSignal()  # Pass on quit signal in a threadsafe way
 
     def __init__(self, *args, **kwargs):
         super(ReviewWidget, self).__init__(*args, **kwargs)
@@ -1432,6 +1433,7 @@ class ReviewWidget(qw.QWidget):
         self.video_reader.sigFrameRead.connect(self.setFrame)
         self.video_reader.sigSeekError.connect(self.catchSeekError)
         self.video_reader.sigVideoEnd.connect(self.videoEnd)
+        self.sigQuit.connect(self.video_reader.close)
         self.frame_interval = 1000.0 / self.video_reader.fps
         self.pos_spin.blockSignals(True)
         self.pos_spin.setRange(0, self.track_reader.last_frame)
@@ -1497,7 +1499,6 @@ class ReviewWidget(qw.QWidget):
         # self._wait_cond.set()
         self.vid_info.close()
         self.changelist_widget.close()
-
         if self.track_reader is not None and len(self.track_reader.change_list) > 0:
             self.saveReviewedTracks()
         diff = 0
@@ -1507,6 +1508,7 @@ class ReviewWidget(qw.QWidget):
             diff = 2
         settings.setValue('review/showdiff', diff)
         settings.setValue('review/disable_seek', self.disableSeekAction.isChecked())
+        self.sigQuit.emit()
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool):
