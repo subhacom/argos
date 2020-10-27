@@ -76,7 +76,7 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    on Windows command prompt:
    
    ```
-   set PYTHONPATH=.;$PYTHONPATH
+   set PYTHONPATH=.;%PYTHONPATH%
    ```
    
    and on Linux/Unix/Mac with `bash` shell:
