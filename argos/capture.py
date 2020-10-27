@@ -7,7 +7,7 @@
 """Program to capture video using OpenCV.
 
 usage: python argos/capture.py -i myvideo.mpg -o myvideo_motion_cap.avi  \\
---format=DIVX --m --threshold=20 -a 10
+--format=DIVX -m --threshold=20 -a 10
 
 We allow motion based recording: only when there is significant change
 in scene.
