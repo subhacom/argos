@@ -250,8 +250,11 @@ class YolactWidget(qw.QWidget):
         self.score_thresh_edit = qw.QDoubleSpinBox()
         saved_val = settings.value('yolact/scorethreshold', '0.15')
         self.score_thresh_edit.setRange(0.01, 1.0)
-        self.score_thresh_edit.setStepType(
-            qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        try:
+            self.score_thresh_edit.setStepType(
+                qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        except AttributeError:
+            pass     # older versions of Qt don't support this
         self.score_thresh_edit.setSingleStep(0.05)
         self.score_thresh_edit.setValue(float(saved_val))
         self.worker.score_threshold = float(saved_val)
@@ -272,8 +275,11 @@ class YolactWidget(qw.QWidget):
                                           'into a single object ')
         self.overlap_thresh_edit.setRange(0.01, 1.1)
         # self.overlap_thresh_edit.setSingleStep(0.01)
-        self.overlap_thresh_edit.setStepType(
-            qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        try:
+            self.overlap_thresh_edit.setStepType(
+                qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        except AttributeError:
+            pass  # older Qt versions
         saved_val = settings.value('yolact/overlapthreshold', '1.0')
         self.overlap_thresh_edit.setValue(float(saved_val))
         self.worker.overlap_threshold = float(saved_val)
