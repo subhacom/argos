@@ -90,8 +90,16 @@ class TrainingWidget(qw.QMainWindow):
         self._waiting = False
         self.boundary_type = 'contour'
         self.display_coco = True
-        self.num_crops = 4  # number of random crops to generate if input image is bigger than training image size
+        self.num_crops = 1  # number of random crops to generate if input image is bigger than training image size
         self.saved = True
+        self.validation_frac = 0.3
+        self.description = ''
+        self.license_name = ''
+        self.license_url = ''
+        self.contributor = ''
+        self.category_name = 'object'
+        self.url = ''
+        self.max_size = 550
         self.image_dir = settings.value('training/imagedir', '.')
         self.image_files = []
         self.image_index = -1
@@ -473,14 +481,14 @@ class TrainingWidget(qw.QMainWindow):
         layout = qw.QFormLayout()
         desc_label = qw.QLabel('Description')
         desc_text = qw.QLineEdit()
-
+        desc_text.setText(self.description)
         def setDesc():
             self.description = desc_text.text()
 
         desc_text.editingFinished.connect(setDesc)
         license_label = qw.QLabel('License name')
         license_text = qw.QLineEdit()
-
+        license_text.setText(self.license_name)
         def setLicenseName():
             self.license_name = license_text.text()
 
@@ -488,7 +496,7 @@ class TrainingWidget(qw.QMainWindow):
         layout.addRow(license_label, license_text)
         license_url_label = qw.QLabel('License URL')
         license_url_text = qw.QLineEdit()
-
+        license_url_text.setText(self.license_url)
         def setLicenseUrl():
             self.license_url = license_url_text.text()
 
@@ -545,19 +553,33 @@ class TrainingWidget(qw.QMainWindow):
         val_text.editingFinished.connect(setValFrac)
         layout.addRow(val_label, val_text)
 
+        subregion_label = qw.QLabel('Split into subregions')
+        subregion_spin = qw.QSpinBox()
+        subregion_spin.setRange(1, 5)
+        subregion_spin.setValue(self.num_crops)
+        def setSubregionCount(num):
+            self.num_crops = num
+        subregion_spin.valueChanged.connect(setSubregionCount)
+        layout.addRow(subregion_label, subregion_spin)
+
         bbox_label = qw.QLabel('Export boundaries as')
         bbox_combo = qw.QComboBox()
         bbox_combo.addItems(['contour', 'bbox', 'minrect'])
+
         def setBoundaryType(text):
             self.boundary_type = text
+
         bbox_combo.currentTextChanged.connect(setBoundaryType)
         layout.addRow(bbox_label, bbox_combo)
         display_seg_button = qw.QCheckBox('Display segmentation (for debugging)')
         display_seg_button.setChecked(self.display_coco)
+
         def setDisplayCocoSeg(state):
             self.display_coco = state
+
         display_seg_button.clicked.connect(setDisplayCocoSeg)
         layout.addWidget(display_seg_button)
+
         ok_button = qw.QPushButton('OK')
         ok_button.setDefault(True)
         ok_button.clicked.connect(dialog.accept)
@@ -591,14 +613,7 @@ class TrainingWidget(qw.QMainWindow):
                                     f' directory')
             return
         ts = datetime.now()
-        self.validation_frac = 0.3
-        self.description = None
-        self.license_name = None
-        self.license_url = None
-        self.contributor = None
-        self.category_name = 'object'
-        self.url = None
-        self.max_size = 550
+
         accepted = self._makeCocoDialog()
         validation_count = int(len(self.image_files) * self.validation_frac)
         training_count = len(self.image_files) - validation_count
@@ -622,7 +637,7 @@ class TrainingWidget(qw.QMainWindow):
         with open(yolact_file, 'w') as yolact_fd:
             yaml.dump(yolact_config, yolact_fd)
         if validation_count > 0:
-            validation_list = random.sample(self.image_files, validation_count)
+            validation_list = set(self.image_files) - set(training_list)
             self.dumpCocoJson(validation_list, val_dir, ts,
                               message='Exporting validation set in COCO format')
         command = f'python -m yolact.train --config={yolact_file} --save_folder={self.out_dir}'
@@ -638,8 +653,9 @@ class TrainingWidget(qw.QMainWindow):
                                    )
         qw.qApp.clipboard().setText(command)
 
-    def dumpCocoJson(self, filepaths, directory, ts,
+    def dumpCocoJson(self, filepaths, directory, ts, subregions=0,
                      message='Exporting COCO JSON'):
+        """Dump annotation in COCO format as a .JSON file."""
         coco = {
             "info": {
                 "description": self.description,
@@ -688,27 +704,29 @@ class TrainingWidget(qw.QMainWindow):
             fname = os.path.basename(fpath)
             prefix = fname.rpartition('.')[0]
             # If image is bigger than allowed size, make some random crops
-            xlist = [0]
-            ylist = [0]
-            if img.shape[0] > self.max_size:
-                if img.shape[0] >= self.max_size * 1.5:
-                    ylist += random.sample(range(img.shape[0] - self.max_size),
-                                          self.num_crops)
-                else:
-                    ylist += [img.shape[0] - self.max_size]
-            if img.shape[1] > self.max_size:
-                if img.shape[1] >= self.max_size * 1.5:
-                    xlist += random.sample(range(img.shape[1] - self.max_size),
-                                          self.num_crops)
-                else:
-                    xlist += [img.shape[1] - self.max_size]
             h = min(self.max_size, img.shape[0])
             w = min(self.max_size, img.shape[1])
+
+            if img.shape[0] > self.max_size or img.shape[1] > self.max_size:
+                # Here I select half of `num_crops` segments' top left corner (pos_tl)
+                # and another half's bottom right corner.
+                seg_bounds = [(np.min(seg[:, 0]), np.min(seg[:, 1]))
+                              for seg in self.seg_dict[fpath].values()]
+                seg_bounds = np.array(seg_bounds)
+                idx = np.random.randint(0, len(seg_bounds), size=self.num_crops)
+                xlist = seg_bounds[idx, 0] - np.random.randint(0, w // 2, size=len(idx))
+                xlist[xlist < 0] = 0
+                ylist = seg_bounds[idx, 1] - np.random.randint(0, h // 2, size=len(idx))
+                ylist[ylist < 0] = 0
+            else:
+                xlist, ylist = [0], [0]
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
                 sq_img = np.zeros((self.max_size, self.max_size, 3),
                                   dtype=np.uint8)
-                sq_img[:h, :w, :] = img[y: y + h, x: x + w, :]
-                logging.debug(f'Processing: {prefix}: span ({x}, {y}, {x+h}, {y+h}')
+                h_ = min(h, img.shape[0] - y)
+                w_ = min(w, img.shape[1] - x)
+                sq_img[:h_, :w_, :] = img[y: y + h_, x: x + w_, :]
+                logging.debug(f'Processing: {prefix}: span ({x}, {y}, {x+h_}, {y+h_}')
                 fname = f'{prefix}_{jj}.png'
                 any_valid_seg = False
                 for seg in self.seg_dict[fpath].values():
