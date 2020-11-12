@@ -413,14 +413,20 @@ class TrainingWidget(qw.QMainWindow):
         self.image_index = index
         self.display_widget.resetArenaAction.trigger()
         self.sigImage.emit(image, index)
+        self.display_widget.updateSegList({})
         if fname not in self.seg_dict:
             self.saved = False
-            self.sigSegment.emit(image, index)
             self._waiting = True
+            self.statusBar().showMessage(
+                f'Processing image: {os.path.basename(fname)}.'
+                f'[Image {self.image_index + 1} of {len(self.image_files)}] ...')            
+            self.sigSegment.emit(image, index)
+            
         else:
             self.sigSegmented.emit(self.seg_dict[fname], index)
-        self.statusBar().showMessage(
-            f'Current image: {os.path.basename(fname)}. [Image {self.image_index + 1} of {len(self.image_files)}]')
+            self.statusBar().showMessage(
+                f'Current image: {os.path.basename(fname)}.'
+                f'[Image {self.image_index + 1} of {len(self.image_files)}]')
 
     def nextFrame(self):
         self.gotoFrame(self.image_index + 1)
@@ -443,6 +449,10 @@ class TrainingWidget(qw.QMainWindow):
         fname = self.image_files[self.image_index]
         self.seg_dict[fname] = segdict
         self._waiting = False
+        self.statusBar().showMessage(
+            f'Current image: {os.path.basename(fname)}.'
+            f'[Image {self.image_index + 1} of {len(self.image_files)}]')
+
 
     def cleanup(self):
         self.sigQuit.emit()

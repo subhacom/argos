@@ -475,8 +475,10 @@ class FrameView(qw.QGraphicsView):
 
     @qc.pyqtSlot()
     def setLW(self) -> None:
-        input, accept = qw.QInputDialog.getInt(self, 'Line-width of outline',
-                                               'pixels', 1, min=1, max=10)
+        input, accept = qw.QInputDialog.getInt(
+            self, 'Line-width of outline',
+            'pixels',
+            self.frame_scene.linewidth, min=1, max=10)
         if accept:
             self.sigLineWidth.emit(input)
 

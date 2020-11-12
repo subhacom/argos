@@ -418,6 +418,8 @@ class SegWorker(qc.QObject):
 
     @qc.pyqtSlot(int)
     def setBlurWidth(self, width: int) -> None:
+        if width % 2 == 0:
+            width += 1
         self.kernel_width = width
 
     @qc.pyqtSlot(float)
@@ -615,6 +617,7 @@ class SegWidget(qw.QWidget):
         self._blur_width_label = qw.QLabel('Blur width')
         self._blur_width_edit = qw.QSpinBox()
         self._blur_width_edit.setRange(1, 100)
+        self._blur_width_edit.setSingleStep(2)
         value = settings.value('segment/blur_width', self.worker.kernel_width,
                                type=int)
         self._blur_width_edit.setValue(value)
