@@ -134,7 +134,7 @@ class TrainingWidget(qw.QMainWindow):
         self.segDock.setWidget(scroll)
         self.displayWidget = SegDisplay()
         self.displayWidget.setRoiMode()
-        self.displayWidget.frame_scene.linewidth = 1
+        self.displayWidget.frame_scene.linewidth = 0
         self.setCentralWidget(self.displayWidget)
         self._makeActions()
         self._makeFileDock()
@@ -350,7 +350,9 @@ class TrainingWidget(qw.QMainWindow):
                                   self.displayWidget.zoomOutAction,
                                   self.displayWidget.autoColorAction,
                                   self.displayWidget.colormapAction,
-                                  self.displayWidget.lineWidthAction])
+                                  self.displayWidget.lineWidthAction,
+                                  self.displayWidget.fontSizeAction,
+                                  self.displayWidget.relativeFontSizeAction])
         self.advancedMenu = self.menuBar().addMenu('Advanced')
         self.advancedMenu.addAction(self.debugAction)
 

@@ -14,6 +14,7 @@ from PyQt5 import (
     QtGui as qg,
     QtWidgets as qw
 )
+import sip
 
 import argos.utility as util
 from argos.constants import DrawingGeom, ColorMode
@@ -55,6 +56,7 @@ class FrameScene(qw.QGraphicsScene):
     def _clearIncomplete(self):
         if self.incomplete_item is not None:
             self.removeItem(self.incomplete_item)
+            del self.incomplete_item
             self.incomplete_item = None
 
     def clearItems(self):
@@ -110,8 +112,12 @@ class FrameScene(qw.QGraphicsScene):
         """Remove all items except the selected ones"""
         bad = set(self.item_dict.keys()) - set(self.selected)
         for key in bad:
-            self.removeItem(self.item_dict.pop(key))
-            self.removeItem(self.label_dict.pop(key))
+            item = self.item_dict.pop(key)
+            self.removeItem(item)
+            del item
+            label = self.label_dict.pop(key)
+            self.removeItem(label)
+            del label
             self.polygons.pop(key)
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
@@ -121,8 +127,12 @@ class FrameScene(qw.QGraphicsScene):
         for key in self.selected:
             if key not in self.polygons:
                 continue
-            self.removeItem(self.item_dict.pop(key))
-            self.removeItem(self.label_dict.pop(key))
+            item = self.item_dict.pop(key)
+            self.removeItem(item)
+            del item
+            label = self.label_dict.pop(key)            
+            self.removeItem(label)
+            del label
             self.polygons.pop(key)
         self.selected = []
         self.sigPolygons.emit(self.polygons)
@@ -208,36 +218,94 @@ class FrameScene(qw.QGraphicsScene):
 
     @qc.pyqtSlot(int)
     def setLineWidth(self, width):
-        self.linewidth = width
+        self.linewidth = width        
+        for item in self.item_dict.values():
+            pen = item.pen()
+            pen.setWidth(width)
+            item.setPen(pen)
+        self.update()
+
+    @qc.pyqtSlot(int)
+    def setFontSize(self, size):
+        self.font.setPointSize(size)
+        for label in self.label_dict.values():
+            if sip.isdeleted(label):
+                print('Error: label deleted')                
+            label.setFont(self.font)
+            label.adjustSize()
+        self.update()
+
+    @qc.pyqtSlot(float)
+    def setRelativeFontSize(self, size):
+        if self._frame is not None:
+            frame_width = max((self._frame.height(), self._frame.width()))
+            size = int(frame_width * size / 100)
+            self.font.setPixelSize(size)
+            for label in self.label_dict.values():
+                label.setFont(self.font)
+                label.adjustSize()
+            self.update()
 
     @qc.pyqtSlot(qg.QColor)
     def setColor(self, color: qg.QColor) -> None:
         """Color of completed rectangles"""
         self.color = color
         self.color_mode = ColorMode.single
+        for key, item in self.item_dict.items():
+            if key not in self.selected:
+                pen = item.pen()
+                pen.setColor(self.color)
+                item.setPen(pen)
+                self.label_dict[key].setDefaultTextColor(self.color)
+        self.update()
 
+    @qc.pyqtSlot(qg.QColor)
     def setSelectedColor(self, color: qg.QColor) -> None:
         """Color of selected rectangle"""
         self.selected_color = color
+        for key in self.selected:
+            item = self.item_dict[key]
+            pen = item.pen()
+            pen.setColor(self.selected_color)
+            item.setPen(pen)
+            self.label_dict[key].setDefaultTextColor(self.selected_color)
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
         if auto:
             self.color_mode = ColorMode.auto
             self.linestyle_selected = qc.Qt.DotLine
+            for key, item in self.item_dict.items():
+                color = qg.QColor(*make_color(key))
+                pen = item.pen()
+                pen.setColor(color)
+                item.setPen(pen)
+                self.label_dict[key].setDefaultTextColor(color)
         else:
             self.color_mode = ColorMode.single
             self.linestyle_selected = qc.Qt.SolidLine
+            for key, item in self.item_dict.items():
+                pen = item.pen()
+                pen.setColor(self.color)
+                item.setPen(pen)
+                self.label_dict[key].setDefaultTextColor(self.color)
+            for key in self.selected:
+                item = self.item_dict[key]
+                pen = item.pen()
+                pen.setColor(self.selected_color)
+                item.setPen(pen)
+                self.label_dict[key].setDefaultTextColor(self.selected_color)
+        self.update()
 
     @qc.pyqtSlot(str, int)
     def setColormap(self, cmap, max_items):
         """Set a colormap `cmap` to use for getting unique color for each
         item where maximum number of items is `max_colors`"""
         if max_items < 1:
-            self.color_mode = ColorMode.single
-            # self.colormap = None
-            self.max_colors = 10
-            self.linestyle_selected = qc.Qt.SolidLine
+            # self.color_mode = ColorMode.single
+            # # self.colormap = None
+            # self.max_colors = 10
+            # self.linestyle_selected = qc.Qt.SolidLine
             return
         try:
             get_cmap_color(0, max_items, cmap)
@@ -249,10 +317,23 @@ class FrameScene(qw.QGraphicsScene):
             self.max_colors = 10
             self.color_mode = ColorMode.single
             self.linestyle_selected = qc.Qt.SolidLine
+            return
+        for key, item in self.item_dict.items():
+            color = qg.QColor(
+                *get_cmap_color(key % self.max_colors, self.max_colors,
+                                self.colormap))
+            pen = item.pen()
+            pen.setColor(color)
+            item.setPen(pen)
+        self.update()
+
 
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
         self.incomplete_color = color
+        pen = self.incomplete_item.pen()
+        pen.setColor(color)
+        self.incomplete_item.setPen(pen)    
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -391,6 +472,12 @@ class FrameScene(qw.QGraphicsScene):
                 path.lineTo(qc.QPointF(pos[0], pos[1]))
                 self.addIncompletePath(path)
 
+    def keyPressEvent(self, event: qg.QKeyEvent):
+        if event.key() == qc.Qt.Key_Escape:
+            self.points = []
+            self._clearIncomplete()
+            event.accept()
+
     def drawBackground(self, painter: qg.QPainter, rect: qc.QRectF) -> None:
         if self._frame is None:
             return
@@ -418,6 +505,8 @@ class FrameView(qw.QGraphicsView):
     setRoiRectMode = qc.pyqtSignal()
     setRoiPolygonMode = qc.pyqtSignal()
     sigLineWidth = qc.pyqtSignal(int)
+    sigFontSize = qc.pyqtSignal(int)
+    sigRelativeFontSize = qc.pyqtSignal(float)
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
@@ -426,6 +515,8 @@ class FrameView(qw.QGraphicsView):
         self.sigSetRectangles.connect(self.frame_scene.setRectangles)
         self.sigSetPolygons.connect(self.frame_scene.setPolygons)
         self.sigLineWidth.connect(self.frame_scene.setLineWidth)
+        self.sigFontSize.connect(self.frame_scene.setFontSize)
+        self.sigRelativeFontSize.connect(self.frame_scene.setRelativeFontSize)
         self.frame_scene.sigPolygons.connect(self.sigPolygons)
         self.frame_scene.sigPolygonsSet.connect(self.polygonsSet)
         self.frame_scene.sigArena.connect(self.sigArena)
@@ -450,6 +541,10 @@ class FrameView(qw.QGraphicsView):
         self.colormapAction.setCheckable(True)
         self.lineWidthAction = qw.QAction('Line width')
         self.lineWidthAction.triggered.connect(self.setLW)
+        self.fontSizeAction = qw.QAction('Set font size in points')        
+        self.fontSizeAction.triggered.connect(self.setFontSize)
+        self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')        
+        self.relativeFontSizeAction.triggered.connect(self.setRelativeFontSize)
         self.sigSetColor.connect(self.frame_scene.setColor)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
@@ -475,19 +570,37 @@ class FrameView(qw.QGraphicsView):
 
     @qc.pyqtSlot()
     def setLW(self) -> None:
-        input, accept = qw.QInputDialog.getInt(
+        input_, accept = qw.QInputDialog.getInt(
             self, 'Line-width of outline',
             'pixels',
-            self.frame_scene.linewidth, min=1, max=10)
+            self.frame_scene.linewidth, min=0, max=10)
         if accept:
-            self.sigLineWidth.emit(input)
+            self.sigLineWidth.emit(input_)
+
+    @qc.pyqtSlot()
+    def setFontSize(self) -> None:
+        input_, accept = qw.QInputDialog.getInt(
+            self, 'Font size',
+            'points',
+            self.frame_scene.font.pointSize(), min=1, max=100)
+        if accept:
+            self.sigFontSize.emit(input_)
+        
+    @qc.pyqtSlot()
+    def setRelativeFontSize(self) -> None:
+        input_, accept = qw.QInputDialog.getDouble(
+            self, 'Font size relative to image size',
+            '%',
+            1, min=0.1, max=10)
+        if accept:
+            self.sigRelativeFontSize.emit(input_)
 
     @qc.pyqtSlot(bool)
     def setColormap(self, checked):
         if not checked:
             self.sigSetColormap.emit(None, 0)
             return
-        input, accept = qw.QInputDialog.getItem(self, 'Select colormap',
+        input_, accept = qw.QInputDialog.getItem(self, 'Select colormap',
                                                 'Colormap',
                                                 ['jet',
                                                  'viridis',
@@ -499,8 +612,8 @@ class FrameView(qw.QGraphicsView):
                                                  'cool',
                                                  'hot',
                                                  'None'])
-        logging.debug(f'Setting colormap to {input}')
-        if (input == 'None') or (not accept):
+        logging.debug(f'Setting colormap to {input_}')
+        if (input_ == 'None') or (not accept):
             self.colormapAction.setChecked(False)
             return
         max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
@@ -508,7 +621,7 @@ class FrameView(qw.QGraphicsView):
                                                     20)
         self.autoColorAction.setChecked(False)
         self.colormapAction.setChecked(True)
-        self.sigSetColormap.emit(input, max_colors)
+        self.sigSetColormap.emit(input_, max_colors)
 
     @qc.pyqtSlot()
     def chooseColor(self):
