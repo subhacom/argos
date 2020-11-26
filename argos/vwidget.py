@@ -287,7 +287,7 @@ class VideoWidget(qw.QWidget):
                 self.display_widget.setRoiPolygonMode)
             self.resetArenaAction.triggered.connect(
                 self.display_widget.resetArenaAction.trigger)
-            # self.sigSetTracked.connect(self.display_widget.sigSetRectangles)
+            # self.sigSetTracked.connect(self.displayWidget.sigSetRectangles)
             self.slider = qw.QSlider(qc.Qt.Horizontal)
             self.slider.valueChanged.connect(self.sigGotoFrame)
             self.spinbox = qw.QSpinBox()

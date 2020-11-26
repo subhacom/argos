@@ -47,7 +47,7 @@ class SegDisplay(FrameView):
         self.removeSelectedAction = qw.QAction('Remove selected objects (X)')
         self.keepSelectedAction.triggered.connect(self.scene().keepSelected)
         self.removeSelectedAction.triggered.connect(self.scene().removeSelected)
-        self.scene().sigPolygons.connect(self.sigPolygons)
+        # self.scene().sigPolygons.connect(self.sigPolygons)
         self.scene().sigPolygons.connect(self.updateSegList)
 
     @qc.pyqtSlot()
@@ -94,62 +94,62 @@ class TrainingWidget(qw.QMainWindow):
         self.saved = True
         self.validation_frac = 0.3
         self.description = ''
-        self.license_name = ''
-        self.license_url = ''
+        self.licenseName = ''
+        self.licenseUrl = ''
         self.contributor = ''
-        self.category_name = 'object'
+        self.categoryName = 'object'
         self.url = ''
         self.inputImageSize = 550
-        self.image_dir = settings.value('training/imagedir', '.')
-        self.image_files = []
-        self.image_index = -1
-        self.training_dir = 'training'
+        self.imageDir = settings.value('training/imagedir', '.')
+        self.imageFiles = []
+        self.imageIndex = -1
+        self.trainingDir = 'training'
         self.validation_dir = 'validation'
-        self.out_dir = settings.value('training/outdir', '.')
-        self.baseconfig_name = ''
+        self.outputDir = settings.value('training/outdir', '.')
+        self.baseconfigName = ''
         for name in dir(yconfig):
             if name.startswith('yolact') and name.endswith('config'):
-                self.baseconfig_name = name
+                self.baseconfigName = name
                 break
-        self.baseconfig = getattr(yconfig, self.baseconfig_name)
-        self.weights_file = ''
-        self.config_file = ''
-        self.category_name = 'object'
-        self.seg_dict = {}  # dict containing segmentation info for each file
-        self.seg_widget = SegWidget()
-        self.seg_widget.outline_combo.setCurrentText('contour')
-        self.seg_widget.setOutlineStyle('contour')
-        self.lim_widget = LimitsWidget()
-        self.seg_dock = qw.QDockWidget('Segmentation settings')
-        self.seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                      qc.Qt.RightDockWidgetArea)
-        self.addDockWidget(qc.Qt.RightDockWidgetArea, self.seg_dock)
+        self.baseconfig = getattr(yconfig, self.baseconfigName)
+        self.weightsFile = ''
+        self.configFile = ''
+        self.categoryName = 'object'
+        self.segDict = {}  # dict containing segmentation info for each file
+        self.segWidget = SegWidget()
+        self.segWidget.outline_combo.setCurrentText('contour')
+        self.segWidget.setOutlineStyle('contour')
+        self.limitsWidget = LimitsWidget()
+        self.segDock = qw.QDockWidget('Segmentation settings')
+        self.segDock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                     qc.Qt.RightDockWidgetArea)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self.segDock)
         layout = qw.QVBoxLayout()
-        layout.addWidget(self.seg_widget)
-        layout.addWidget(self.lim_widget)
+        layout.addWidget(self.segWidget)
+        layout.addWidget(self.limitsWidget)
         widget = qw.QWidget()
         widget.setLayout(layout)
         scroll = qw.QScrollArea()
         scroll.setWidget(widget)
-        self.seg_dock.setWidget(scroll)
-        self.display_widget = SegDisplay()
-        self.display_widget.setRoiMode()
-        self.display_widget.frame_scene.linewidth = 1
-        self.setCentralWidget(self.display_widget)
+        self.segDock.setWidget(scroll)
+        self.displayWidget = SegDisplay()
+        self.displayWidget.setRoiMode()
+        self.displayWidget.frame_scene.linewidth = 1
+        self.setCentralWidget(self.displayWidget)
         self._makeActions()
         self._makeFileDock()
         self._makeSegDock()
         self._makeMenuBar()
-        self.sigImage.connect(self.display_widget.setFrame)
-        self.sigSegment.connect(self.seg_widget.sigProcess)
-        self.seg_widget.sigSegPolygons.connect(
-            self.display_widget.sigSetPolygons)
-        self.display_widget.sigPolygons.connect(self.setSegmented)
-        self.seg_widget.sigProcessed.connect(self.display_widget.setBboxes)
-        self.lim_widget.sigWmin.connect(self.seg_widget.setWmin)
-        self.lim_widget.sigWmax.connect(self.seg_widget.setWmax)
-        self.lim_widget.sigHmin.connect(self.seg_widget.setHmin)
-        self.lim_widget.sigHmax.connect(self.seg_widget.setHmax)
+        self.sigImage.connect(self.displayWidget.setFrame)
+        self.sigSegment.connect(self.segWidget.sigProcess)
+        self.segWidget.sigSegPolygons.connect(
+            self.displayWidget.sigSetPolygons)
+        self.displayWidget.sigPolygons.connect(self.setSegmented)
+        self.segWidget.sigProcessed.connect(self.displayWidget.setBboxes)
+        self.limitsWidget.sigWmin.connect(self.segWidget.setWmin)
+        self.limitsWidget.sigWmax.connect(self.segWidget.setWmax)
+        self.limitsWidget.sigHmin.connect(self.segWidget.setHmin)
+        self.limitsWidget.sigHmax.connect(self.segWidget.setHmax)
         # Note the difference between `sigSegment` and `sigSegmented`
         # - this TrainingWidget's `sigSegment` sends the image to the
         #   segmentation widget
@@ -162,11 +162,11 @@ class TrainingWidget(qw.QMainWindow):
         #   - display widget's setBboxes slot converts the rects into polygon
         #       vtx and passes them via `sigPolygons`
         # - when the frame has been already segmented and is available in
-        #   `seg_dict`, `sigSegmented` sends segmented polygons to
+        #   `segDict`, `sigSegmented` sends segmented polygons to
         #   displaywidget's `setPolygons` slot directly
-        self.sigSegmented.connect(self.display_widget.setPolygons)
-        self.sigQuit.connect(self.seg_widget.sigQuit)
-        self.sigQuit.connect(self.lim_widget.sigQuit)
+        self.sigSegmented.connect(self.displayWidget.setPolygons)
+        self.sigQuit.connect(self.segWidget.sigQuit)
+        self.sigQuit.connect(self.limitsWidget.sigQuit)
         self._makeShortcuts()
         self.openImageDir()
         self.statusBar().showMessage('Press `Next image` to start segmenting')
@@ -176,26 +176,26 @@ class TrainingWidget(qw.QMainWindow):
 
         dirlayout = qw.QFormLayout()
         self.out_dir_label = qw.QLabel('Output directory for training data')
-        self.out_dir_name = qw.QLabel(self.out_dir)
+        self.out_dir_name = qw.QLabel(self.outputDir)
         dirlayout.addRow(self.out_dir_label, self.out_dir_name)
-        self.image_dir_label = qw.QLabel('Input image directory')
-        self.image_dir_name = qw.QLabel(self.image_dir)
-        dirlayout.addRow(self.image_dir_label, self.image_dir_name)
+        self.imageDirLabel = qw.QLabel('Input image directory')
+        self.imageDirName = qw.QLabel(self.imageDir)
+        dirlayout.addRow(self.imageDirLabel, self.imageDirName)
         self.dir_widget = qw.QWidget()
         self.dir_widget.setLayout(dirlayout)
 
-        self.file_view = qw.QListView()
-        self.file_view.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
+        self.fileView = qw.QListView()
+        self.fileView.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
         self.file_model = qw.QFileSystemModel()
         self.file_model.setFilter(qc.QDir.NoDotAndDotDot | qc.QDir.Files)
-        self.file_view.setModel(self.file_model)
-        self.file_view.setRootIndex(self.file_model.setRootPath(self.image_dir))
-        self.file_view.selectionModel().selectionChanged.connect(self.handleFileSelectionChanged)
+        self.fileView.setModel(self.file_model)
+        self.fileView.setRootIndex(self.file_model.setRootPath(self.imageDir))
+        self.fileView.selectionModel().selectionChanged.connect(self.handleFileSelectionChanged)
 
         self.fwidget = qw.QWidget()
         layout = qw.QVBoxLayout()
         layout.addWidget(self.dir_widget)
-        layout.addWidget(self.file_view)
+        layout.addWidget(self.fileView)
         self.fwidget.setLayout(layout)
         self.file_dock.setWidget(self.fwidget)
         self.file_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
@@ -203,10 +203,10 @@ class TrainingWidget(qw.QMainWindow):
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self.file_dock)
 
     def _makeSegDock(self):
-        self.next_button = qw.QToolButton()
-        self.next_button.setSizePolicy(qw.QSizePolicy.Minimum,
-                                       qw.QSizePolicy.MinimumExpanding)
-        self.next_button.setDefaultAction(self.nextFrameAction)
+        self.nextButton = qw.QToolButton()
+        self.nextButton.setSizePolicy(qw.QSizePolicy.Minimum,
+                                      qw.QSizePolicy.MinimumExpanding)
+        self.nextButton.setDefaultAction(self.nextFrameAction)
 
         self.prev_button = qw.QToolButton()
         self.prev_button.setSizePolicy(qw.QSizePolicy.Minimum,
@@ -231,34 +231,34 @@ class TrainingWidget(qw.QMainWindow):
         # self.export_button = qw.QToolButton()
         # self.export_button.setDefaultAction(self.exportSegmentationAction)
         # layout.addWidget(self.export_button)
-        self.keep_button = qw.QToolButton()
-        self.keep_button.setSizePolicy(qw.QSizePolicy.Minimum,
-                                       qw.QSizePolicy.MinimumExpanding)
-        self.keep_button.setDefaultAction(
-            self.display_widget.keepSelectedAction)
-        self.remove_button = qw.QToolButton()
-        self.remove_button.setSizePolicy(qw.QSizePolicy.Minimum,
-                                         qw.QSizePolicy.MinimumExpanding)
-        self.remove_button.setDefaultAction(
-            self.display_widget.removeSelectedAction)
+        self.keepButton = qw.QToolButton()
+        self.keepButton.setSizePolicy(qw.QSizePolicy.Minimum,
+                                      qw.QSizePolicy.MinimumExpanding)
+        self.keepButton.setDefaultAction(
+            self.displayWidget.keepSelectedAction)
+        self.removeButton = qw.QToolButton()
+        self.removeButton.setSizePolicy(qw.QSizePolicy.Minimum,
+                                        qw.QSizePolicy.MinimumExpanding)
+        self.removeButton.setDefaultAction(
+            self.displayWidget.removeSelectedAction)
 
         layout = qw.QVBoxLayout()
-        layout.addWidget(self.display_widget.seglist, 1)
+        layout.addWidget(self.displayWidget.segList, 1)
 
-        layout.addWidget(self.keep_button)
-        layout.addWidget(self.remove_button)
-        layout.addWidget(self.next_button)
+        layout.addWidget(self.keepButton)
+        layout.addWidget(self.removeButton)
+        layout.addWidget(self.nextButton)
         layout.addWidget(self.prev_button)
         layout.addWidget(self.resegment_button)
         layout.addWidget(self.clear_cur_button)
         layout.addWidget(self.clear_all_button)
         widget = qw.QWidget()
         widget.setLayout(layout)
-        self.seg_dock = qw.QDockWidget('Segmented objects')
-        self.seg_dock.setWidget(widget)
-        self.seg_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                      qc.Qt.RightDockWidgetArea)
-        self.addDockWidget(qc.Qt.LeftDockWidgetArea, self.seg_dock)
+        self.segDock = qw.QDockWidget('Segmented objects')
+        self.segDock.setWidget(widget)
+        self.segDock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                     qc.Qt.RightDockWidgetArea)
+        self.addDockWidget(qc.Qt.LeftDockWidgetArea, self.segDock)
 
     def _makeActions(self):
         self.imagedirAction = qw.QAction('Open image dir')
@@ -294,9 +294,9 @@ class TrainingWidget(qw.QMainWindow):
 
     def _makeShortcuts(self):
         self.zoomInKey = qw.QShortcut(qg.QKeySequence('+'), self)
-        self.zoomInKey.activated.connect(self.display_widget.zoomIn)
+        self.zoomInKey.activated.connect(self.displayWidget.zoomIn)
         self.zoomOutKey = qw.QShortcut(qg.QKeySequence('-'), self)
-        self.zoomOutKey.activated.connect(self.display_widget.zoomOut)
+        self.zoomOutKey.activated.connect(self.displayWidget.zoomOut)
 
         self.nextImageKey = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
         self.nextImageKey.activated.connect(self.nextFrame)
@@ -305,16 +305,16 @@ class TrainingWidget(qw.QMainWindow):
 
         self.removeSegKey = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
         self.removeSegKey.activated.connect(
-            self.display_widget.removeSelectedAction.trigger)
+            self.displayWidget.removeSelectedAction.trigger)
         self.removeSegKey2 = qw.QShortcut(qg.QKeySequence('X'), self)
         self.removeSegKey2.activated.connect(
-            self.display_widget.removeSelectedAction.trigger)
+            self.displayWidget.removeSelectedAction.trigger)
         self.keepSegKey = qw.QShortcut(qg.QKeySequence('K'), self)
         self.keepSegKey.activated.connect(
-            self.display_widget.keepSelectedAction.trigger)
+            self.displayWidget.keepSelectedAction.trigger)
         self.keepSegKey2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
         self.keepSegKey2.activated.connect(
-            self.display_widget.keepSelectedAction.trigger)
+            self.displayWidget.keepSelectedAction.trigger)
 
         self.clearCurrentImageKey = qw.QShortcut(qg.QKeySequence('C'), self)
         self.clearCurrentImageKey.activated.connect(self.clearCurrent)
@@ -346,11 +346,11 @@ class TrainingWidget(qw.QMainWindow):
                                  self.clearCurrentAction,
                                  self.clearAllAction])
         self.viewMenu = self.menuBar().addMenu('View')
-        self.viewMenu.addActions([self.display_widget.zoomInAction,
-                                   self.display_widget.zoomOutAction,
-                                   self.display_widget.autoColorAction,
-                                   self.display_widget.colormapAction,
-                                   self.display_widget.lineWidthAction])
+        self.viewMenu.addActions([self.displayWidget.zoomInAction,
+                                  self.displayWidget.zoomOutAction,
+                                  self.displayWidget.autoColorAction,
+                                  self.displayWidget.colormapAction,
+                                  self.displayWidget.lineWidthAction])
         self.advancedMenu = self.menuBar().addMenu('Advanced')
         self.advancedMenu.addAction(self.debugAction)
 
@@ -375,17 +375,17 @@ class TrainingWidget(qw.QMainWindow):
         if len(directory) == 0:
             return
         try:
-            self.image_dir = directory
-            self.image_dir_name.setText(directory)
-            self.image_files = [entry.path for entry in
-                                os.scandir(self.image_dir)]
-            self.image_index = -1
+            self.imageDir = directory
+            self.imageDirName.setText(directory)
+            self.imageFiles = [entry.path for entry in
+                               os.scandir(self.imageDir)]
+            self.imageIndex = -1
             settings.setValue('training/imagedir', directory)
         except IOError as err:
             qw.QMessageBox.critical(self, 'Could not open image directory',
                                     str(err))
             return
-        self.file_view.setRootIndex(self.file_model.setRootPath(self.image_dir))
+        self.fileView.setRootIndex(self.file_model.setRootPath(self.imageDir))
 
     def setOutputDir(self):
         directory = settings.value('training/outdir', '.')
@@ -396,7 +396,7 @@ class TrainingWidget(qw.QMainWindow):
         if len(directory) == 0:
             return
         try:
-            self.out_dir = directory
+            self.outputDir = directory
             self.out_dir_name.setText(directory)
             settings.setValue('training/outdir', directory)
         except IOError as err:
@@ -406,105 +406,113 @@ class TrainingWidget(qw.QMainWindow):
             return
 
     def gotoFrame(self, index):
-        if index >= len(self.image_files) or index < 0 or self._waiting:
+        if index >= len(self.imageFiles) or index < 0 or self._waiting:
             return
-        fname = self.image_files[index]
+        fname = self.imageFiles[index]
         if not os.path.exists(fname):
             qw.QMessageBox.critical(self, 'File does not exist', f'No such file exists: {fname}')
-            del self.image_files[index]
-            self.seg_dict.pop(index, None)
+            del self.imageFiles[index]
+            self.segDict.pop(index, None)
             return
         image = cv2.imread(fname)
         if image is None:
             return
-        self.image_index = index
-        self.display_widget.resetArenaAction.trigger()
+        self.imageIndex = index
+        self.displayWidget.resetArenaAction.trigger()
         self.sigImage.emit(image, index)
-        self.display_widget.updateSegList({})
-        if fname not in self.seg_dict:
+        self.displayWidget.updateSegList({})
+        if fname not in self.segDict:
             self.saved = False
             self._waiting = True
             self.statusBar().showMessage(
                 f'Processing image: {os.path.basename(fname)}.'
-                f'[Image {self.image_index + 1} of {len(self.image_files)}] ...')            
+                f'[Image {self.imageIndex + 1} of {len(self.imageFiles)}] ...')
             self.sigSegment.emit(image, index)
-            
+            print(f'#### Sent image: {os.path.basename(fname)}.'
+            f'[Index {self.imageIndex} of {len(self.imageFiles)}]')
         else:
-            self.sigSegmented.emit(self.seg_dict[fname], index)
+            self.sigSegmented.emit(self.segDict[fname], index)
             self.statusBar().showMessage(
                 f'Current image: {os.path.basename(fname)}.'
-                f'[Image {self.image_index + 1} of {len(self.image_files)}]')
+                f'[Image {self.imageIndex + 1} of {len(self.imageFiles)}]')
 
     def nextFrame(self):
-        self.gotoFrame(self.image_index + 1)
+        self.gotoFrame(self.imageIndex + 1)
 
     def prevFrame(self):
-        self.gotoFrame(self.image_index - 1)
+        self.gotoFrame(self.imageIndex - 1)
 
     def handleFileSelectionChanged(self, selection):
         indices = selection.indexes()
         if len(indices) == 0:
             return
         fname = self.file_model.data(indices[0])
-        index = self.image_files.index(os.path.join(self.image_dir, fname))
+        index = self.imageFiles.index(os.path.join(self.imageDir, fname))
         self.gotoFrame(index)
 
     @qc.pyqtSlot(dict)
     def setSegmented(self, segdict: Dict[int, np.ndarray]) -> None:
         """Store the list of segmented objects for frame"""
         logging.debug(f'Received segmentated {len(segdict)} objects from {self.sender()}')
-        fname = self.image_files[self.image_index]
-        self.seg_dict[fname] = segdict
+        print(f'#### Received segmentated {len(segdict)} objects from {self.sender()} for image # {self.imageIndex}')
+        fname = self.imageFiles[self.imageIndex]
+        self.segDict[fname] = segdict
         self._waiting = False
         self.statusBar().showMessage(
             f'Current image: {os.path.basename(fname)}.'
-            f'[Image {self.image_index + 1} of {len(self.image_files)}]')
+            f'[Image {self.imageIndex + 1} of {len(self.imageFiles)}]')
 
     @qc.pyqtSlot(dict)
-    def send_for_seg_and_wait(self, segdict: Dict[int, np.ndarray]) -> None:
+    def sendAndWaitSegmentation(self, segdict: Dict[int, np.ndarray]) -> None:
         """Utility function for batch segmentation.
 
         When triggered send the next image file for processing
         """
         if len(segdict ) > 0:
             self.setSegmented(segdict)
-        if len(self.seg_dict) == len(self.image_files):
-            self.batch_indicator.setValue(self.batch_indicator.maximum() + 1)
+        print('###### segDict', len(self.segDict), 'Image files', len(self.imageFiles))
+        # this comparison is needed because entries may be removed from imageFiles in case of unreadable or deleted file
+        if len(self.segDict) >= len(self.imageFiles):
+            self.batchSegIndicator.setValue(self.batchSegIndicator.maximum())
             # Switch the connection back for interactive segmentation
             try:
-                self.display_widget.sigPolygons.disconnect(
-                    self.send_for_seg_and_wait)
+                self.displayWidget.sigPolygons.disconnect(
+                    self.sendAndWaitSegmentation)
             except TypeError:
-                logging.error('Failed to disconnect: send_for_seg_and_wait')
-            self.display_widget.sigPolygons.connect(
+                logging.error('Failed to disconnect: sendAndWaitSegmentation')
+            self.displayWidget.sigPolygons.connect(
                 self.setSegmented)
             return
-        self.batch_indicator.setValue(self.image_index)
-        self.gotoFrame(self.image_index + 1)        
+        self.batchSegIndicator.setValue(self.imageIndex + 1)
+        self.gotoFrame(self.imageIndex + 1)
         
     @qc.pyqtSlot()
     def batchSegment(self):
-        """This works by switching the display_widget.sigPolygons from slot
-        setSegmented to send_for_seg_and_wait.
+        """This works by switching the displayWidget.sigPolygons from slot
+        setSegmented to sendAndWaitSegmentation.
 
         
         """
-        maxcount = len(self.image_files)
-        self.batch_indicator = qw.QProgressDialog('Processing all files in directory',
-                                       None,
-                                       0, maxcount,
-                                       self)        
-        self.batch_indicator.setWindowModality(qc.Qt.WindowModal)
-        self.batch_indicator.show()
+        maxcount = len(self.imageFiles)
+        self.batchSegIndicator = qw.QProgressDialog('Processing all files in directory',
+                                                    None,
+                                                    0, maxcount,
+                                                    self)
+        self.batchSegIndicator.setWindowModality(qc.Qt.WindowModal)
+        self.batchSegIndicator.setValue(0)
+        self.batchSegIndicator.show()
         try:
-            self.display_widget.sigPolygons.disconnect(
+            self.displayWidget.sigPolygons.disconnect(
                 self.setSegmented)
         except TypeError:
             logging.error('Failed to disconnect: setSegmented')
-        self.display_widget.sigPolygons.connect(
-            self.send_for_seg_and_wait)
-        self.image_index = -1
-        self.send_for_seg_and_wait({})
+        print('AAA. Polygon receivers', self.displayWidget.receivers(self.displayWidget.sigPolygons))
+        self.displayWidget.sigPolygons.connect(
+            self.sendAndWaitSegmentation)
+        print('BBB. Polygon receivers',
+              self.displayWidget.receivers(self.displayWidget.sigPolygons))
+        self.imageIndex = -1
+        self.sendAndWaitSegmentation({})
 
     def cleanup(self):
         self.sigQuit.emit()
@@ -516,8 +524,9 @@ class TrainingWidget(qw.QMainWindow):
             a0.accept()
         else:
             ret = qw.QMessageBox.question(self, 'Quit without saving?',
-                                          'Data not saved. Are you sure to quit?'
-                                          ' If not, select "No" and use the'
+                                          'Are you sure to quit?'
+                                          ' Data not saved.'
+                                          ' Select "No" and use the'
                                           ' "Export training/validation data"'
                                           ' button to save the data.',
                                           qw.QMessageBox.Yes,
@@ -528,188 +537,195 @@ class TrainingWidget(qw.QMainWindow):
                 a0.ignore()
 
     def clearAllSegmentation(self):
-        self.seg_dict = {}
+        self.segDict = {}
 
     def resegmentCurrent(self):
-        self.seg_dict.pop(self.image_files[self.image_index], None)
-        self.gotoFrame(self.image_index)
+        self.segDict.pop(self.imageFiles[self.imageIndex], None)
+        self.gotoFrame(self.imageIndex)
 
     def clearCurrent(self):
-        self.seg_dict.pop(self.image_files[self.image_index], None)
-        self.display_widget.setPolygons({}, self.image_index)
+        self.segDict.pop(self.imageFiles[self.imageIndex], None)
+        self.displayWidget.setPolygons({}, self.imageIndex)
 
     def _makeCocoDialog(self):
         dialog = qw.QDialog(self)
         layout = qw.QFormLayout()
-        desc_label = qw.QLabel('Description')
-        desc_text = qw.QLineEdit()
-        desc_text.setText(self.description)
+        descLabel = qw.QLabel('Description')
+        descText = qw.QLineEdit()
+        descText.setText(self.description)
+
         def setDesc():
-            self.description = desc_text.text()
+            self.description = descText.text()
 
-        desc_text.editingFinished.connect(setDesc)
-        license_label = qw.QLabel('License name')
-        license_text = qw.QLineEdit()
-        license_text.setText(self.license_name)
+        descText.editingFinished.connect(setDesc)
+        layout.addRow(descLabel, descText)
+        licenseLabel = qw.QLabel('License name')
+        licenseText = qw.QLineEdit()
+        licenseText.setText(self.licenseName)
+
         def setLicenseName():
-            self.license_name = license_text.text()
+            self.licenseName = licenseText.text()
 
-        license_text.editingFinished.connect(setLicenseName)
-        layout.addRow(license_label, license_text)
-        license_url_label = qw.QLabel('License URL')
-        license_url_text = qw.QLineEdit()
-        license_url_text.setText(self.license_url)
+        licenseText.editingFinished.connect(setLicenseName)
+        layout.addRow(licenseLabel, licenseText)
+        licenseUrlLabel = qw.QLabel('License URL')
+        licenseUrlText = qw.QLineEdit()
+        licenseUrlText.setText(self.licenseUrl)
+
         def setLicenseUrl():
-            self.license_url = license_url_text.text()
+            self.licenseUrl = licenseUrlText.text()
 
-        license_url_text.editingFinished.connect(setLicenseUrl)
-        layout.addRow(license_url_label, license_url_text)
-        url_label = qw.QLabel('URL')
-        url_text = qw.QLineEdit()
+        licenseUrlText.editingFinished.connect(setLicenseUrl)
+        layout.addRow(licenseUrlLabel, licenseUrlText)
+        urlLabel = qw.QLabel('URL')
+        urlText = qw.QLineEdit()
 
         def setUrl():
-            self.url = url_text.text()
+            self.url = urlText.text()
 
-        url_text.editingFinished.connect(setUrl)
-        layout.addRow(url_label, url_text)
-        contrib_label = qw.QLabel('Contributor')
-        contrib_text = qw.QLineEdit()
+        urlText.editingFinished.connect(setUrl)
+        layout.addRow(urlLabel, urlText)
+        contribLabel = qw.QLabel('Contributor')
+        contribText = qw.QLineEdit()
 
         def setContrib():
-            self.contributor = contrib_text.text()
+            self.contributor = contribText.text()
 
-        contrib_text.editingFinished.connect(setContrib)
-        layout.addRow(contrib_label, contrib_text)
-        cat_label = qw.QLabel('Object class')
-        cat_text = qw.QLineEdit(self.category_name)
+        contribText.editingFinished.connect(setContrib)
+        layout.addRow(contribLabel, contribText)
+        catLabel = qw.QLabel('Object class')
+        catText = qw.QLineEdit(self.categoryName)
 
         def setCategory():
-            self.category_name = cat_text.text()
+            self.categoryName = catText.text()
 
-        cat_text.editingFinished.connect(setCategory)
-        layout.addRow(cat_label, cat_text)
+        catText.editingFinished.connect(setCategory)
+        layout.addRow(catLabel, catText)
 
-        size_label = qw.QLabel('Maximum image size')
-        size_text = qw.QLabel(str(self.inputImageSize))
-        layout.addRow(size_label, size_text)
+        sizeLabel = qw.QLabel('Maximum image size')
+        sizeText = qw.QLabel(str(self.inputImageSize))
+        layout.addRow(sizeLabel, sizeText)
 
-        baseconfig_label = qw.QLabel('Neural-Net base configuration')
-        baseconfig_combo = qw.QComboBox()
+        baseConfigLabel = qw.QLabel('Neural-Net base configuration')
+        baseConfigCombo = qw.QComboBox()
         for name in dir(yconfig):
             if name.startswith('yolact') and name.endswith('config'):
-                baseconfig_combo.addItem(name)
-        def setBaseconfig(text):
-            self.baseconfig_name = text
-            self.baseconfig = getattr(yconfig, text)
-            size_text.setText(str(self.baseconfig.max_size))
-        baseconfig_combo.currentTextChanged.connect(setBaseconfig)
-        self.baseconfig_name = baseconfig_combo.currentText()
-        layout.addRow(baseconfig_label, baseconfig_combo)
+                baseConfigCombo.addItem(name)
 
-        val_label = qw.QLabel('Use % of images for validation')
-        val_text = qw.QLineEdit(str(int(self.validation_frac * 100)))
+        def setBaseconfig(text):
+            self.baseconfigName = text
+            self.baseconfig = getattr(yconfig, text)
+            sizeText.setText(str(self.baseconfig.max_size))
+
+        baseConfigCombo.currentTextChanged.connect(setBaseconfig)
+        self.baseconfigName = baseConfigCombo.currentText()
+        layout.addRow(baseConfigLabel, baseConfigCombo)
+
+        valLabel = qw.QLabel('Use % of images for validation')
+        valText = qw.QLineEdit(str(int(self.validation_frac * 100)))
 
         def setValFrac():
-            self.validation_frac = float(val_text.text()) / 100
+            self.validation_frac = float(valText.text()) / 100
 
-        val_text.editingFinished.connect(setValFrac)
-        layout.addRow(val_label, val_text)
+        valText.editingFinished.connect(setValFrac)
+        layout.addRow(valLabel, valText)
 
-        subregion_label = qw.QLabel('Split into subregions')
-        subregion_spin = qw.QSpinBox()
-        subregion_spin.setRange(1, 5)
-        subregion_spin.setValue(self.numCrops)
+        subregionLabel = qw.QLabel('Split into subregions')
+        subregionSpin = qw.QSpinBox()
+        subregionSpin.setRange(1, 5)
+        subregionSpin.setValue(self.numCrops)
+
         def setSubregionCount(num):
             self.numCrops = num
-        subregion_spin.valueChanged.connect(setSubregionCount)
-        layout.addRow(subregion_label, subregion_spin)
 
-        bbox_label = qw.QLabel('Export boundaries as')
-        bbox_combo = qw.QComboBox()
-        bbox_combo.addItems(['contour', 'bbox', 'minrect'])
+        subregionSpin.valueChanged.connect(setSubregionCount)
+        layout.addRow(subregionLabel, subregionSpin)
+
+        bboxLabel = qw.QLabel('Export boundaries as')
+        bboxCombo = qw.QComboBox()
+        bboxCombo.addItems(['contour', 'bbox', 'minrect'])
 
         def setBoundaryType(text):
             self.boundaryType = text
 
-        bbox_combo.currentTextChanged.connect(setBoundaryType)
-        layout.addRow(bbox_label, bbox_combo)
-        display_seg_button = qw.QCheckBox('Display segmentation (for debugging)')
-        display_seg_button.setChecked(self.displayCoco)
+        bboxCombo.currentTextChanged.connect(setBoundaryType)
+        layout.addRow(bboxLabel, bboxCombo)
+        displaySegButton = qw.QCheckBox('Display segmentation (for debugging)')
+        displaySegButton.setChecked(self.displayCoco)
 
         def setDisplayCocoSeg(state):
             self.displayCoco = state
 
-        display_seg_button.clicked.connect(setDisplayCocoSeg)
-        layout.addWidget(display_seg_button)
+        displaySegButton.clicked.connect(setDisplayCocoSeg)
+        layout.addWidget(displaySegButton)
 
-        ok_button = qw.QPushButton('OK')
-        ok_button.setDefault(True)
-        ok_button.clicked.connect(dialog.accept)
-        layout.addWidget(ok_button)
+        okButton = qw.QPushButton('OK')
+        okButton.setDefault(True)
+        okButton.clicked.connect(dialog.accept)
+        layout.addWidget(okButton)
         dialog.setLayout(layout)
         ret = dialog.exec_()
         return ret
 
-
     def exportSegmentation(self):
         self.setOutputDir()
-        train_dir = f'{self.out_dir}/training'
+        trainDir = f'{self.outputDir}/training'
         try:
-            os.mkdir(train_dir)
+            os.mkdir(trainDir)
         except FileExistsError:
             qw.QMessageBox.critical(self, 'Directory already exists',
-                                    f'Directory {train_dir} already exists.'
+                                    f'Directory {trainDir} already exists.'
                                     f' Delete it or specify another output'
                                     f' directory')
             return
         except FileNotFoundError as ferr:
             qw.QMessageBox.critical(self, 'Path does not exist', str(ferr))
             return
-        val_dir = f'{self.out_dir}/validation'
+        valDir = f'{self.outputDir}/validation'
         try:
-            os.mkdir(val_dir)
+            os.mkdir(valDir)
         except FileExistsError:
             qw.QMessageBox.critical('Directory already exists',
-                                    f'Directory {val_dir} already exists.'
+                                    f'Directory {valDir} already exists.'
                                     f' Delete it or specify another output'
                                     f' directory')
             return
         ts = datetime.now()
 
         accepted = self._makeCocoDialog()
-        validation_count = int(len(self.image_files) * self.validation_frac)
-        training_count = len(self.image_files) - validation_count
-        training_list = random.sample(self.image_files, training_count)
-        self.dumpCocoJson(training_list, train_dir, ts,
+        validationCount = int(len(self.imageFiles) * self.validation_frac)
+        trainingCount = len(self.imageFiles) - validationCount
+        trainingList = random.sample(self.imageFiles, trainingCount)
+        self.dumpCocoJson(trainingList, trainDir, ts,
                           message='Exporting training set in COCO format')
-        yolact_config = {'name': f'{self.category_name}_weights',
-                         'base': self.baseconfig_name,
+        yolactConfig = {'name': f'{self.categoryName}_weights',
+                         'base': self.baseconfigName,
                          'dataset': {'name': self.description,
-                                     'train_info': f'{train_dir}/annotations.json',
-                                     'valid_info': f'{val_dir}/annotations.json',
-                                     'train_images': train_dir,
-                                     'valid_images': val_dir,
+                                     'train_info': f'{trainDir}/annotations.json',
+                                     'valid_info': f'{valDir}/annotations.json',
+                                     'train_images': trainDir,
+                                     'valid_images': valDir,
                                      'has_gt': True,
-                                     'class_names': [self.category_name]},
+                                     'class_names': [self.categoryName]},
                          'num_classes': 2,
                          'max_size': self.inputImageSize,
-                         'lr_steps': [100000, 150000, 175000, 190000],
-                         'max_iter': 200000}
-        yolact_file = f'{self.out_dir}/yolact_config.yaml'
-        with open(yolact_file, 'w') as yolact_fd:
-            yaml.dump(yolact_config, yolact_fd)
-        if validation_count > 0:
-            validation_list = set(self.image_files) - set(training_list)
-            self.dumpCocoJson(validation_list, val_dir, ts,
+                        'lr_steps': [100000, 150000, 175000, 190000],
+                        'max_iter': 200000}
+        yolactFile = f'{self.outputDir}/yolact_config.yaml'
+        with open(yolactFile, 'w') as yolactFd:
+            yaml.dump(yolactConfig, yolactFd)
+        if validationCount > 0:
+            validationList = set(self.imageFiles) - set(trainingList)
+            self.dumpCocoJson(validationList, valDir, ts,
                               message='Exporting validation set in COCO format')
-        command = f'python -m yolact.train --config={yolact_file} --save_folder={self.out_dir}'
+        command = f'python -m yolact.train --config={yolactFile} --save_folder={self.outputDir}'
         qw.QMessageBox.information(self, 'Data saved',
-                                   f'Training images: {train_dir}<br>'
-                                   f'Validation images: {val_dir}<br>'
-                                   f'Yolact configuration: {yolact_file}<br>'
+                                   f'Training images: {trainDir}<br>'
+                                   f'Validation images: {valDir}<br>'
+                                   f'Yolact configuration: {yolactFile}<br>'
                                    f'Now you can train yolact by running this command (copied to clipboard):<br>'
                                    f'<b>{command}</b><br>'
-                                   f'But you must copy the initial weights file {self.baseconfig.backbone.path} to {self.out_dir} before starting<br>'
+                                   f'But you must copy the initial weights file {self.baseconfig.backbone.path} to {self.outputDir} before starting<br>'
                                    f'For finer control over training settings see yolact help:'
                                    f'`python -m yolact.train --help`'
                                    )
@@ -729,9 +745,9 @@ class TrainingWidget(qw.QMainWindow):
             },
             "licenses": [
                 {
-                    "url": self.license_url,
+                    "url": self.licenseUrl,
                     "id": 0,
-                    "name": self.license_name
+                    "name": self.licenseName
                 }
             ],
             'images': [],
@@ -743,13 +759,13 @@ class TrainingWidget(qw.QMainWindow):
                  'name': '_background_'},
                 {'supercategory': None,
                  'id': 1,
-                 'name': self.category_name}
+                 'name': self.categoryName}
             ]
         }
         imdir = os.path.join(directory, 'PNGImages')
         os.mkdir(imdir)
-        seg_id = 0
-        img_id = 0
+        segId = 0
+        imgId = 0
 
         indicator = qw.QProgressDialog(message, None,
                                        0, len(filepaths),
@@ -760,7 +776,7 @@ class TrainingWidget(qw.QMainWindow):
 
         for ii, fpath in enumerate(filepaths):
             indicator.setValue(ii)
-            if fpath not in self.seg_dict or len(self.seg_dict[fpath]) == 0:
+            if fpath not in self.segDict or len(self.segDict[fpath]) == 0:
                 continue
             img = cv2.imread(fpath)
             fname = os.path.basename(fpath)
@@ -772,43 +788,43 @@ class TrainingWidget(qw.QMainWindow):
             if img.shape[0] > self.inputImageSize or img.shape[1] > self.inputImageSize:
                 # Here I select half of `num_crops` segments' top left corner (pos_tl)
                 # and another half's bottom right corner.
-                seg_bounds = [(np.min(seg[:, 0]), np.min(seg[:, 1]))
-                              for seg in self.seg_dict[fpath].values()]
-                seg_bounds = np.array(seg_bounds)
-                idx = np.random.randint(0, len(seg_bounds), size=self.numCrops)
-                xlist = seg_bounds[idx, 0] - np.random.randint(0, w // 2, size=len(idx))
+                segBounds = [(np.min(seg[:, 0]), np.min(seg[:, 1]))
+                             for seg in self.segDict[fpath].values()]
+                segBounds = np.array(segBounds)
+                idx = np.random.randint(0, len(segBounds), size=self.numCrops)
+                xlist = segBounds[idx, 0] - np.random.randint(0, w // 2, size=len(idx))
                 xlist[xlist < 0] = 0
-                ylist = seg_bounds[idx, 1] - np.random.randint(0, h // 2, size=len(idx))
+                ylist = segBounds[idx, 1] - np.random.randint(0, h // 2, size=len(idx))
                 ylist[ylist < 0] = 0
             else:
                 xlist, ylist = [0], [0]
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
-                sq_img = np.zeros((self.max_size, self.max_size, 3),
-                                  dtype=np.uint8)
+                sqImg = np.zeros((self.max_size, self.max_size, 3),
+                                 dtype=np.uint8)
                 h_ = min(h, img.shape[0] - y)
                 w_ = min(w, img.shape[1] - x)
-                sq_img[:h_, :w_, :] = img[y: y + h_, x: x + w_, :]
+                sqImg[:h_, :w_, :] = img[y: y + h_, x: x + w_, :]
                 logging.debug(f'Processing: {prefix}: span ({x}, {y}, {x+h_}, {y+h_}')
                 fname = f'{prefix}_{jj}.png'
-                any_valid_seg = False
-                for seg in self.seg_dict[fpath].values():
-                    tmp_seg = seg - [x, y]
-                    tmp_seg = tmp_seg[np.all((tmp_seg >= 0) &
-                                             (tmp_seg < self.max_size),
-                                             axis=1)]
-                    if tmp_seg.shape[0] < 3:
+                anyValidSeg = False
+                for seg in self.segDict[fpath].values():
+                    tmpSeg = seg - [x, y]
+                    tmpSeg = tmpSeg[np.all((tmpSeg >= 0) &
+                                           (tmpSeg < self.max_size),
+                                           axis=1)]
+                    if tmpSeg.shape[0] < 3:
                         continue
-                    any_valid_seg = True
-                    bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
+                    anyValidSeg = True
+                    bbox = [int(xx) for xx in cv2.boundingRect(tmpSeg)]
                     if self.boundaryType == 'contour':
-                        segmentation = [int(xx) for xx in tmp_seg.flatten()]
+                        segmentation = [int(xx) for xx in tmpSeg.flatten()]
                     elif self.boundaryType == 'bbox':
                         segmentation = [bbox[0], bbox[1],
                                         bbox[0], bbox[1] + bbox[3],
                                         bbox[0] + bbox[2], bbox[1] + bbox[3],
                                         bbox[0] + bbox[2], bbox[1]]
                     elif self.boundaryType == 'minrect':
-                        mr = cv2.minAreaRect(tmp_seg)
+                        mr = cv2.minAreaRect(tmpSeg)
                         segmentation = [int(xx) for xx in cv2.boxPoints(mr)]
                     _seg = np.array(segmentation).reshape(-1, 2)
                     logging.debug(f'Segmentation: \n{_seg} \nafter translating \n{seg}\nto {x}, {y}')
@@ -816,25 +832,25 @@ class TrainingWidget(qw.QMainWindow):
                         logging.debug(f'Segmentation empty for ({x},{y}): {seg}')
                         continue
                     if self.displayCoco:
-                        cv2.drawContours(sq_img, [_seg], -1, (0, 0, 255))
-                        cv2.rectangle(sq_img, (bbox[0], bbox[1]),
+                        cv2.drawContours(sqImg, [_seg], -1, (0, 0, 255))
+                        cv2.rectangle(sqImg, (bbox[0], bbox[1]),
                                       (bbox[0] + bbox[2], bbox[1] + bbox[3]),
                                       (0, 255, 255))
                     annotation = {
-                        "id": seg_id,
-                        "image_id": img_id,
+                        "id": segId,
+                        "image_id": imgId,
                         "category_id": 1,
                         "segmentation": [segmentation],
-                        "area": cv2.contourArea(tmp_seg),
+                        "area": cv2.contourArea(tmpSeg),
                         "bbox": bbox,
                         "iscrowd": 0
                     }
                     coco['annotations'].append(annotation)
-                    seg_id += 1
-                if not any_valid_seg:
+                    segId += 1
+                if not anyValidSeg:
                     continue
                 cv2.imwrite(os.path.join(imdir, fname),
-                            sq_img)
+                            sqImg)
                 coco['images'].append({
                     "license": 0,
                     "url": None,
@@ -842,57 +858,58 @@ class TrainingWidget(qw.QMainWindow):
                     "height": self.max_size,
                     "width": self.max_size,
                     "date_captured": None,
-                    "id": img_id
+                    "id": imgId
                 })
                 if self.displayCoco:
                     winname = 'cvwin'
-                    title = f'{fname}. Press `Esc` or `q` to hide. Any other key to fast forward.'
+                    title = f'{fname}. Press `Esc` or `q` to hide. '  \
+                            f'Any other key to fast forward.'
                     cv2.namedWindow(winname, cv2.WINDOW_NORMAL)
                     cv2.resizeWindow(winname, 800, 600)
-                    cv2.imshow(winname, sq_img)
+                    cv2.imshow(winname, sqImg)
                     cv2.setWindowTitle(winname, title)
                     key = cv2.waitKey(1000)
                     if key == 27 or key == ord('q'):
                         self.displayCoco = False
                         cv2.destroyAllWindows()
-                img_id += 1
+                imgId += 1
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
             json.dump(coco, fd)
         cv2.destroyAllWindows()
         indicator.setValue(len(filepaths))
 
     def saveSegmentation(self):
-        savedir = settings.value('training/savedir', '.')
+        saveDir = settings.value('training/savedir', '.')
         filename, _ = qw.QFileDialog.getSaveFileName(
             self,
             'Save current segmentation data',
-            directory=savedir,
+            directory=saveDir,
             filter='Pickle file (*.pkl *.pickle);;All files (*)')
         if len(filename) == 0:
             return
-        data = {'image_dir': self.image_dir,
-                'seg_dict': {fpath: seg for fpath, seg in self.seg_dict.items()}}
+        data = {'image_dir': self.imageDir,
+                'seg_dict': {fpath: seg for fpath, seg in self.segDict.items()}}
         with open(filename, 'wb') as fd:
             pickle.dump(data, fd)
         settings.setValue('training/savedir', os.path.dirname(filename))
         self.saved = True
 
     def loadSegmentation(self):
-        savedir = settings.value('training/savedir', '.')
+        saveDir = settings.value('training/savedir', '.')
         filename, _ = qw.QFileDialog.getOpenFileName(
-            self, 'Load saved segmentation', directory=savedir,
+            self, 'Load saved segmentation', directory=saveDir,
             filter='Pickle file (*.pkl *.pickle);;All files (*)')
         if len(filename) == 0:
             return
         with open(filename, 'rb') as fd:
             data = pickle.load(fd)
-            self.image_dir = data['image_dir']
-            seg_dict = data['seg_dict']
-            self.image_files = [entry.path for entry in os.scandir(self.image_dir) if os.path.isfile(entry.path)]
-            for key in list(seg_dict.keys()):
-                if key not in self.image_files:
-                    seg_dict.pop(key)
-            self.seg_dict = {fpath: seg for fpath, seg in seg_dict.items()}
+            self.imageDir = data['image_dir']
+            segDict = data['seg_dict']
+            self.imageFiles = [entry.path for entry in os.scandir(self.imageDir) if os.path.isfile(entry.path)]
+            for key in list(segDict.keys()):
+                if key not in self.imageFiles:
+                    segDict.pop(key)
+            self.segDict = {fpath: seg for fpath, seg in segDict.items()}
         settings.setValue('training/savedir', os.path.dirname(filename))
         self.gotoFrame(0)
 
