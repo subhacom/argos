@@ -38,10 +38,10 @@ class SegDisplay(FrameView):
 
     def __init__(self, *args, **kwargs):
         super(SegDisplay, self).__init__(*args, **kwargs)
-        self.seglist = qw.QListWidget()
-        self.seglist.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
-        self.seglist.setSelectionMode(self.seglist.ExtendedSelection)
-        self.seglist.itemSelectionChanged.connect(self.sendSelection)
+        self.segList = qw.QListWidget()
+        self.segList.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
+        self.segList.setSelectionMode(self.segList.ExtendedSelection)
+        self.segList.itemSelectionChanged.connect(self.sendSelection)
         self.sigItemSelectionChanged.connect(self.scene().setSelected)
         self.keepSelectedAction = qw.QAction('Keep selected objects (K)')
         self.removeSelectedAction = qw.QAction('Remove selected objects (X)')
@@ -53,14 +53,14 @@ class SegDisplay(FrameView):
     @qc.pyqtSlot()
     def sendSelection(self):
         selection = [int(item.text()) for item in
-                     self.seglist.selectedItems()]
+                     self.segList.selectedItems()]
         self.sigItemSelectionChanged.emit(selection)
 
     @qc.pyqtSlot(dict)
     def updateSegList(self, segdict: Dict[int, np.ndarray]) -> None:
-        self.seglist.clear()
-        self.seglist.addItems([str(key) for key in segdict.keys()])
-        self.seglist.updateGeometry()
+        self.segList.clear()
+        self.segList.addItems([str(key) for key in segdict.keys()])
+        self.segList.updateGeometry()
 
     def setRoiMode(self):
         self.scene().setRoiPolygonMode()
@@ -88,9 +88,9 @@ class TrainingWidget(qw.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
         self._waiting = False
-        self.boundary_type = 'contour'
-        self.display_coco = True
-        self.num_crops = 1  # number of random crops to generate if input image is bigger than training image size
+        self.boundaryType = 'contour'
+        self.displayCoco = True
+        self.numCrops = 1  # number of random crops to generate if input image is bigger than training image size
         self.saved = True
         self.validation_frac = 0.3
         self.description = ''
@@ -99,7 +99,7 @@ class TrainingWidget(qw.QMainWindow):
         self.contributor = ''
         self.category_name = 'object'
         self.url = ''
-        self.max_size = 550
+        self.inputImageSize = 550
         self.image_dir = settings.value('training/imagedir', '.')
         self.image_files = []
         self.image_index = -1
@@ -216,6 +216,10 @@ class TrainingWidget(qw.QMainWindow):
         self.resegment_button.setSizePolicy(qw.QSizePolicy.Minimum,
                                        qw.QSizePolicy.MinimumExpanding)
         self.resegment_button.setDefaultAction(self.resegmentAction)
+        self.batchSegment_button = qw.QToolButton()
+        self.batchSegment_button.setDefaultAction(self.batchSegmentAction)
+        self.batchSegment_button.setSizePolicy(qw.QSizePolicy.Minimum,
+                                       qw.QSizePolicy.MinimumExpanding)
         self.clear_cur_button = qw.QToolButton()
         self.clear_cur_button.setSizePolicy(qw.QSizePolicy.Minimum,
                                        qw.QSizePolicy.MinimumExpanding)
@@ -268,6 +272,8 @@ class TrainingWidget(qw.QMainWindow):
         self.resegmentAction = qw.QAction('Re-segment current image (R)')
         self.resegmentAction.triggered.connect(
             self.resegmentCurrent)
+        self.batchSegmentAction = qw.QAction('Segment all files in directory')
+        self.batchSegmentAction.triggered.connect(self.batchSegment)
         self.clearCurrentAction = qw.QAction('&Clear current segmentation (C)')
         self.clearCurrentAction.triggered.connect(self.clearCurrent)
         self.clearAllAction = qw.QAction('Reset all segmentation')
@@ -287,59 +293,60 @@ class TrainingWidget(qw.QMainWindow):
         self.debugAction.triggered.connect(self.setDebug)
 
     def _makeShortcuts(self):
-        self.sc_zoom_in = qw.QShortcut(qg.QKeySequence('+'), self)
-        self.sc_zoom_in.activated.connect(self.display_widget.zoomIn)
-        self.sc_zoom_out = qw.QShortcut(qg.QKeySequence('-'), self)
-        self.sc_zoom_out.activated.connect(self.display_widget.zoomOut)
+        self.zoomInKey = qw.QShortcut(qg.QKeySequence('+'), self)
+        self.zoomInKey.activated.connect(self.display_widget.zoomIn)
+        self.zoomOutKey = qw.QShortcut(qg.QKeySequence('-'), self)
+        self.zoomOutKey.activated.connect(self.display_widget.zoomOut)
 
-        self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
-        self.sc_next.activated.connect(self.nextFrame)
-        self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
-        self.sc_prev.activated.connect(self.prevFrame)
+        self.nextImageKey = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
+        self.nextImageKey.activated.connect(self.nextFrame)
+        self.prevImageKey = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
+        self.prevImageKey.activated.connect(self.prevFrame)
 
-        self.sc_remove = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
-        self.sc_remove.activated.connect(
+        self.removeSegKey = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_Delete), self)
+        self.removeSegKey.activated.connect(
             self.display_widget.removeSelectedAction.trigger)
-        self.sc_remove_2 = qw.QShortcut(qg.QKeySequence('X'), self)
-        self.sc_remove_2.activated.connect(
+        self.removeSegKey2 = qw.QShortcut(qg.QKeySequence('X'), self)
+        self.removeSegKey2.activated.connect(
             self.display_widget.removeSelectedAction.trigger)
-        self.sc_keep = qw.QShortcut(qg.QKeySequence('K'), self)
-        self.sc_keep.activated.connect(
+        self.keepSegKey = qw.QShortcut(qg.QKeySequence('K'), self)
+        self.keepSegKey.activated.connect(
             self.display_widget.keepSelectedAction.trigger)
-        self.sc_keep_2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
-        self.sc_keep_2.activated.connect(
+        self.keepSegKey2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
+        self.keepSegKey2.activated.connect(
             self.display_widget.keepSelectedAction.trigger)
 
-        self.sc_clear_current = qw.QShortcut(qg.QKeySequence('C'), self)
-        self.sc_clear_current.activated.connect(self.clearCurrent)
-        self.sc_reseg_current = qw.QShortcut(qg.QKeySequence('R'), self)
-        self.sc_reseg_current.activated.connect(self.resegmentCurrent)
+        self.clearCurrentImageKey = qw.QShortcut(qg.QKeySequence('C'), self)
+        self.clearCurrentImageKey.activated.connect(self.clearCurrent)
+        self.resegmentCUrrentImageKey = qw.QShortcut(qg.QKeySequence('R'), self)
+        self.resegmentCUrrentImageKey.activated.connect(self.resegmentCurrent)
 
-        self.sc_save = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
-        self.sc_save.activated.connect(
+        self.saveKey = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
+        self.saveKey.activated.connect(
             self.saveSegmentation)
-        self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
-        self.sc_open.activated.connect(
+        self.openKey = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
+        self.openKey.activated.connect(
             self.loadSegmentation)
 
-        self.sc_export = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
-        self.sc_export.activated.connect(self.exportSegmentation)
+        self.exportKey = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
+        self.exportKey.activated.connect(self.exportSegmentation)
 
     def _makeMenuBar(self):
-        self.file_menu = self.menuBar().addMenu('&File')
-        self.file_menu.addActions([self.imagedirAction,
-                                   self.outdirAction,
-                                   self.loadSegmentationsAction,
-                                   self.saveSegmentationAction,
-                                   self.exportSegmentationAction])
-        self.seg_menu = self.menuBar().addMenu('&Segment')
-        self.seg_menu.addActions([self.nextFrameAction,
-                                  self.prevFrameAction,
-                                  self.resegmentAction,
-                                  self.clearCurrentAction,
-                                  self.clearAllAction])
-        self.view_menu = self.menuBar().addMenu('View')
-        self.view_menu.addActions([self.display_widget.zoomInAction,
+        self.fileMenu = self.menuBar().addMenu('&File')
+        self.fileMenu.addActions([self.imagedirAction,
+                                  self.outdirAction,
+                                  self.loadSegmentationsAction,
+                                  self.saveSegmentationAction,
+                                  self.exportSegmentationAction])
+        self.segMenu = self.menuBar().addMenu('&Segment')
+        self.segMenu.addActions([self.nextFrameAction,
+                                 self.prevFrameAction,
+                                 self.resegmentAction,
+                                 self.batchSegmentAction,
+                                 self.clearCurrentAction,
+                                 self.clearAllAction])
+        self.viewMenu = self.menuBar().addMenu('View')
+        self.viewMenu.addActions([self.display_widget.zoomInAction,
                                    self.display_widget.zoomOutAction,
                                    self.display_widget.autoColorAction,
                                    self.display_widget.colormapAction,
@@ -453,6 +460,51 @@ class TrainingWidget(qw.QMainWindow):
             f'Current image: {os.path.basename(fname)}.'
             f'[Image {self.image_index + 1} of {len(self.image_files)}]')
 
+    @qc.pyqtSlot(dict)
+    def send_for_seg_and_wait(self, segdict: Dict[int, np.ndarray]) -> None:
+        """Utility function for batch segmentation.
+
+        When triggered send the next image file for processing
+        """
+        if len(segdict ) > 0:
+            self.setSegmented(segdict)
+        if len(self.seg_dict) == len(self.image_files):
+            self.batch_indicator.setValue(self.batch_indicator.maximum() + 1)
+            # Switch the connection back for interactive segmentation
+            try:
+                self.display_widget.sigPolygons.disconnect(
+                    self.send_for_seg_and_wait)
+            except TypeError:
+                logging.error('Failed to disconnect: send_for_seg_and_wait')
+            self.display_widget.sigPolygons.connect(
+                self.setSegmented)
+            return
+        self.batch_indicator.setValue(self.image_index)
+        self.gotoFrame(self.image_index + 1)        
+        
+    @qc.pyqtSlot()
+    def batchSegment(self):
+        """This works by switching the display_widget.sigPolygons from slot
+        setSegmented to send_for_seg_and_wait.
+
+        
+        """
+        maxcount = len(self.image_files)
+        self.batch_indicator = qw.QProgressDialog('Processing all files in directory',
+                                       None,
+                                       0, maxcount,
+                                       self)        
+        self.batch_indicator.setWindowModality(qc.Qt.WindowModal)
+        self.batch_indicator.show()
+        try:
+            self.display_widget.sigPolygons.disconnect(
+                self.setSegmented)
+        except TypeError:
+            logging.error('Failed to disconnect: setSegmented')
+        self.display_widget.sigPolygons.connect(
+            self.send_for_seg_and_wait)
+        self.image_index = -1
+        self.send_for_seg_and_wait({})
 
     def cleanup(self):
         self.sigQuit.emit()
@@ -538,7 +590,7 @@ class TrainingWidget(qw.QMainWindow):
         layout.addRow(cat_label, cat_text)
 
         size_label = qw.QLabel('Maximum image size')
-        size_text = qw.QLabel(str(self.max_size))
+        size_text = qw.QLabel(str(self.inputImageSize))
         layout.addRow(size_label, size_text)
 
         baseconfig_label = qw.QLabel('Neural-Net base configuration')
@@ -566,9 +618,9 @@ class TrainingWidget(qw.QMainWindow):
         subregion_label = qw.QLabel('Split into subregions')
         subregion_spin = qw.QSpinBox()
         subregion_spin.setRange(1, 5)
-        subregion_spin.setValue(self.num_crops)
+        subregion_spin.setValue(self.numCrops)
         def setSubregionCount(num):
-            self.num_crops = num
+            self.numCrops = num
         subregion_spin.valueChanged.connect(setSubregionCount)
         layout.addRow(subregion_label, subregion_spin)
 
@@ -577,15 +629,15 @@ class TrainingWidget(qw.QMainWindow):
         bbox_combo.addItems(['contour', 'bbox', 'minrect'])
 
         def setBoundaryType(text):
-            self.boundary_type = text
+            self.boundaryType = text
 
         bbox_combo.currentTextChanged.connect(setBoundaryType)
         layout.addRow(bbox_label, bbox_combo)
         display_seg_button = qw.QCheckBox('Display segmentation (for debugging)')
-        display_seg_button.setChecked(self.display_coco)
+        display_seg_button.setChecked(self.displayCoco)
 
         def setDisplayCocoSeg(state):
-            self.display_coco = state
+            self.displayCoco = state
 
         display_seg_button.clicked.connect(setDisplayCocoSeg)
         layout.addWidget(display_seg_button)
@@ -640,7 +692,7 @@ class TrainingWidget(qw.QMainWindow):
                                      'has_gt': True,
                                      'class_names': [self.category_name]},
                          'num_classes': 2,
-                         'max_size': self.max_size,
+                         'max_size': self.inputImageSize,
                          'lr_steps': [100000, 150000, 175000, 190000],
                          'max_iter': 200000}
         yolact_file = f'{self.out_dir}/yolact_config.yaml'
@@ -714,16 +766,16 @@ class TrainingWidget(qw.QMainWindow):
             fname = os.path.basename(fpath)
             prefix = fname.rpartition('.')[0]
             # If image is bigger than allowed size, make some random crops
-            h = min(self.max_size, img.shape[0])
-            w = min(self.max_size, img.shape[1])
+            h = min(self.inputImageSize, img.shape[0])
+            w = min(self.inputImageSize, img.shape[1])
 
-            if img.shape[0] > self.max_size or img.shape[1] > self.max_size:
+            if img.shape[0] > self.inputImageSize or img.shape[1] > self.inputImageSize:
                 # Here I select half of `num_crops` segments' top left corner (pos_tl)
                 # and another half's bottom right corner.
                 seg_bounds = [(np.min(seg[:, 0]), np.min(seg[:, 1]))
                               for seg in self.seg_dict[fpath].values()]
                 seg_bounds = np.array(seg_bounds)
-                idx = np.random.randint(0, len(seg_bounds), size=self.num_crops)
+                idx = np.random.randint(0, len(seg_bounds), size=self.numCrops)
                 xlist = seg_bounds[idx, 0] - np.random.randint(0, w // 2, size=len(idx))
                 xlist[xlist < 0] = 0
                 ylist = seg_bounds[idx, 1] - np.random.randint(0, h // 2, size=len(idx))
@@ -748,14 +800,14 @@ class TrainingWidget(qw.QMainWindow):
                         continue
                     any_valid_seg = True
                     bbox = [int(xx) for xx in cv2.boundingRect(tmp_seg)]
-                    if self.boundary_type == 'contour':
+                    if self.boundaryType == 'contour':
                         segmentation = [int(xx) for xx in tmp_seg.flatten()]
-                    elif self.boundary_type == 'bbox':
+                    elif self.boundaryType == 'bbox':
                         segmentation = [bbox[0], bbox[1],
                                         bbox[0], bbox[1] + bbox[3],
                                         bbox[0] + bbox[2], bbox[1] + bbox[3],
                                         bbox[0] + bbox[2], bbox[1]]
-                    elif self.boundary_type == 'minrect':
+                    elif self.boundaryType == 'minrect':
                         mr = cv2.minAreaRect(tmp_seg)
                         segmentation = [int(xx) for xx in cv2.boxPoints(mr)]
                     _seg = np.array(segmentation).reshape(-1, 2)
@@ -763,7 +815,7 @@ class TrainingWidget(qw.QMainWindow):
                     if len(_seg) == 0:
                         logging.debug(f'Segmentation empty for ({x},{y}): {seg}')
                         continue
-                    if self.display_coco:
+                    if self.displayCoco:
                         cv2.drawContours(sq_img, [_seg], -1, (0, 0, 255))
                         cv2.rectangle(sq_img, (bbox[0], bbox[1]),
                                       (bbox[0] + bbox[2], bbox[1] + bbox[3]),
@@ -792,7 +844,7 @@ class TrainingWidget(qw.QMainWindow):
                     "date_captured": None,
                     "id": img_id
                 })
-                if self.display_coco:
+                if self.displayCoco:
                     winname = 'cvwin'
                     title = f'{fname}. Press `Esc` or `q` to hide. Any other key to fast forward.'
                     cv2.namedWindow(winname, cv2.WINDOW_NORMAL)
@@ -801,7 +853,7 @@ class TrainingWidget(qw.QMainWindow):
                     cv2.setWindowTitle(winname, title)
                     key = cv2.waitKey(1000)
                     if key == 27 or key == ord('q'):
-                        self.display_coco = False
+                        self.displayCoco = False
                         cv2.destroyAllWindows()
                 img_id += 1
         with open(os.path.join(directory, 'annotations.json'), 'w') as fd:
