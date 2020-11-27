@@ -22,7 +22,7 @@ module load gcc
 
 echo "$SHELL"
 
-conda activate deeplearn
+conda activate track
 pushd /data/rays3/locust_tracking/argos
 export PYTHONPATH=.:$PYTHONPATH
 # Start training with resnet101_reducedfc.pth (550x550 images). A copy of this file must be present in the save_folder.

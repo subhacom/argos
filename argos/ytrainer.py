@@ -455,14 +455,15 @@ class TrainingWidget(qw.QMainWindow):
     @qc.pyqtSlot(dict)
     def setSegmented(self, segdict: Dict[int, np.ndarray]) -> None:
         """Store the list of segmented objects for frame"""
-        logging.debug(f'Received segmentated {len(segdict)} objects from {self.sender()}')
-        print(f'#### Received segmentated {len(segdict)} objects from {self.sender()} for image # {self.imageIndex}')
+        logging.debug(f'Received segmentated {len(segdict)} objects'
+                      f' from {self.sender()} for image # {self.imageIndex}')
+
         fname = self.imageFiles[self.imageIndex]
         self.segDict[fname] = segdict
         self._waiting = False
         self.statusBar().showMessage(
             f'Current image: {os.path.basename(fname)}.'
-            f'[Image {self.imageIndex + 1} of {len(self.imageFiles)}]')
+            f' [Image {self.imageIndex + 1} of {len(self.imageFiles)}]')
 
     @qc.pyqtSlot(dict)
     def sendAndWaitSegmentation(self, segdict: Dict[int, np.ndarray]) -> None:
@@ -472,8 +473,8 @@ class TrainingWidget(qw.QMainWindow):
         """
         if len(segdict ) > 0:
             self.setSegmented(segdict)
-        print('###### segDict', len(self.segDict), 'Image files', len(self.imageFiles))
-        # this comparison is needed because entries may be removed from imageFiles in case of unreadable or deleted file
+        # this comparison is needed because entries may be removed
+        # from imageFiles in case of unreadable or deleted file
         if len(self.segDict) >= len(self.imageFiles):
             self.batchSegIndicator.setValue(self.batchSegIndicator.maximum())
             # Switch the connection back for interactive segmentation
@@ -801,7 +802,7 @@ class TrainingWidget(qw.QMainWindow):
             else:
                 xlist, ylist = [0], [0]
             for jj, (x, y) in enumerate(zip(xlist, ylist)):
-                sqImg = np.zeros((self.max_size, self.max_size, 3),
+                sqImg = np.zeros((self.inputImageSize, self.inputImageSize, 3),
                                  dtype=np.uint8)
                 h_ = min(h, img.shape[0] - y)
                 w_ = min(w, img.shape[1] - x)
@@ -812,7 +813,7 @@ class TrainingWidget(qw.QMainWindow):
                 for seg in self.segDict[fpath].values():
                     tmpSeg = seg - [x, y]
                     tmpSeg = tmpSeg[np.all((tmpSeg >= 0) &
-                                           (tmpSeg < self.max_size),
+                                           (tmpSeg < self.inputImageSize),
                                            axis=1)]
                     if tmpSeg.shape[0] < 3:
                         continue
@@ -857,8 +858,8 @@ class TrainingWidget(qw.QMainWindow):
                     "license": 0,
                     "url": None,
                     "file_name": f"PNGImages/{fname}",
-                    "height": self.max_size,
-                    "width": self.max_size,
+                    "height": self.inputImageSize,
+                    "width": self.inputImageSize,
                     "date_captured": None,
                     "id": imgId
                 })

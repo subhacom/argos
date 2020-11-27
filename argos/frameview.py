@@ -64,6 +64,7 @@ class FrameScene(qw.QGraphicsScene):
         self.selected = []
         self.polygons = {}
         self.item_dict = {}
+        self.label_dict = {}
         self.incomplete_item = None
         self.clear()
 
@@ -228,9 +229,9 @@ class FrameScene(qw.QGraphicsScene):
     @qc.pyqtSlot(int)
     def setFontSize(self, size):
         self.font.setPointSize(size)
-        for label in self.label_dict.values():
+        for key, label in self.label_dict.items():
             if sip.isdeleted(label):
-                print('Error: label deleted')                
+                print(f'Error: label deleted "{key}"')                
             label.setFont(self.font)
             label.adjustSize()
         self.update()
@@ -241,7 +242,9 @@ class FrameScene(qw.QGraphicsScene):
             frame_width = max((self._frame.height(), self._frame.width()))
             size = int(frame_width * size / 100)
             self.font.setPixelSize(size)
-            for label in self.label_dict.values():
+            for key, label in self.label_dict.items():
+                if sip.isdeleted(label):
+                    print('Error: label deleted', key)                
                 label.setFont(self.font)
                 label.adjustSize()
             self.update()
