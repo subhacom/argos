@@ -34,28 +34,6 @@ def init():
     return settings
 
 
-def run_fn(arg0: np.ndarray, args: List) -> np.ndarray:
-    """Run functions and arguments on args.
-
-    arg0 is the first argument to the first function. All the following
-    functions take the output of the previous one as the first argument.
-
-    args should be [(fn, positional_args, kwargs), ...]
-
-    :returns the processed _image data as a `numpy.ndarray`
-    """
-    result = None
-    for fn, pargs, kwargs in args:
-        logging.debug('Running fn %r, nargs: %d, kwargs: %r', fn, len(args),
-                      kwargs.keys())
-        if result is not None:
-            result = fn(result, *pargs, **kwargs)
-        else:  # first function needs arg0
-            result = fn(arg0, *pargs, **kwargs)
-        logging.debug(f'Result: len {len(result)} of type {type(result)}')
-    return result
-
-
 def rectpoly_points(p0: tuple, p1: tuple) -> tuple:
     """Generate four clockwise corner positions starting from
     top left of the rectangle with any pair of diagonal points `p0` and `p1`"""
