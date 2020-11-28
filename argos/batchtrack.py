@@ -291,7 +291,7 @@ def threshold(frame: np.ndarray, params: ThreshParam):
 
 def bbox_func(points_list):
     """Calculate list of bounding boxes of point arrays"""
-    ret = [cv2.boundingRect(points) for points in points_list]
+    ret = np.array([cv2.boundingRect(points) for points in points_list])
     return ret
 
 
@@ -374,7 +374,7 @@ def batch_segment(args):
                 if frame_no % 100 == 0:
                     logging.debug(f'Read till {frame_no}')
                 if frame is None:
-                    video.close()
+                    video.release()
                     break
                 frames.append((frame_no, frame))
             futures = {}
@@ -421,7 +421,7 @@ def batch_track(args):
     for frame, fgrp in segments.groupby('frame'):
         if len(fgrp) == 0:
             continue
-        tracked = tracker.update(fgrp.values)
+        tracked = tracker.update(fgrp[['x', 'y', 'w', 'h']].values)
         for tid, bbox in tracked.items():
             results.append({'frame': frame,
                             'trackid': tid,
