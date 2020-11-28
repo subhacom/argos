@@ -76,7 +76,7 @@ class HDFWriter(DataHandler):
             return
         data = np.concatenate(data)
         data = pd.DataFrame(data=data, columns=['frame', 'x', 'y', 'w', 'h'])
-        self.data_store.put(segmented_key, data, format='table', append=False)
+        self.data_store.put(segmented_key, data, format='fixed', append=False)
         data = []
         for frame_no, trk in self._tracked.items():
             if len(trk) == 0:

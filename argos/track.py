@@ -9,7 +9,7 @@ import enum
 import threading
 import collections
 import logging
-
+import yaml
 import argos.utility
 import numpy as np
 import cv2
@@ -118,6 +118,9 @@ class ArgosMain(qw.QMainWindow):
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
         self._file_menu.addAction(self._video_widget.openCamAction)
+        self.saveConfigAction = qw.QAction('Save configuration in file')
+        self.saveConfigAction.triggered.connect(self.saveConfig)
+        self._file_menu.addAction(self.saveConfigAction)
         self._seg_menu = self._menubar.addMenu('&Segmentation method')
         self._seg_menu.addActions(self._seg_grp.actions())
         self._track_menu = self._menubar.addMenu('&Tracking method')
@@ -146,10 +149,12 @@ class ArgosMain(qw.QMainWindow):
         self._video_widget.sigReset.connect(self._lim_widget.resetRoi)
         self._video_widget.sigArena.connect(self._seg_widget.setRoi)
         self._video_widget.sigReset.connect(self._seg_widget.resetRoi)
-        self._video_widget.resetArenaAction.triggered.connect(self._seg_widget.resetRoi)
+        self._video_widget.resetArenaAction.triggered.connect(
+            self._seg_widget.resetRoi)
         self._yolact_widget.sigProcessed.connect(self._lim_widget.process)
         self._lim_widget.sigProcessed.connect(self._sort_widget.track)
-        self._yolact_widget.sigProcessed.connect(self._video_widget.sigSetBboxes)
+        self._yolact_widget.sigProcessed.connect(
+            self._video_widget.sigSetBboxes)
         self._lim_widget.sigWmin.connect(self._seg_widget.setWmin)
         self._lim_widget.sigWmax.connect(self._seg_widget.setWmax)
         self._lim_widget.sigHmin.connect(self._seg_widget.setHmin)
@@ -159,7 +164,8 @@ class ArgosMain(qw.QMainWindow):
         # self._seg_widget.sigSegPolygons.connect(self._video_widget.sigSetSegmented)
         self._sort_widget.sigTracked.connect(self._video_widget.setTracked)
         self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
-        self._video_widget.openAction.triggered.connect(self._sort_widget.sigReset)
+        self._video_widget.openAction.triggered.connect(
+            self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._seg_grp.triggered.connect(self.switchSegmentation)
@@ -176,7 +182,6 @@ class ArgosMain(qw.QMainWindow):
         self.sc_play.activated.connect(self._video_widget.playAction.trigger)
         self.sc_open = qw.QShortcut(qg.QKeySequence('Ctrl+O'), self)
         self.sc_open.activated.connect(self._video_widget.openVideo)
-
 
     @qc.pyqtSlot(bool)
     def setDebug(self, state):
@@ -249,6 +254,65 @@ class ArgosMain(qw.QMainWindow):
     @qc.pyqtSlot(str)
     def updateTitle(self, filename: str) -> None:
         self.setWindowTitle(f'Argos:track {filename}')
+
+    @qc.pyqtSlot()
+    def saveConfig(self):
+        config = {
+            'wmin': settings.value('segment/min_width', 10, type=int),
+            'wmax': settings.value('segment/max_width', 50, type=int),
+            'hmin': settings.value('segment/min_height', 10, type=int),
+            'hmax': settings.value('segment/max_height', 100, type=int),
+            'overlap': settings.value('sortracker/min_dist', 0.3, type=float),
+            'min_hits': settings.value('sortracker/min_hits', 3, type=int),
+            'max_age': settings.value('sortracker/max_age', 10, type=int),
+            'pmin': settings.value('segment/min_pixels', 10, type=int),
+            'pmax': settings.value('segment/max_pixels', 1000, type=int)
+        }
+        if self._seg_dock.isVisible():
+            config['blur_width'] = settings.value('segment/blur_width', 21,
+                                                  type=int)
+            config['blur_sd'] = settings.value('segment/blur_sd', 1.0,
+                                               type=float)
+            config['thresh_method'] = settings.value('segment/thresh_method',
+                                                     'gaussian', type=str)
+            config['thresh_max'] = settings.value(
+                'segment/thresh_max_intensity', 255, type=int)
+            config['thresh_baseline'] = settings.value(
+                'segment/thresh_baseline', type=int)
+            config['thresh_blocksize'] = settings.value(
+                'segment/thresh_blocksize', type=int)
+            config['thresh_invert'] = settings.value('segment/thresh_invert',
+                                                     True,
+                                                     type=bool)
+            seg_method = settings.value('segment/method', type=str).lower()
+            config['seg_method'] = seg_method
+            if seg_method == 'watershed':
+                config['dist_thresh'] = int(settings.value(
+                    'segment/watershed_distthresh', 3, type=float))
+            elif seg_method == 'dbscan':
+                config['eps'] = settings.value('segment/dbscan_eps', 5.0,
+                                               type=float)
+                config['min_samples'] = settings.value(
+                    'segment/dbscan_minsamples', 10, type=int)
+        else:  # yolact
+            config['method'] = 'yolact'
+            config['weight'] = settings.value('yolact/weightsfile', type=str)
+            config['yconfig'] = settings.value('yolact/configfile', type=str)
+            config['overlap_thresh'] = settings.value('yolact/overlap_thresh',
+                                                      1.0, type=float)
+            config['score_thresh'] = settings.value('yolact/score_thresh', 0.1,
+                                                    type=float)
+            config['top_k'] = settings.value('yolact/top_k', 30,
+                                             type=int)
+            config['cuda'] = settings.value('yolact/cuda', True, type=bool)
+
+        directory = settings.value('video/directory', '.')
+        fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save configuration as',
+                                                  directory,
+                                                  filter='yaml (*.yml *.yaml)')
+        if len(fname) > 0:
+            with open(fname, 'w') as fd:
+                yaml.dump(config, fd)
 
 
 if __name__ == '__main__':

@@ -18,7 +18,6 @@ import argos.constants as const
 from argos import utility as ut
 from argos.frameview import FrameView
 
-
 settings = ut.init()
 
 
@@ -29,6 +28,7 @@ class LimitsWidget(qw.QWidget):
     sigWmax = qc.pyqtSignal(int)
     sigHmin = qc.pyqtSignal(int)
     sigHmax = qc.pyqtSignal(int)
+
     def __init__(self, *args, **kwargs):
         super(LimitsWidget, self).__init__(*args, **kwargs)
         self.roi = None
@@ -36,32 +36,25 @@ class LimitsWidget(qw.QWidget):
         self._wmin_label = qw.QLabel('Minimum width')
         self._wmin_edit = qw.QSpinBox()
         self._wmin_edit.setRange(1, 1000)
-        value = settings.value('segment/min_width',10,
-                               type=int)
+        value = settings.value('segment/min_width', 10, type=int)
         self._wmin_edit.setValue(value)
         layout.addRow(self._wmin_label, self._wmin_edit)
         self._wmax_label = qw.QLabel('Maximum width')
         self._wmax_edit = qw.QSpinBox()
         self._wmax_edit.setRange(1, 1000)
-        value = settings.value('segment/max_width',
-                               50,
-                               type=int)
+        value = settings.value('segment/max_width', 50, type=int)
         self._wmax_edit.setValue(value)
         layout.addRow(self._wmax_label, self._wmax_edit)
         self._hmin_label = qw.QLabel('Minimum length')
         self._hmin_edit = qw.QSpinBox()
         self._hmin_edit.setRange(1, 1000)
-        value = settings.value('segment/min_height',
-                               10,
-                               type=int)
+        value = settings.value('segment/min_height', 10, type=int)
         self._hmin_edit.setValue(value)
         layout.addRow(self._hmin_label, self._hmin_edit)
         self._hmax_label = qw.QLabel('Maximum length')
         self._hmax_edit = qw.QSpinBox()
         self._hmax_edit.setRange(1, 1000)
-        value = settings.value('segment/max_height',
-                               100,
-                               type=int)
+        value = settings.value('segment/max_height', 100, type=int)
         self._hmax_edit.setValue(value)
         layout.addRow(self._hmax_label, self._hmax_edit)
         self.setLayout(layout)

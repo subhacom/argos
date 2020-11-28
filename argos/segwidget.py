@@ -25,9 +25,7 @@ from argos.segment import (
     get_bounding_poly
 )
 
-
 settings = ut.init()
-
 
 segstep_dict = OrderedDict([
     ('Final', argos.constants.SegStep.final),
@@ -35,7 +33,7 @@ segstep_dict = OrderedDict([
     ('Thresholded', argos.constants.SegStep.threshold),
     ('Segmented', argos.constants.SegStep.segmented),
     ('Filtered', argos.constants.SegStep.filtered),
-    ])
+])
 
 segmethod_dict = OrderedDict([
     ('Threshold', argos.constants.SegmentationMethod.threshold),
@@ -136,12 +134,12 @@ class SegWorker(qc.QObject):
         self.block_size = 41
         self.max_intensity = 255
         # this baseline value is subtracted from the neighborhood weighted mean
-        self.baseline =10
+        self.baseline = 10
         # segmentation method
         self.seg_method = argos.constants.SegmentationMethod.threshold
         #  DBSCAN parameters
         self.dbscan_eps = 5
-        self.dbscan_min_samples =10
+        self.dbscan_min_samples = 10
         # Watershed algorithm - distance threshold
         self.wdist_thresh = 3.0
         # cleanup params
@@ -167,26 +165,36 @@ class SegWorker(qc.QObject):
     def setBlurWidth(self, width: int) -> None:
         if width % 2 == 0:
             width += 1
+        settings.setValue('segment/blur_width', width)
         self.kernel_width = width
 
     @qc.pyqtSlot(float)
     def setBlurSigma(self, sigma: float) -> None:
+        settings.setValue('segment/blur_sd', sigma)
         self.kernel_sd = sigma
 
     @qc.pyqtSlot(int)
     def setInvertThreshold(self, invert: int) -> None:
+        settings.setValue('segment/thresh_invert', invert)
         self.invert = invert
 
     @qc.pyqtSlot(int)
     def setThresholdMethod(self, method: int) -> None:
+        if method == cv2.ADAPTIVE_THRESH_GAUSSIAN_C:
+            settings.setValue('segment/thresh_method', 'gaussian')
+        else:
+            settings.setValue('segment/thresh_method', 'mean')
         self.thresh_method = method
 
     @qc.pyqtSlot(int)
     def setMaxIntensity(self, value: int) -> None:
+        settings.setValue('segment/thresh_max_intensity',
+                          value)
         self.max_intensity = value
 
     @qc.pyqtSlot(int)
     def setBaseline(self, value: int) -> None:
+        settings.setValue('segment/thresh_baseline', value)
         self.baseline = value
 
     @qc.pyqtSlot(int)
@@ -195,45 +203,63 @@ class SegWorker(qc.QObject):
             self.block_size = value + 1
         else:
             self.block_size = value
+        settings.setValue('segment/thresh_blocksize', self.block_size)
 
     @qc.pyqtSlot(argos.constants.SegmentationMethod)
-    def setSegmentationMethod(self, method: argos.constants.SegmentationMethod) -> None:
+    def setSegmentationMethod(self,
+                              method: argos.constants.SegmentationMethod) -> None:
+        if method == argos.constants.SegmentationMethod.dbscan:
+            settings.setValue('segment/method', 'DBSCAN')
+        elif method == argos.constants.SegmentationMethod.watershed:
+            settings.setValue('segment/method', 'Watershed')
+        else:
+            settings.setValue('segment/method', 'Threshold')
+
         self.seg_method = method
 
     @qc.pyqtSlot(float)
     def setEpsDBSCAN(self, value: int) -> None:
+        settings.setValue('segment/dbscan_eps', value)
         self.dbscan_eps = value
 
     @qc.pyqtSlot(int)
     def setMinSamplesDBSCAN(self, value: int) -> None:
+        settings.setValue('segment/dbscan_minsamples', value)
         self.dbscan_min_samples = value
 
     @qc.pyqtSlot(float)
     def setDistThreshWatershed(self, value: float) -> None:
+        settings.setValue('segment/watershed_distthresh', value)
         self.wdist_thresh = value
 
     @qc.pyqtSlot(int)
     def setMinPixels(self, value: int) -> None:
+        settings.setValue('segment/min_pixels', value)
         self.pmin = value
 
     @qc.pyqtSlot(int)
     def setMaxPixels(self, value: int) -> None:
+        settings.setValue('segment/max_pixels', value)
         self.pmax = value
 
     @qc.pyqtSlot(int)
     def setMinWidth(self, value: int) -> None:
+        settings.setValue('segment/min_width', value)
         self.wmin = value
 
     @qc.pyqtSlot(int)
     def setMaxWidth(self, value: int) -> None:
+        settings.setValue('segment/max_width', value)
         self.wmax = value
 
     @qc.pyqtSlot(int)
     def setMinHeight(self, value: int) -> None:
+        settings.setValue('segment/min_height', value)
         self.hmin = value
 
     @qc.pyqtSlot(int)
     def setMaxHeight(self, value: int) -> None:
+        settings.setValue('segment/max_height', value)
         self.hmax = value
 
     @qc.pyqtSlot(qg.QPolygonF)
@@ -280,11 +306,11 @@ class SegWorker(qc.QObject):
         else:
             thresh_type = cv2.THRESH_BINARY
         binary = cv2.adaptiveThreshold(gray,
-                                          maxValue=self.max_intensity,
-                                          adaptiveMethod=self.thresh_method,
-                                          thresholdType=thresh_type,
-                                          blockSize=self.block_size,
-                                          C=self.baseline)
+                                       maxValue=self.max_intensity,
+                                       adaptiveMethod=self.thresh_method,
+                                       thresholdType=thresh_type,
+                                       blockSize=self.block_size,
+                                       C=self.baseline)
         if self.intermediate == argos.constants.SegStep.threshold:
             self.sigIntermediate.emit(binary, pos)
         if self.seg_method == argos.constants.SegmentationMethod.threshold:
@@ -297,7 +323,8 @@ class SegWorker(qc.QObject):
                                                   self.wdist_thresh)
         if self.intermediate == argos.constants.SegStep.segmented:
             if self.seg_method == argos.constants.SegmentationMethod.watershed:
-                self.sigIntermediate.emit(cv2.applyColorMap(processed, self.cmap), pos)
+                self.sigIntermediate.emit(
+                    cv2.applyColorMap(processed, self.cmap), pos)
             else:
                 for ii, points in enumerate(seg):
                     binary[points[:, 1], points[:, 0]] = ii + 1
@@ -321,7 +348,8 @@ class SegWorker(qc.QObject):
             contours = {ii: contour for ii, contour in enumerate(contours)}
             self.sigSegPolygons.emit(contours, pos)
         elif self.outline_style == ut.OutlineStyle.minrect:
-            minrects = [cv2.boxPoints(cv2.minAreaRect(points)) for points in seg]
+            minrects = [cv2.boxPoints(cv2.minAreaRect(points)) for points in
+                        seg]
             minrects = {ii: box for ii, box in enumerate(minrects)}
             self.sigSegPolygons.emit(minrects, pos)
         elif self.outline_style == ut.OutlineStyle.fill:
@@ -355,7 +383,6 @@ class SegWidget(qw.QWidget):
     setHmax = qc.pyqtSignal(int)
     setRoi = qc.pyqtSignal(qg.QPolygonF)
     resetRoi = qc.pyqtSignal()
-
 
     def __init__(self, *args, **kwargs):
         super(SegWidget, self).__init__(*args, **kwargs)
@@ -446,7 +473,8 @@ class SegWidget(qw.QWidget):
         self._dbscan_eps.setRange(0.1, 100)
         try:
             # setStepType was added in Qt v 5.12 only
-            self._dbscan_eps.setStepType(qw.QAbstractSpinBox.AdaptiveDecimalStepType)
+            self._dbscan_eps.setStepType(
+                qw.QAbstractSpinBox.AdaptiveDecimalStepType)
         except AttributeError:
             pass  # Avoid problem with older Qt versions
         value = settings.value('segment/dbscan_eps',
@@ -547,7 +575,8 @@ class SegWidget(qw.QWidget):
         self.setLayout(layout)
 
         self._intermediate_win = FrameView()
-        self._intermediate_win.setWindowFlag(qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
+        self._intermediate_win.setWindowFlag(
+            qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
         self._intermediate_win.hide()
         # Housekeeping - widgets to be shown or hidden based on choice of method
         self._seg_param_widgets = {
@@ -654,18 +683,13 @@ class SegWidget(qw.QWidget):
         settings.setValue('segment/blur_sd', self.worker.kernel_sd)
         settings.setValue('segment/thresh_invert', self.worker.invert)
         settings.setValue('segment/thresh_max_intensity',
-                               self.worker.max_intensity)
+                          self.worker.max_intensity)
         settings.setValue('segment/thresh_baseline', self.worker.baseline)
         settings.setValue('segment/thresh_blocksize', self.worker.block_size)
         settings.setValue('segment/dbscan_minsamples',
-                               self.worker.dbscan_min_samples)
+                          self.worker.dbscan_min_samples)
         settings.setValue('segment/dbscan_eps', self.worker.dbscan_eps)
         settings.setValue('segment/min_pixels', self.worker.pmin)
         settings.setValue('segment/max_pixels', self.worker.pmax)
-        # settings.setValue('segment/min_width', self.worker.wmin)
-        # settings.setValue('segment/max_width', self.worker.wmax)
-        # settings.setValue('segment/min_height', self.worker.hmin)
-        # settings.setValue('segment/max_height', self.worker.hmax)
         settings.setValue('segment/watershed_distthresh',
                           self.worker.wdist_thresh)
-

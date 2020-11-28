@@ -128,7 +128,8 @@ def init_yolact(cfgfile, netfile, cuda):
 
 # This function should stay here for it uses the globals
 # @timed
-def segment_yolact(frame, score_threshold, top_k, cfgfile, netfile, cuda):
+def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
+                   netfile, cuda):
     """:returns (classes, scores, boxes)
 
     where `boxes` is an array of bounding boxes of detected objects in
@@ -180,6 +181,17 @@ def segment_yolact(frame, score_threshold, top_k, cfgfile, netfile, cuda):
         # top-left, width, height format
         if len(boxes) > 0:
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
+        # if overlap_thresh < 1:
+        #     dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
+        #                                     boxtype=OutlineStyle.bbox,
+        #                                     metric=DistanceMetric.iou)
+        #     bad_boxes = []
+        #     for ii in range(dist_matrix.shape[0] - 1):
+        #         for jj in range(ii + 1, dist_matrix.shape[1]):
+        #             if dist_matrix[ii, jj] < 1 - overlap_thresh:
+        #                 bad_boxes.append(jj)
+        #     boxes = np.array([boxes[ii] for ii in range(boxes.shape[0]) if
+        #                       ii not in bad_boxes])
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s',
                       1e-9 * (toc - tic))
@@ -298,7 +310,7 @@ def bbox_func(points_list):
 def create_seg_func_list(args):
     thresh_params = ThreshParam(blur_width=args.blur_width,
                                 blur_sd=args.blur_sd,
-                                invert=args.invert_thresh,
+                                invert=args.thresh_invert,
                                 method=args.thresh_method,
                                 max_intensity=args.thresh_max,
                                 baseline=args.thresh_baseline,
@@ -356,8 +368,9 @@ def batch_segment(args):
     cpu_count = mp.cpu_count()
     max_workers = args.max_proc if args.max_proc > 0 else cpu_count
     if args.seg_method == 'yolact':
-        seg_fn = partial(segment_yolact, score_threshold=args.score,
+        seg_fn = partial(segment_yolact, score_threshold=args.score_thresh,
                          top_k=args.top_k,
+                         overlap_thresh=args.overlap_thresh,
                          cfgfile=args.yconfig, netfile=args.weight,
                          cuda=args.cuda)
         max_workers = max(1, min(cpu_count, torch.cuda.device_count()))
@@ -458,11 +471,14 @@ def make_parser():
                             help='YOLACT configuration file')
     yolact_grp.add_argument('-w', '--weight', type=str,
                             help='YOLACT trained weights file')
-    yolact_grp.add_argument('-s', '--score', type=float, default=0.3,
+    yolact_grp.add_argument('-s', '--score_thresh', type=float, default=0.3,
                             help='score threshold for accepting a detected object')
     yolact_grp.add_argument('-k', '--top_k', type=int, default=30,
                             help='maximum number of objects above score'
                                  ' threshold to keep')
+    yolact_grp.add_argument('--overlap_thresh', type=float, default=1.0,
+                            help='Bboxes with IoU overlap higher than this are'
+                                 ' merged')
     yolact_grp.add_argument('--cuda', type=bool, default=True,
                             help='Whether to use CUDA')
     thresh_grp = parser.add_argument_group(
@@ -484,7 +500,7 @@ def make_parser():
     thresh_grp.add_argument('--thresh_blocksize', type=int, default=41,
                             help='block size for adaptive thresholding.'
                                  ' Must be odd number')
-    thresh_grp.add_argument('--invert_thresh', type=bool, default=True,
+    thresh_grp.add_argument('--thresh_invert', type=bool, default=True,
                             help='Inverted thresholding')
     watershed_grp = parser.add_argument_group(
         'Watershed',

@@ -13,7 +13,7 @@ import argos.constants
 from argos import utility as au
 from argos.utility import match_bboxes
 
-setup = au.init()
+settings = au.init()
 
 
 class KalmanTracker(object):
@@ -71,7 +71,8 @@ class KalmanTracker(object):
             self.filter.errorCovPost = np.diag(np.square(error_cov))
         else:
             self.filter.errorCovPost = np.eye(2 * self.NDIM, dtype=float) * 10.0
-            self.filter.errorCovPost[self.NDIM:, self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
+            self.filter.errorCovPost[self.NDIM:,
+            self.NDIM:] *= 1000.0  # High uncertainty for velocity at first
 
         # NOTE process noise covariance matrix (Q) [here motion covariance] is
         # computed as a function of mean height in DeepSORT, but constant
@@ -143,7 +144,6 @@ class KalmanTracker(object):
         return self.pos
 
 
-
 class SORTracker(qc.QObject):
     """SORT algorithm implementation
 
@@ -151,8 +151,10 @@ class SORTracker(qc.QObject):
     """
     sigTracked = qc.pyqtSignal(dict, int)
 
-    def __init__(self, metric=argos.constants.DistanceMetric.iou, min_dist=0.3, max_age=1,
-                 n_init=3, min_hits=3, boxtype=argos.constants.OutlineStyle.bbox):
+    def __init__(self, metric=argos.constants.DistanceMetric.iou, min_dist=0.3,
+                 max_age=1,
+                 n_init=3, min_hits=3,
+                 boxtype=argos.constants.OutlineStyle.bbox):
         super(SORTracker, self).__init__()
         self.n_init = n_init
         self.min_hits = min_hits
@@ -188,11 +190,13 @@ class SORTracker(qc.QObject):
             self.min_dist = 1 - dist
         else:
             self.min_dist = dist
+        settings.setValue('sortracker/min_dist', dist)
 
     @qc.pyqtSlot(int)
     def setMaxAge(self, max_age: int) -> None:
         """Set the maximum misses before discarding a track"""
         _ = qc.QMutexLocker(self._mutex)
+        settings.setValue('sortracker/max_age', max_age)
         self.max_age = max_age
 
     @qc.pyqtSlot(int)
@@ -200,13 +204,15 @@ class SORTracker(qc.QObject):
         """Number of times a track should match prediction before it is
         confirmed"""
         _ = qc.QMutexLocker(self._mutex)
+        settings.setValue('sortracker/min_hits', count)
         self.n_init = count
 
     def update(self, bboxes):
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
             prior = tracker.predict()
-            if np.any(np.isnan(prior)) or np.any(prior[:KalmanTracker.NDIM] < 0):
+            if np.any(np.isnan(prior)) or np.any(
+                    prior[:KalmanTracker.NDIM] < 0):
                 logging.info(f'Found nan or negative in prior of {id_}')
                 continue
             predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
@@ -228,8 +234,8 @@ class SORTracker(qc.QObject):
         for id_ in list(self.trackers.keys()):
             tracker = self.trackers[id_]
             if (tracker.time_since_update < 1) and \
-                (tracker.hits >= self.min_hits or
-                 self.frame_count <= self.min_hits):
+                    (tracker.hits >= self.min_hits or
+                     self.frame_count <= self.min_hits):
                 ret[id_] = tracker.pos
             if tracker.time_since_update > self.max_age:
                 self.trackers.pop(id_)
@@ -266,21 +272,26 @@ class SORTWidget(qw.QWidget):
     def __init__(self, *args, **kwargs):
         super(SORTWidget, self).__init__(*args, **kwargs)
         self._max_age_label = qw.QLabel('Maximum age')
-        self._max_age_label.setToolTip('Maximum number of misses before a track is removed')
+        self._max_age_label.setToolTip(
+            'Maximum number of misses before a track is removed')
         self._max_age_spin = qw.QSpinBox()
         self._max_age_spin.setRange(1, 100)
-        self._max_age_spin.setValue(10)
+        value = settings.value('sortracker/max_age', 10, type=int)
+        self._max_age_spin.setValue(value)
         self._max_age_spin.setToolTip(self._max_age_label.toolTip())
         self._conf_age_label = qw.QLabel('Minimum hits')
-        self._conf_age_label.setToolTip('Minimum number of hits before a track is confirmed')
+        self._conf_age_label.setToolTip(
+            'Minimum number of hits before a track is confirmed')
         self._conf_age_spin = qw.QSpinBox()
         self._conf_age_spin.setRange(1, 100)
-        self._conf_age_spin.setValue(3)
+        value = settings.value('sortracker/min_hits', 3, type=int)
+        self._conf_age_spin.setValue(value)
         self._conf_age_spin.setToolTip(self._conf_age_label.toolTip())
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
         self._min_dist_spin.setRange(0.1, 1.0)
-        self._min_dist_spin.setValue(0.3)
+        value = settings.value('sortracker/min_dist', 0.3, type=float)
+        self._min_dist_spin.setValue(value)
         self._min_dist_spin.setToolTip('Minimum overlap between bounding boxes '
                                        'to consider them same object.')
         self._disable_check = qw.QCheckBox('Disable tracking')
@@ -319,15 +330,15 @@ class SORTWidget(qw.QWidget):
 
     @qc.pyqtSlot(np.ndarray, int)
     def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
-        ret = {ii+1: bboxes[ii] for ii in range(bboxes.shape[0])}
+        ret = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(ret, pos)
 
     @qc.pyqtSlot(np.ndarray, int)
     def track(self, bboxes: np.ndarray, pos: int) -> None:
         """Just to intercept signal source for debugging"""
-        logging.debug(f'Received frame {pos} from {self.sender()} bboxes: {bboxes}')
+        logging.debug(
+            f'Received frame {pos} from {self.sender()} bboxes: {bboxes}')
         self.sigTrack.emit(bboxes, pos)
-
 
 
 def test():
@@ -340,6 +351,7 @@ def test():
     # app.aboutToQuit.connect(win.cleanup)
     win.show()
     sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     test()

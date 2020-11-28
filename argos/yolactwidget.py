@@ -64,6 +64,7 @@ class YolactWorker(qc.QObject):
 
     @qc.pyqtSlot(bool)
     def enableCuda(self, on):
+        settings.setValue('yolact/cuda', on)
         self.cuda = on
 
     @qc.pyqtSlot(int)
@@ -229,15 +230,17 @@ class YolactWidget(qw.QWidget):
         self.cuda_action.setCheckable(True)
         if torch.cuda.is_available():
             self.cuda_action.setChecked(self.worker.cuda)
+            settings.setValue('yolact/cuda', self.worker.cuda)
             self.cuda_action.triggered.connect(self.worker.enableCuda)
             self.cuda_action.setToolTip('Try to use GPU if available')
         else:
             self.cuda_action.setEnabled(False)
+            settings.setValue('yolact/cuda', False)
             self.cuda_action.setToolTip('PyTorch on this system does not '
                                         'support CUDA')
         self.top_k_edit = qw.QSpinBox()
         self.top_k_edit.setRange(1, 1000)
-        saved_val = settings.value('yolact/topk', '10')
+        saved_val = settings.value('yolact/top_k', 10, type=int)
         self.top_k_edit.setValue(int(saved_val))
         self.worker.top_k = int(saved_val)
 
@@ -248,7 +251,7 @@ class YolactWidget(qw.QWidget):
         self.top_k_label = qw.QLabel('Number of objects to include')
         self.top_k_label.setToolTip(self.top_k_edit.toolTip())
         self.score_thresh_edit = qw.QDoubleSpinBox()
-        saved_val = settings.value('yolact/scorethreshold', '0.15')
+        saved_val = settings.value('yolact/score_thresh', '0.15')
         self.score_thresh_edit.setRange(0.01, 1.0)
         try:
             self.score_thresh_edit.setStepType(
@@ -280,7 +283,7 @@ class YolactWidget(qw.QWidget):
                 qw.QDoubleSpinBox.AdaptiveDecimalStepType)
         except AttributeError:
             pass  # older Qt versions
-        saved_val = settings.value('yolact/overlapthreshold', '1.0')
+        saved_val = settings.value('yolact/overlap_thresh', 1.0, type=float)
         self.overlap_thresh_edit.setValue(float(saved_val))
         self.worker.overlap_threshold = float(saved_val)
 
@@ -331,14 +334,17 @@ class YolactWidget(qw.QWidget):
 
     @qc.pyqtSlot(int)
     def setTopK(self, value):
+        settings.setValue('yolact/top_k', value)
         self.sigTopK.emit(value)
 
     @qc.pyqtSlot(float)
     def setScoreThresh(self, value):
+        settings.setValue('yolact/score_thresh', value)
         self.sigScoreThresh.emit(value)
 
     @qc.pyqtSlot(float)
     def setOverlapThresh(self, value):
+        settings.setValue('yolact/overlap_thresh', value)
         self.sigOverlapThresh.emit(value)
 
     @qc.pyqtSlot()
@@ -351,6 +357,8 @@ class YolactWidget(qw.QWidget):
         if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
+        settings.setValue('yolact/configfile', filename)
+
         self.sigConfigFile.emit(filename)
 
     @qc.pyqtSlot()
@@ -363,6 +371,7 @@ class YolactWidget(qw.QWidget):
         if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
+        settings.setValue('yolact/weightsfile', filename)
         self.initialized = False
         self.sigWeightsFile.emit(filename)
         if self.indicator is None:
@@ -398,9 +407,3 @@ class YolactWidget(qw.QWidget):
                 return
         if self.initialized:
             self.sigProcess.emit(image, pos)
-
-    def __del__(self):
-        settings = qc.QSettings()
-        settings.setValue('yolact/scorethreshold',
-                          self.score_thresh_edit.text())
-        settings.setValue('yolact/topk', self.top_k_edit.text())
