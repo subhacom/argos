@@ -48,7 +48,7 @@ def init_yolact(cfgfile, netfile, cuda):
     load_weights(netfile, cuda)
 
 
-def segment(frame: np.ndarray, cuda: bool,
+def segment_yolact(frame: np.ndarray, cuda: bool,
             score_threshold: float, top_k: int):
     """:returns (classes, scores, boxes)
 
@@ -106,7 +106,11 @@ def segment(frame: np.ndarray, cuda: bool,
                       1e-9 * (toc - tic))
         return boxes
 
+    
+def segment_classic():
+    pass
 
+    
 def load_config(filename):
     global config
     config = yconfig.cfg
@@ -209,9 +213,61 @@ class SORTracker(object):
 
 
 class BatchTrack(object):
-    def __init__(self, video_filename, output_filename, config_filename,
-                 weights_filename, score_threshold, top_k,
+    def __init__(self, video_filename, output_filename,
+                 hmin, hmax, wmin, wmax, min_iou, min_hits, max_age):
+        """
+        Parameters
+        -------------
+        video_filename: str
+            path to video file to process
+        output_filename: str
+            path to output file. If the extension is ``csv`` then write in
+            comma separated text file. If ``hdf`` or ``h5`` then write in hdf5
+            format.
+        hmin: int
+            minimum height (longer side) of bounding box
+        hmax: int
+            maximum height (longer side) of bounding box
+        wmin: int
+            minimum width (shorter side) of bounding box
+        wmax: int
+            maximum width (shorter side) of bounding box
+        min_iou: float
+            minimum intersection over union of bboxes to be considered same object
+        min_hits: int
+            minimum number of detections before including object in track
+        max_age: int
+            maximum number of misses before discarding object        
+        """
+        self.video = cv2.VideoCapture(video_filename)
+        if (self.video is None) or not self.video.isOpened():
+            raise IOError(f'Could not open video "{video_filename}"')
+        self.frame_count = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.output_filename = output_filename
+        # tracker
+        self.wmin = wmin
+        self.wmax = wmax
+        self.hmin = hmin
+        self.hmax = hmax
+        self.tracker = SORTracker()
+        self.tracker.min_dist = 1 - min_iou
+        self.tracker.max_age = max_age
+        self.tracker.n_init = min_hits
+        
+    def read_frame(self):
+        if (self.video is None) or not self.video.isOpened():
+            return (None, -1)
+        ret, frame = self.video.read()
+        frame_no = int(self.video.get(cv2.CAP_PROP_POS_FRAMES))
+        logging.debug('Read frame no %d', frame_no)
+        return (frame_no, frame)
+
+        
+        
+class BatchTrackYolact(BatchTrack):
+    def __init__(self, video_filename, output_filename, 
                  hmin, hmax, wmin, wmax, min_iou, min_hits, max_age,
+                 config_filename, weights_filename, score_threshold, top_k,
                  cuda=None):
         """
         Parameters
@@ -222,14 +278,6 @@ class BatchTrack(object):
             path to output file. If the extension is ``csv`` then write in
             comma separated text file. If ``hdf`` or ``h5`` then write in hdf5
             format.
-        config_filename: str
-            Yolact configuration file path
-        weights_filename: str
-            path to file containing trained network weights
-        score_threshold: float
-            threshold for detection score
-        top_k: int
-            keep only the top ``top_k`` detections by score
         min_iou: float
             intersection over union of bboxes to consider same objects.
         hmin: int
@@ -246,14 +294,20 @@ class BatchTrack(object):
             minimum number of detections before including object in track
         max_age: int
             maximum number of misses before discarding object        
+        config_filename: str
+            Yolact configuration file path
+        weights_filename: str
+            path to file containing trained network weights
+        score_threshold: float
+            threshold for detection score
+        top_k: int
+            keep only the top ``top_k`` detections by score
         cuda: bool
             whether or not to use GPU. If ``None`` detect automatically.
         """
-        self.video = cv2.VideoCapture(video_filename)
-        if (self.video is None) or not self.video.isOpened():
-            raise IOError(f'Could not open video "{video_filename}"')
-        self.frame_count = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.output_filename = output_filename
+        super(BatchTrackYolact, self).__init__(
+            video_filename, output_filename,
+            hmin, hmax, wmin, wmax, min_iou, min_hits, max_age)
         if cuda is None:
             self.cuda = torch.cuda.is_available()
         else:
@@ -263,23 +317,6 @@ class BatchTrack(object):
         self.config_filename = config_filename
         self.weights_filename = weights_filename
         init_yolact(self.config_filename, self.weights_filename, self.cuda)
-        # tracker
-        self.wmin = wmin
-        self.wmax = wmax
-        self.hmin = hmin
-        self.hmax = hmax
-        self.tracker = SORTracker()
-        self.tracker.min_dist = 1 - min_iou
-        self.tracker.max_age = max_age
-        self.tracker.n_init = min_hits
-
-    def read_frame(self):
-        if (self.video is None) or not self.video.isOpened():
-            return (None, -1)
-        ret, frame = self.video.read()
-        frame_no = int(self.video.get(cv2.CAP_PROP_POS_FRAMES))
-        logging.debug('Read frame no %d', frame_no)
-        return (frame_no, frame)
 
     def process(self):
         results = []
@@ -289,7 +326,7 @@ class BatchTrack(object):
             t1 = time.perf_counter_ns()
             if frame is None:
                 break
-            bboxes = segment(frame,
+            bboxes = segment_yolact(frame,
                              cuda=self.cuda,
                              score_threshold=self.score_threshold,
                              top_k=self.top_k)
@@ -324,6 +361,41 @@ class BatchTrack(object):
                      f'in {(t4 - t3) * 1e-9} seconds.')
 
 
+class BatchTrackClassic(BatchTrack):
+    def __init__(self, video_filename, output_filename,
+                 hmin, hmax, wmin, wmax, min_iou, min_hits, max_age,    
+                 blur_width, blur_sd, 
+                 invert_thresh, thresh_method, thresh_max, thresh_baseline,
+                 thresh_blocksize, min_pixels, max_pixels):
+        """
+        Parameters
+        -------------
+        video_filename: str
+            path to video file to process
+        output_filename: str
+            path to output file. If the extension is ``csv`` then write in
+            comma separated text file. If ``hdf`` or ``h5`` then write in hdf5
+            format.
+        min_iou: float
+            intersection over union of bboxes to consider same objects.
+        hmin: int
+            minimum height (longer side) of bounding box
+        hmax: int
+            maximum height (longer side) of bounding box
+        wmin: int
+            minimum width (shorter side) of bounding box
+        wmax: int
+            maximum width (shorter side) of bounding box
+        min_iou: float
+            minimum intersection over union of bboxes to be considered same object
+        min_hits: int
+            minimum number of detections before including object in track
+        max_age: int
+            maximum number of misses before discarding object        
+        """
+        pass
+    
+
 def make_parser():
     parser = argparse.ArgumentParser('Track objects in video in batch mode')
     parser.add_argument('-i', '--input', type=str, help='input file')
@@ -356,7 +428,7 @@ if __name__ == '__main__':
         logging.getLogger().setLevel(logging.INFO)
     print('ARGS:')
     print(args)
-    tracker = BatchTrack(
+    tracker = BatchTrackYolact(
         video_filename=args.input,        
         output_filename=args.output,
         config_filename=args.config,
