@@ -65,7 +65,7 @@ def segment_by_contours(binary_img: np.ndarray) -> List[np.ndarray]:
     contours, hierarchy = cv2.findContours(binary_img,
                                            cv2.RETR_EXTERNAL,
                                            cv2.CHAIN_APPROX_SIMPLE)
-    logging.debug(f'Segmented {len(contours)} objects.')
+    # logging.debug(f'Segmented {len(contours)} objects.')
     segmented = np.zeros(binary_img.shape, dtype=np.int32)
     for ii, contour in enumerate(contours):
         cv2.drawContours(segmented, [contour], -1, thickness=cv2.FILLED,
@@ -131,7 +131,7 @@ def segment_by_watershed(binary_img: np.ndarray, img: np.ndarray,
     sure_bg = cv2.dilate(opening, kernel, iterations=3)
     unknown = cv2.subtract(sure_bg, sure_fg)
     ret, markers = cv2.connectedComponents(sure_fg, connectivity=4)
-    logging.debug(f'Found {ret} connected components')
+    # logging.debug(f'Found {ret} connected components')
     # 0 is for background - assign a large value to keep them off
     markers += 1
     markers[unknown == 255] = 0
@@ -181,8 +181,8 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
         where The length of the smaller side of the minimum bounding
         rotated-rectangle is considered width and the larger as height.
     """
-    logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
-                  f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
+    # logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
+    #               f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
     minrects = [cv2.minAreaRect(points) for points in points_list]
     mr_size = np.array([mr[1] for mr in minrects])
     if len(mr_size) == 0:
@@ -203,7 +203,7 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
             if np.any(contained):
                 inside.append(ii)
         good = inside
-    logging.debug(f'From {len(points_list)} indices fitting size conds: {good}')
+    # logging.debug(f'From {len(points_list)} indices fitting size conds: {good}')
     return [points_list[ii] for ii in good]
 
 

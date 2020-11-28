@@ -74,7 +74,9 @@ def timed(func):
             return func(*args, **kwargs)
         finally:
             toc = time.perf_counter_ns()
-            print(f'Total execution time {(toc - tic) / 1e9} s')
+            msg = f'Total execution time {(toc - tic) / 1e9} s'
+            print(msg)
+            # logging.debug(msg)
 
     return _time_it
 
@@ -258,11 +260,9 @@ class SORTracker(object):
 def read_frame(video):
     """Read a frame from `video` and return the frame number and the image data"""
     if (video is None) or not video.isOpened():
-        return (None, -1)
-
+        return (-1, None)
     frame_no = int(video.get(cv2.CAP_PROP_POS_FRAMES))
     ret, frame = video.read()
-    logging.debug('Read frame no %d', frame_no)
     return (frame_no, frame)
 
 
@@ -289,6 +289,12 @@ def threshold(frame: np.ndarray, params: ThreshParam):
     return binary
 
 
+def bbox_func(points_list):
+    """Calculate list of bounding boxes of point arrays"""
+    ret = [cv2.boundingRect(points) for points in points_list]
+    return ret
+
+
 def create_seg_func_list(args):
     thresh_params = ThreshParam(blur_width=args.blur_width,
                                 blur_sd=args.blur_sd,
@@ -310,18 +316,18 @@ def create_seg_func_list(args):
     else:
         raise ValueError(f'Unknown segmentation method: {seg_method}')
 
-    limits_params = LimitParam(pmin=args.pmin,
-                               pmax=args.pmax,
-                               wmin=args.wmin,
-                               wmax=args.wmax,
-                               hmin=args.hmin,
-                               hmax=args.hmax)
-    limit_func = partial(extract_valid, params=limits_params)
-    bbox_func = lambda points_list: [cv2.boundingRect(points)
-                                     for points in points_list]
+
+    limit_func = partial(extract_valid,
+                         pmin=args.pmin,
+                         pmax=args.pmax,
+                         wmin=args.wmin,
+                         wmax=args.wmax,
+                         hmin=args.hmin,
+                         hmax=args.hmax)
     return [thresh_func, seg_func, limit_func, bbox_func]
 
 
+# @timed
 def run_fn_seq(fn_args):
     """Run frame through a function pipeline.
 
@@ -348,7 +354,7 @@ def batch_segment(args):
     """Segment frames in parallel and save the bboxes of segmented objects in
     an HDF file for later tracking"""
     cpu_count = mp.cpu_count()
-    max_workers = cpu_count
+    max_workers = args.max_proc if args.max_proc > 0 else cpu_count
     if args.seg_method == 'yolact':
         seg_fn = partial(segment_yolact, score_threshold=args.score,
                          top_k=args.top_k,
@@ -363,9 +369,12 @@ def batch_segment(args):
     with cf.ProcessPoolExecutor(max_workers=max_workers) as executor:
         while video.isOpened():
             frames = []
-            for ii in range(cpu_count):
+            for ii in range(max_workers):
                 frame_no, frame = read_frame(video)
+                if frame_no % 100 == 0:
+                    logging.debug(f'Read till {frame_no}')
                 if frame is None:
+                    video.close()
                     break
                 frames.append((frame_no, frame))
             futures = {}
@@ -438,6 +447,8 @@ def make_parser():
     parser.add_argument('-c', '--config', type=str,
                         help='configuration file to use for rest of the'
                              ' arguments')
+    parser.add_argument('-p', '--max_proc', type=int, default=-1,
+                        help='number of parallel processes')
     parser.add_argument('-m', '--seg_method', type=str, default='yolact',
                         help='method for segmentation'
                              ' (yolact/threshold/watershed/dbscan)')
