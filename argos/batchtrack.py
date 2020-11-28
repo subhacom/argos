@@ -414,7 +414,7 @@ def batch_track(args):
     """
     segments = pd.read_hdf(args.outfile, 'segmented')
     results = []
-    tracker = SORTracker(min_dist=args.min_dist,
+    tracker = SORTracker(min_dist=(1 - args.overlap),
                          max_age=args.max_age,
                          n_init=args.min_hits,
                          min_hits=args.min_hits)
