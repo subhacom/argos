@@ -24,7 +24,7 @@ from yolact.data import config as yconfig
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
-from argos.sortracker import KalmanTracker
+from argos.sortracker import SORTracker
 from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
@@ -198,77 +198,6 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
         return boxes
 
 
-class SORTracker(object):
-    """SORT algorithm implementation. This is same as SORTracker
-    sortracker.py except avoids Qt and multi-threading complications.
-
-    NOTE: accepts bounding boxes in (x, y, w, h) format.
-
-    """
-
-    def __init__(self, metric=DistanceMetric.iou, min_dist=0.3, max_age=1,
-                 n_init=3, min_hits=3, boxtype=OutlineStyle.bbox):
-        super(SORTracker, self).__init__()
-        self.n_init = n_init
-        self.min_hits = min_hits
-        self.boxtype = boxtype
-        self.metric = metric
-        if self.metric == DistanceMetric.iou:
-            self.min_dist = 1 - min_dist
-        else:
-            self.min_dist = min_dist
-        self.max_age = max_age
-        self.trackers = {}
-        self._next_id = 1
-        self.frame_count = 0
-
-    def reset(self):
-        logging.debug('Resetting trackers.')
-        self.trackers = {}
-        self._next_id = 1
-        self.frame_count = 0
-
-    def update(self, bboxes: np.ndarray):
-        predicted_bboxes = {}
-        for id_, tracker in self.trackers.items():
-            prior = tracker.predict()
-            if np.any(np.isnan(prior)) or np.any(
-                    prior[:KalmanTracker.NDIM] < 0):
-                logging.info(f'Found nan or negative in prior of {id_}')
-                continue
-            predicted_bboxes[id_] = prior[:KalmanTracker.NDIM]
-        self.trackers = {id_: self.trackers[id_] for id_ in predicted_bboxes}
-        for id_, bbox in predicted_bboxes.items():
-            if np.any(bbox < 0):
-                logging.debug(f'EEEE prediced bbox negative: {id_}: {bbox}')
-        matched, new_unmatched, old_unmatched = ut.match_bboxes(
-            predicted_bboxes,
-            bboxes[:, :KalmanTracker.NDIM],
-            boxtype=self.boxtype,
-            metric=self.metric,
-            max_dist=self.min_dist)
-        for track_id, bbox_id in matched.items():
-            self.trackers[track_id].update(bboxes[bbox_id])
-        for ii in new_unmatched:
-            self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
-        ret = {}
-        for id_ in list(self.trackers.keys()):
-            tracker = self.trackers[id_]
-            if (tracker.time_since_update < 1) and \
-                    (tracker.hits >= self.min_hits or
-                     self.frame_count <= self.min_hits):
-                ret[id_] = tracker.pos
-            if tracker.time_since_update > self.max_age:
-                self.trackers.pop(id_)
-        return ret
-
-    def _add_tracker(self, bbox):
-        self.trackers[self._next_id] = KalmanTracker(bbox, self._next_id,
-                                                     self.n_init,
-                                                     self.max_age)
-        self._next_id += 1
-
-
 def read_frame(video):
     """Read a frame from `video` and return the frame number and the image data"""
     if (video is None) or not video.isOpened():
@@ -427,7 +356,7 @@ def batch_track(args):
     """
     segments = pd.read_hdf(args.outfile, 'segmented')
     results = []
-    tracker = SORTracker(min_dist=(1 - args.overlap),
+    tracker = SORTracker(min_dist=args.overlap,
                          max_age=args.max_age,
                          n_init=args.min_hits,
                          min_hits=args.min_hits)

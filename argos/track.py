@@ -22,7 +22,7 @@ from PyQt5 import (
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
-from argos.sortracker import SORTWidget
+from argos.sortrackerwidget import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
 from argos.limitswidget import LimitsWidget

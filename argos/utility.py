@@ -299,7 +299,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         Set of keys in ``id_bboxes`` whose corresponding bbox values did not
         match anything in ``bboxes``.
     """
-    logging.debug('Current bboxes:\n%r', '\n'.join([str(i) for i in id_bboxes.items()]))
+    logging.debug('Current bboxes:\n%s', '\n'.join([str(i) for i in id_bboxes.items()]))
     logging.debug('New bboxes:\n%r', new_bboxes)
     logging.debug('Box type: %r', boxtype)
     logging.debug('Max dist: %r', max_dist)
