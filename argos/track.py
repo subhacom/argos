@@ -284,7 +284,8 @@ class ArgosMain(qw.QMainWindow):
             config['thresh_invert'] = settings.value('segment/thresh_invert',
                                                      True,
                                                      type=bool)
-            seg_method = settings.value('segment/method', type=str).lower()
+            seg_method = settings.value('segment/method', 'threshold',
+                                        type=str).lower()
             config['seg_method'] = seg_method
             if seg_method == 'watershed':
                 config['dist_thresh'] = int(settings.value(
