@@ -181,17 +181,17 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
         # top-left, width, height format
         if len(boxes) > 0:
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
-        # if overlap_thresh < 1:
-        #     dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
-        #                                     boxtype=OutlineStyle.bbox,
-        #                                     metric=DistanceMetric.iou)
-        #     bad_boxes = []
-        #     for ii in range(dist_matrix.shape[0] - 1):
-        #         for jj in range(ii + 1, dist_matrix.shape[1]):
-        #             if dist_matrix[ii, jj] < 1 - overlap_thresh:
-        #                 bad_boxes.append(jj)
-        #     boxes = np.array([boxes[ii] for ii in range(boxes.shape[0]) if
-        #                       ii not in bad_boxes])
+        if overlap_thresh < 1:
+            dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
+                                            boxtype=OutlineStyle.bbox,
+                                            metric=DistanceMetric.iou)
+            bad_boxes = []
+            for ii in range(dist_matrix.shape[0] - 1):
+                for jj in range(ii + 1, dist_matrix.shape[1]):
+                    if dist_matrix[ii, jj] < 1 - overlap_thresh:
+                        bad_boxes.append(jj)
+            boxes = np.array([boxes[ii] for ii in range(boxes.shape[0]) if
+                              ii not in bad_boxes])
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s',
                       1e-9 * (toc - tic))
@@ -356,7 +356,12 @@ def batch_track(args):
     """
     segments = pd.read_hdf(args.outfile, 'segmented')
     results = []
-    tracker = SORTracker(min_dist=args.overlap,
+    if args.sort_metric == 'iou':
+        metric = DistanceMetric.iou
+    else:
+        metric = DistanceMetric.euclidean
+    tracker = SORTracker(metric=metric,
+                         min_dist=args.min_dist,
                          max_age=args.max_age,
                          n_init=args.min_hits,
                          min_hits=args.min_hits)
@@ -468,9 +473,14 @@ def make_parser():
     track_grp = parser.add_argument_group(
         'Tracker',
         'Parameters for SORT tracker')
-    track_grp.add_argument('-x', '--overlap', type=float, default=0.3,
-                           help='Minimum overlap between bounding boxes as a'
-                                ' fraction of their total area.')
+    track_grp.add_argument('--sort_metric', type=str, default='iou',
+                           help='Metric for measuring closeness.'
+                           ' iou or euclidean')
+    track_grp.add_argument('-x', '--min_dist', type=float, default=0.3,
+                           help='Minimum distance between bounding boxes.'
+                           ' If iou, this their intersection as a'
+                           ' fraction of their combined area.'
+                           ' If euclidean, number of pixels.')
     track_grp.add_argument('--min_hits', type=int, default=3,
                            help='Minimum number of hits to accept a track')
     track_grp.add_argument('--max_age', type=int, default=50,

@@ -4,10 +4,18 @@
 import logging
 
 import numpy as np
+from collections import OrderedDict
 from PyQt5 import QtCore as qc, QtWidgets as qw
 
 import argos.constants
 from argos.sortracker import SORTracker, settings
+
+
+distance_metric = OrderedDict(
+    (('Intersection over Union', argos.constants.DistanceMetric.iou),
+    ('Euclidean', argos.constants.DistanceMetric.euclidean))
+)
+
 
 
 class QSORTracker(qc.QObject):
@@ -23,6 +31,10 @@ class QSORTracker(qc.QObject):
     def reset(self):
         _ = qc.QMutexLocker(self._mutex)
         self.tracker.reset()
+
+    @qc.pyqtSlot(argos.constants.DistanceMetric)
+    def setDistMetric(self, metric):
+        self.tracker.setDistMetric(metric)
 
     @qc.pyqtSlot(float)
     def setMinDist(self, dist: float) -> None:
@@ -62,6 +74,7 @@ class SORTWidget(qw.QWidget):
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
+    sigDistMetric = qc.pyqtSignal(argos.constants.DistanceMetric)
 
     def __init__(self, *args, **kwargs):
         super(SORTWidget, self).__init__(*args, **kwargs)
@@ -81,10 +94,15 @@ class SORTWidget(qw.QWidget):
         value = settings.value('sortracker/min_hits', 3, type=int)
         self._conf_age_spin.setValue(value)
         self._conf_age_spin.setToolTip(self._conf_age_label.toolTip())
+
+        self._dist_metric_label = qw.QLabel('Distance metric')
+        self._dist_metric_combo = qw.QComboBox()
+        self._dist_metric_combo.addItems(list(distance_metric.keys()))
+        
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
         self._min_dist_spin.setRange(0.1, 1.0)
-        value = settings.value('sortracker/min_dist', 0.3, type=float)
+        value = settings.value('sortracker/iou_mindist', 0.3, type=float)
         self._min_dist_spin.setValue(value)
         self._min_dist_spin.setToolTip('Minimum overlap between bounding boxes '
                                        'to consider them same object.')
@@ -93,6 +111,7 @@ class SORTWidget(qw.QWidget):
                                        'be useful for troubleshooting.')
         layout = qw.QFormLayout()
         self.setLayout(layout)
+        layout.addRow(self._dist_metric_label, self._dist_metric_combo)
         layout.addRow(self._min_dist_label, self._min_dist_spin)
         layout.addRow(self._conf_age_label, self._conf_age_spin)
         layout.addRow(self._max_age_label, self._max_age_spin)
@@ -104,9 +123,12 @@ class SORTWidget(qw.QWidget):
         self.thread = qc.QThread()
         self.qtracker.moveToThread(self.thread)
         self._max_age_spin.valueChanged.connect(self.qtracker.setMaxAge)
+        self._dist_metric_combo.currentTextChanged.connect(
+            self.setDistMetric)
         self._min_dist_spin.valueChanged.connect(self.qtracker.setMinDist)
         self._conf_age_spin.valueChanged.connect(self.qtracker.setMinHits)
         self._disable_check.stateChanged.connect(self.disable)
+        self.sigDistMetric.connect(self.qtracker.setDistMetric)
         self.sigTrack.connect(self.qtracker.track)
         self.qtracker.sigTracked.connect(self.sigTracked)
         self.sigReset.connect(self.qtracker.reset)
@@ -114,6 +136,26 @@ class SORTWidget(qw.QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
+    @qc.pyqtSlot(str)
+    def setDistMetric(self, text):
+        metric = distance_metric[text]
+        if metric == argos.constants.DistanceMetric.iou:
+            settings.setValue('sortracker/metric', 'iou')
+            self._min_dist_label.setText('Minimum overlap')
+            self._min_dist_spin.setRange(0.1, 1)
+            self._min_dist_spin.setToolTip(
+                'Minimum overlap between bounding boxes '
+                'to consider them same object.')
+        else:
+            settings.setValue('sortracker/metric', 'euclidean')
+            self._min_dist_label.setText('Maximum distance')
+            self._min_dist_spin.setRange(1, 1000)
+            self._min_dist_spin.setToolTip(
+                'Maximum distance between bounding boxes '
+                'to consider them same object.')
+
+        self.sigDistMetric.emit(metric)
+        
     @qc.pyqtSlot(int)
     def disable(self, state):
         self.sigTrack.disconnect()

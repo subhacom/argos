@@ -319,18 +319,14 @@ class SegWorker(qc.QObject):
             seg = segment_by_dbscan(binary, self.dbscan_eps,
                                     self.dbscan_min_samples)
         elif self.seg_method == argos.constants.SegmentationMethod.watershed:
-            processed, seg = segment_by_watershed(binary, image,
+            seg = segment_by_watershed(binary, image,
                                                   self.wdist_thresh)
         if self.intermediate == argos.constants.SegStep.segmented:
-            if self.seg_method == argos.constants.SegmentationMethod.watershed:
-                self.sigIntermediate.emit(
-                    cv2.applyColorMap(processed, self.cmap), pos)
-            else:
-                for ii, points in enumerate(seg):
-                    binary[points[:, 1], points[:, 0]] = ii + 1
-                self.sigIntermediate.emit(
-                    cv2.applyColorMap(binary, self.cmap),
-                    pos)
+            for ii, points in enumerate(seg):
+                binary[points[:, 1], points[:, 0]] = ii + 1
+            self.sigIntermediate.emit(
+                cv2.applyColorMap(binary, self.cmap),
+                pos)
         seg = extract_valid(seg, self.pmin, self.pmax, self.wmin, self.wmax,
                             self.hmin, self.hmax, roi=self.roi)
         if self.intermediate == argos.constants.SegStep.filtered:

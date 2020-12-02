@@ -173,6 +173,12 @@ class SORTracker(object):
         self._next_id = 1
         self.frame_count = 0
 
+    def setDistMetric(self, metric: argos.constants.DistanceMetric) -> None:
+        if self.metric != metric:
+            self.metric = metric
+            if self.min_dist < 1:
+                self.min_dist = 1 - self.min_dist
+
     def setMinDist(self, dist: float) -> None:
         if self.metric == argos.constants.DistanceMetric.iou:
             self.min_dist = 1 - dist
