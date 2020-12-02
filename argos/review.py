@@ -46,10 +46,6 @@ class TrackReader(qc.QObject):
     sigChangeList = qc.pyqtSignal(SortedKeyList)
 
 
-    
-
-
-
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
         self.data_path = data_file
@@ -315,7 +311,12 @@ class ReviewScene(FrameScene):
         self.track_hist = []
         for ii, t in enumerate(track):
             color = qg.QColor(*get_cmap_color(ii, len(track), self.path_cmap))
-            self.track_hist.append(self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(color)))
+            self.track_hist.append(self.addEllipse(
+                t[0] - 1,
+                t[1] - 1,
+                2 * self.linewidth,
+                2 * self.linewidth,
+                qg.QPen(color)))
         # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
     
     @qc.pyqtSlot(dict)
@@ -831,6 +832,8 @@ class ReviewWidget(qw.QWidget):
         # self.colormapAction.triggered.connect(self.setColormap)
         self.lineWidthAction = self.right_view.lineWidthAction
         self.right_view.sigLineWidth.connect(self.left_view.frame_scene.setLineWidth)
+        self.fontSizeAction = self.right_view.fontSizeAction
+        self.right_view.sigFontSize.connect(self.left_view.frame_scene.setFontSize)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
@@ -1598,6 +1601,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.autoColorAction)
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.pathCmapAction)
+        view_menu.addAction(self.review_widget.fontSizeAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)
@@ -1652,7 +1656,15 @@ class ReviewerMain(qw.QMainWindow):
         self.debugAction.triggered.connect(self.setDebug)
         action_menu.addAction(self.debugAction)
         toolbar = self.addToolBar('View')
-        toolbar.addActions(view_menu.actions())
+        toolbar.addActions([
+            self.review_widget.zoomInLeftAction,
+            self.review_widget.zoomInRightAction,
+            self.review_widget.zoomOutLeftAction,
+            self.review_widget.zoomOutRightAction,
+            self.review_widget.tieViewsAction,
+            self.review_widget.showOldTracksAction,
+            self.review_widget.showHistoryAction])
+
         toolbar.addActions(action_menu.actions())
         self.review_widget.sigDataFile.connect(self.updateTitle)
         self.sigQuit.connect(self.review_widget.doQuit)
