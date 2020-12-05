@@ -45,7 +45,6 @@ class TrackReader(qc.QObject):
     sigSavedFrames = qc.pyqtSignal(int)
     sigChangeList = qc.pyqtSignal(SortedKeyList)
 
-
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
         self.data_path = data_file
@@ -834,6 +833,8 @@ class ReviewWidget(qw.QWidget):
         self.right_view.sigLineWidth.connect(self.left_view.frame_scene.setLineWidth)
         self.fontSizeAction = self.right_view.fontSizeAction
         self.right_view.sigFontSize.connect(self.left_view.frame_scene.setFontSize)
+        self.relativeFontSizeAction = self.right_view.relativeFontSizeAction
+        self.right_view.sigRelativeFontSize.connect(self.left_view.frame_scene.setRelativeFontSize)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
@@ -1602,6 +1603,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.colormapAction)
         view_menu.addAction(self.review_widget.pathCmapAction)
         view_menu.addAction(self.review_widget.fontSizeAction)
+        view_menu.addAction(self.review_widget.relativeFontSizeAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)

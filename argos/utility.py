@@ -133,7 +133,10 @@ try:
                           rect_intersection,
                           rect_iou,
                           pairwise_distance)
+    logging.info('Loaded C-utilities with pyximport')
 except:
+    logging.info('Could not load C-utilities with pyximport. Using pure Python.')
+    
     def rect2points(rect: np.ndarray) -> np.ndarray:
         """Convert topleft, width, height format rectangle into four anti-clockwise
         vertices"""
