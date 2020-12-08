@@ -147,7 +147,7 @@ class VideoWidget(qw.QWidget):
     def openVideo(self):
         self.pauseVideo()
         directory = settings.value('video/directory', '.')
-        fname, filter = qw.QFileDialog.getOpenFileName(self, 'Open video',
+        fname, filter_ = qw.QFileDialog.getOpenFileName(self, 'Open video',
                                                        directory=directory)
         logging.debug(f'Opening file "{fname}"')
         if len(fname) == 0:
@@ -208,11 +208,11 @@ class VideoWidget(qw.QWidget):
             return
         ## Set-up for saving data
         self.writer = None
-        directory = settings.value('data/directory', '.')
+        directory = os.path.dirname(self.video_filename)
         filename = writer.makepath(directory, self.video_filename)
         self.outfile, _ = qw.QFileDialog.getSaveFileName(
             self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf);;Text (*.csv)')
-        logging.debug(f'Output file "{self.outfile}"')
+        logging.info(f'Output file "{self.outfile}"')
         if len(self.outfile.strip()) == 0:
             qw.QMessageBox.critical(self, 'No output file',
                                     'Output file not specified. Closing video')
