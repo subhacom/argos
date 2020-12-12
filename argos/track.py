@@ -133,6 +133,9 @@ class ArgosMain(qw.QMainWindow):
                                     self._video_widget.setColorAction,
                                     self._video_widget.autoColorAction,
                                     self._video_widget.colormapAction,
+                                    self._video_widget.fontSizeAction,
+                                    self._video_widget.relativeFontSizeAction,
+                                    self._video_widget.lineWidthAction,
                                     self._video_widget.infoAction])
         self._advanced_menu = self.menuBar().addMenu('Advanced')
         # self._advanced_menu.addAction(self._video_widget.arenaSelectAction)

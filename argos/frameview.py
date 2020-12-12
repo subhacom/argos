@@ -46,6 +46,8 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
         self.linewidth = 2
         self.linestyle_selected = qc.Qt.DotLine
+        self.showBbox = True
+        self.showId = True
         self.snap_dist = 5
         self.incomplete_item = None
         self.points = []
@@ -336,7 +338,30 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_color = color
         pen = self.incomplete_item.pen()
         pen.setColor(color)
-        self.incomplete_item.setPen(pen)    
+        self.incomplete_item.setPen(pen)
+        self.update()
+
+    @qc.pyqtSlot(bool)
+    def setShowBbox(self, val: bool) -> None:
+        self.showBbox = val
+        if val:
+            for item in self.item_dict.values():
+                item.setOpacity(1.0)
+        else:
+            for item in self.item_dict.values():
+                item.setOpacity(0.0)
+        self.update()
+
+    @qc.pyqtSlot(bool)
+    def setShowId(self, val: bool) -> None:
+        self.showId = val
+        if val:
+            for item in self.label_dict.values():
+                item.setOpacity(1.0)
+        else:
+            for item in self.label_dict.values():
+                item.setOpacity(0.0)
+        self.update()
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -354,12 +379,15 @@ class FrameScene(qw.QGraphicsScene):
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color, self.linewidth))
+            if not self.showBbox:
+                item.setOpacity(0)
             self.item_dict[id_] = item
             text = self.addText(str(id_), self.font)
-            self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1])
-            self.item_dict[id_] = item
+            self.label_dict[id_] = text
+            if not self.showId:
+                text.setOpacity(0)
             logging.debug(f'Set {id_}: {rect}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
@@ -385,13 +413,16 @@ class FrameScene(qw.QGraphicsScene):
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
             item = self.addPolygon(polygon, qg.QPen(color, self.linewidth))
+            if not self.showBbox:
+                item.setOpacity(0)
             self.item_dict[id_] = item
             text = self.addText(str(id_), self.font)
             self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
-            self.item_dict[id_] = item
+            if not self.showId:
+                text.setOpacity(0)
             # logging.debug(f'Set {id_}: {poly}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
@@ -548,6 +579,14 @@ class FrameView(qw.QGraphicsView):
         self.fontSizeAction.triggered.connect(self.setFontSize)
         self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')        
         self.relativeFontSizeAction.triggered.connect(self.setRelativeFontSize)
+        self.showBboxAction = qw.QAction('Show boundaries')
+        self.showBboxAction.setCheckable(True)
+        self.showBboxAction.setChecked(True)
+        self.showBboxAction.triggered.connect(self.frame_scene.setShowBbox)
+        self.showIdAction = qw.QAction('Show Ids')
+        self.showIdAction.setCheckable(True)
+        self.showIdAction.setChecked(True)
+        self.showIdAction.triggered.connect(self.frame_scene.setShowId)
         self.sigSetColor.connect(self.frame_scene.setColor)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)

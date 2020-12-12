@@ -108,6 +108,9 @@ class VideoWidget(qw.QWidget):
         self.colormapAction = qw.QAction('Use colormap')
         self.colormapAction.setCheckable(True)
         self.colormapAction.triggered.connect(self.setColormap)
+        self.fontSizeAction = qw.QAction('Set font size in points')
+        self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')
+        self.lineWidthAction = qw.QAction('Line width')
         self.infoAction = qw.QAction('Video information')
         self.infoAction.triggered.connect(self.vid_info.show)
         self.reader_thread = qc.QThread()
@@ -270,6 +273,12 @@ class VideoWidget(qw.QWidget):
                 self.display_widget.autoColorAction.trigger)
             self.sigSetColormap.connect(
                 self.display_widget.frame_scene.setColormap)
+            self.fontSizeAction.triggered.connect(
+                self.display_widget.fontSizeAction.trigger)
+            self.relativeFontSizeAction.triggered.connect(
+                self.display_widget.relativeFontSizeAction.trigger)
+            self.lineWidthAction.triggered.connect(
+                self.display_widget.lineWidthAction.trigger)
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetSegmented.connect(self.display_widget.sigSetPolygons)
             self.sigSetTracked.connect(

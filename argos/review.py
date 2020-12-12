@@ -634,6 +634,10 @@ class ReviewWidget(qw.QWidget):
         self.right_list.sigSelected.connect(self.right_view.sigSelected)
         self.right_list.sigSelected.connect(self.projectTrackHist)
         self.left_list.sigSelected.connect(self.projectTrackHist)
+        self.right_view.showBboxAction.triggered.connect(self.left_view.showBboxAction.trigger)
+        self.showBboxAction = self.right_view.showBboxAction
+        self.right_view.showIdAction.triggered.connect(self.left_view.showIdAction.trigger)
+        self.showIdAction = self.right_view.showIdAction
         self.sigProjectTrackHist.connect(self.right_view.frame_scene.showTrackHist)
         self.sigProjectTrackHistAll.connect(self.left_view.frame_scene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
@@ -1605,6 +1609,8 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.fontSizeAction)
         view_menu.addAction(self.review_widget.relativeFontSizeAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
+        view_menu.addAction(self.review_widget.showBboxAction)
+        view_menu.addAction(self.review_widget.showIdAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)
         diffgrp = qw.QActionGroup(self)
