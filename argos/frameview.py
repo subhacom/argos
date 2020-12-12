@@ -25,6 +25,7 @@ class FrameScene(qw.QGraphicsScene):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
     sigArena = qc.pyqtSignal(qg.QPolygonF)
+    sigFontSizePixels = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(FrameScene, self).__init__(*args, **kwargs)
@@ -249,7 +250,19 @@ class FrameScene(qw.QGraphicsScene):
                     print('Error: label deleted', key)                
                 label.setFont(self.font)
                 label.adjustSize()
+            self.sigFontSizePixels.emit(size)
             self.update()
+
+    @qc.pyqtSlot(int)
+    def setFontSizePixels(self, size):
+        self.font.setPixelSize(size)
+        for key, label in self.label_dict.items():
+            if sip.isdeleted(label):
+                print('Error: label deleted', key)                
+            label.setFont(self.font)
+            label.adjustSize()
+        self.update()
+    
 
     @qc.pyqtSlot(qg.QColor)
     def setColor(self, color: qg.QColor) -> None:
