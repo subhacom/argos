@@ -11,6 +11,7 @@ import argos.constants
 from argos.sortracker import SORTracker, settings
 
 
+# Ordered dict to maintain sequence
 distance_metric = OrderedDict(
     (('Intersection over Union', argos.constants.DistanceMetric.iou),
     ('Euclidean', argos.constants.DistanceMetric.euclidean))
@@ -98,6 +99,7 @@ class SORTWidget(qw.QWidget):
         self._dist_metric_label = qw.QLabel('Distance metric')
         self._dist_metric_combo = qw.QComboBox()
         self._dist_metric_combo.addItems(list(distance_metric.keys()))
+        value = settings.value('sortracker/metric', 'iou')
         
         self._min_dist_label = qw.QLabel('Minimum overlap')
         self._min_dist_spin = qw.QDoubleSpinBox()
@@ -140,9 +142,10 @@ class SORTWidget(qw.QWidget):
     def setDistMetric(self, text):
         metric = distance_metric[text]
         if metric == argos.constants.DistanceMetric.iou:
+            print('SORT Metric set to IoU')
             settings.setValue('sortracker/metric', 'iou')
             self._min_dist_label.setText('Minimum overlap')
-            self._min_dist_spin.setRange(0.1, 1)
+            self._min_dist_spin.setRange(0.01, 1)
             self._min_dist_spin.setToolTip(
                 'Minimum overlap between bounding boxes '
                 'to consider them same object.')
