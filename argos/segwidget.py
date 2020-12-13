@@ -386,7 +386,7 @@ class SegWidget(qw.QWidget):
         layout = qw.QFormLayout()
         self._blur_width_label = qw.QLabel('Blur width')
         self._blur_width_edit = qw.QSpinBox()
-        self._blur_width_edit.setRange(1, 100)
+        self._blur_width_edit.setRange(1, 999)
         self._blur_width_edit.setSingleStep(2)
         value = settings.value('segment/blur_width', self.worker.kernel_width,
                                type=int)
@@ -457,7 +457,7 @@ class SegWidget(qw.QWidget):
         layout.addRow(self._seg_label, self._seg_method)
         self._dbscan_minsamples_label = qw.QLabel('DBSCAN minimum samples')
         self._dbscan_minsamples = qw.QSpinBox()
-        self._dbscan_minsamples.setRange(1, 1000)
+        self._dbscan_minsamples.setRange(1, 10000)
         value = settings.value('segment/dbscan_minsamples',
                                self.worker.dbscan_min_samples,
                                type=int)
@@ -481,7 +481,7 @@ class SegWidget(qw.QWidget):
         layout.addRow(self._dbscan_eps_label, self._dbscan_eps)
         self._pmin_label = qw.QLabel('Minimum pixels')
         self._pmin_edit = qw.QSpinBox()
-        self._pmin_edit.setRange(1, 1000)
+        self._pmin_edit.setRange(1, 10000)
         value = settings.value('segment/min_pixels',
                                self.worker.pmin,
                                type=int)

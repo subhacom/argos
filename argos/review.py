@@ -623,7 +623,7 @@ class ReviewWidget(qw.QWidget):
         self.sigLeftFrame.connect(self.left_view.setFrame)
         self.sigRightFrame.connect(self.right_view.setFrame)
         self.right_view.sigArena.connect(self.setRoi)
-        # self.right_view.sigArena.connect(self.left_view.frame_scene.setArena)
+        self.right_view.sigArena.connect(self.left_view.frame_scene.setArena)
         self.sigLeftTracks.connect(self.left_view.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
         self.sigRightTracks.connect(self.right_view.sigSetRectangles)
@@ -845,10 +845,13 @@ class ReviewWidget(qw.QWidget):
         self.fontSizeAction = self.right_view.fontSizeAction
         self.right_view.sigFontSize.connect(self.left_view.frame_scene.setFontSize)
         self.relativeFontSizeAction = self.right_view.relativeFontSizeAction
-        self.right_view.frame_scene.sigFontSizePixels.connect(self.left_view.frame_scene.setFontSizePixels)
+        self.right_view.frame_scene.sigFontSizePixels.connect(
+            self.left_view.frame_scene.setFontSizePixels)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
+        self.right_view.resetArenaAction.triggered.connect(
+            self.left_view.resetArenaAction.trigger)
         self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
@@ -1578,6 +1581,8 @@ class ReviewWidget(qw.QWidget):
         self._wait_cond.set()
         self.playVideo(False)
         self.play_button.setChecked(False)
+        self.left_view.clearAll()
+        self.right_view.clearAll()
         self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int, bool, bool)

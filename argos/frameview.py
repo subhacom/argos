@@ -204,15 +204,23 @@ class FrameScene(qw.QGraphicsScene):
         pen.setWidth(self.linewidth)
         self.incomplete_item = self.addPath(path, pen)
 
-    @qc.pyqtSlot(np.ndarray)
-    def setArena(self, vertices: np.ndarray):
-        logging.debug(f'Arena: {vertices}')
+    # @qc.pyqtSlot(np.ndarray)
+    # def setArena(self, vertices: np.ndarray):
+    #     logging.debug(f'Arena: {vertices}')
+    #     self.clearItems()
+    #     self.arena = qg.QPolygonF([qc.QPointF(*p) for p in vertices])
+    #     self.addPolygon(self.arena)
+    #     self.sigArena.emit(self.arena)
+    #     self.setSceneRect(self.arena.boundingRect())
+
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setArena(self, poly: qg.QPolygonF):
         self.clearItems()
-        self.arena = qg.QPolygonF([qc.QPointF(*p) for p in vertices])
+        self.arena = qg.QPolygonF(poly)
         self.addPolygon(self.arena)
         self.sigArena.emit(self.arena)
         self.setSceneRect(self.arena.boundingRect())
-
+        
     @qc.pyqtSlot()
     def resetArena(self):
         logging.debug('Resetting arena')
@@ -458,7 +466,8 @@ class FrameScene(qw.QGraphicsScene):
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if self.geom == DrawingGeom.rectangle:
             if len(self.points) > 0:
-                rect = util.points2rect(self.points[0], pos)
+                rect = util.points2rect(self.points[0], pos)                
+                rect = qg.QPolygonF([qc.QPointF(*p) for p in rect])
                 self.points = []
                 if self.geom == DrawingGeom.arena:
                     self.setArena(rect)
@@ -482,7 +491,8 @@ class FrameScene(qw.QGraphicsScene):
                     if self.geom == DrawingGeom.polygon:
                         self._addItem(np.array(self.points))
                     elif self.geom == DrawingGeom.arena:
-                        self.setArena(np.array(self.points))
+                        poly = qg.QPolygonF([qc.QPointF(*p) for p in self.points])
+                        self.setArena(poly)
                     self._clearIncomplete()
                     self.points = []
                     logging.debug(f'YYYY Number of items {len(self.items())}')
