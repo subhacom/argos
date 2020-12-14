@@ -386,7 +386,7 @@ class SegWidget(qw.QWidget):
         layout = qw.QFormLayout()
         self._blur_width_label = qw.QLabel('Blur width')
         self._blur_width_edit = qw.QSpinBox()
-        self._blur_width_edit.setRange(1, 100)
+        self._blur_width_edit.setRange(1, 1000)
         self._blur_width_edit.setSingleStep(2)
         value = settings.value('segment/blur_width', self.worker.kernel_width,
                                type=int)
@@ -571,6 +571,7 @@ class SegWidget(qw.QWidget):
         self.setLayout(layout)
 
         self._intermediate_win = FrameView()
+        self.resetRoi.connect(self._intermediate_win.resetArenaAction.trigger)
         self._intermediate_win.setWindowFlag(
             qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
         self._intermediate_win.hide()

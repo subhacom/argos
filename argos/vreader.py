@@ -133,15 +133,17 @@ class VideoReader(qc.QObject):
             self._waitCond.clear()
         self.mutex.unlock()
         if not ret:
-            logging.debug('Video at end')
+            logging.info(f'Video at end. Current time={datetime.now().strftime("%H:%M:%S")}')
             self.sigVideoEnd.emit()
             return
         if frame is None:
-            logging.info(f'Empty frame at position {self._frame_no}')
+            logging.info(f'Empty frame at position {self._frame_no}. Current time={datetime.now().strftime("%H:%M:%S")}')
             self.sigVideoEnd.emit()
             return
         # event = threading.Event()
         self._frame_no += 1
+        if self._frame_no == 0:
+            logging.info(f'Read first frame. Current time={datetime.now().strftime("%H:%M:%S")}')
         if self.is_webcam and self._outfile is not None:
             assert self.frame_width == frame.shape[1] and self.frame_height == frame.shape[0]
             self._outfile.write(frame)
