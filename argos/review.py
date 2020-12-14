@@ -364,8 +364,8 @@ class ReviewScene(FrameScene):
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
-        
 
+        
 
 class TrackView(FrameView):
     """Visualization of bboxes of objects on video frame with facility to set
@@ -623,6 +623,7 @@ class ReviewWidget(qw.QWidget):
         self.sigLeftFrame.connect(self.left_view.setFrame)
         self.sigRightFrame.connect(self.right_view.setFrame)
         self.right_view.sigArena.connect(self.setRoi)
+        self.right_view.sigArena.connect(self.left_view.frame_scene.setArena)
         self.sigLeftTracks.connect(self.left_view.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
         self.sigRightTracks.connect(self.right_view.sigSetRectangles)
@@ -634,6 +635,10 @@ class ReviewWidget(qw.QWidget):
         self.right_list.sigSelected.connect(self.right_view.sigSelected)
         self.right_list.sigSelected.connect(self.projectTrackHist)
         self.left_list.sigSelected.connect(self.projectTrackHist)
+        self.right_view.showBboxAction.triggered.connect(self.left_view.showBboxAction.trigger)
+        self.showBboxAction = self.right_view.showBboxAction
+        self.right_view.showIdAction.triggered.connect(self.left_view.showIdAction.trigger)
+        self.showIdAction = self.right_view.showIdAction
         self.sigProjectTrackHist.connect(self.right_view.frame_scene.showTrackHist)
         self.sigProjectTrackHistAll.connect(self.left_view.frame_scene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
@@ -819,6 +824,12 @@ class ReviewWidget(qw.QWidget):
         self.tieViews(True)
         self.showGrayscaleAction = self.right_view.showGrayscaleAction
         self.showGrayscaleAction.triggered.connect(self.left_view.showGrayscaleAction.trigger)
+        self.overlayAction = qw.QAction('Overlay previous frame')
+        self.overlayAction.setCheckable(True)
+        self.overlayAction.setChecked(False)
+        self.invertOverlayColorAction = qw.QAction('Invert overlay color')
+        self.invertOverlayColorAction.setCheckable(True)
+        self.invertOverlayColorAction.setChecked(False)
         self.setColorAction = self.right_view.setColorAction
         self.autoColorAction = self.right_view.autoColorAction
         self.autoColorAction.triggered.connect(
@@ -834,10 +845,13 @@ class ReviewWidget(qw.QWidget):
         self.fontSizeAction = self.right_view.fontSizeAction
         self.right_view.sigFontSize.connect(self.left_view.frame_scene.setFontSize)
         self.relativeFontSizeAction = self.right_view.relativeFontSizeAction
-        self.right_view.sigRelativeFontSize.connect(self.left_view.frame_scene.setRelativeFontSize)
+        self.right_view.frame_scene.sigFontSizePixels.connect(
+            self.left_view.frame_scene.setFontSizePixels)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
+        self.right_view.resetArenaAction.triggered.connect(
+            self.left_view.resetArenaAction.trigger)
         self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
@@ -1281,12 +1295,21 @@ class ReviewWidget(qw.QWidget):
             # Going sequentially through frames - copy right to left
             self.frame_no = pos
             self.left_frame = self.right_frame
-            self.right_frame = frame
-            self.left_tracks = self.right_tracks
-            self.right_tracks = self._flag_tracks({}, tracks)
             if self.left_frame is not None:
                 self.sigLeftFrame.emit(self.left_frame, pos - 1)
-            self.sigRightFrame.emit(self.right_frame, pos)
+            self.right_frame = frame
+            if self.overlayAction.isChecked() and self.left_frame is not None:
+                tmp = frame
+                frame = np.zeros((frame.shape[0], frame.shape[1], 3), dtype=np.uint8)
+                if len(frame.shape) == 3:  # bgr
+                    frame[:, :, 0] = cv2.cvtColor(tmp, cv2.COLOR_BGR2GRAY)
+                    frame[:, :, 2] = cv2.cvtColor(self.left_frame, cv2.COLOR_BGR2GRAY)
+                    if self.invertOverlayColorAction.isChecked():
+                        frame = 255 - frame
+                        frame[:, :, 1] = 0
+            self.sigRightFrame.emit(frame, pos)
+            self.left_tracks = self.right_tracks
+            self.right_tracks = self._flag_tracks({}, tracks)
             if self.showOldTracksAction.isChecked():
                 self.sigLeftTracks.emit(self.old_all_tracks)
                 self.sigRightTracks.emit(self.all_tracks)
@@ -1297,7 +1320,8 @@ class ReviewWidget(qw.QWidget):
             self.sigRightTrackList.emit(list(self.right_tracks.keys()))
         elif pos == self.frame_no - 1:
             logging.debug(f'Received left frame: {pos}')
-            self.sigLeftFrame.emit(frame, pos)
+            self.left_frame = frame
+            self.sigLeftFrame.emit(self.left_frame, pos)
             self.left_tracks = self._flag_tracks({}, tracks)
             if self.showOldTracksAction.isChecked():
                 self.sigLeftTracks.emit(self.all_tracks)
@@ -1308,6 +1332,16 @@ class ReviewWidget(qw.QWidget):
             return  # do not show popup message for old frame
         elif pos == self.frame_no:
             logging.debug(f'right frame: {pos}')
+            self.right_frame = frame
+            if self.overlayAction.isChecked() and (self.left_frame is not None):
+                tmp = frame
+                frame = np.zeros((frame.shape[0], frame.shape[1], 3), dtype=np.uint8)
+                if len(frame.shape) == 3:  # bgr
+                    frame[:, :, 0] = cv2.cvtColor(tmp, cv2.COLOR_BGR2GRAY)
+                    frame[:, :, 2] = cv2.cvtColor(self.left_frame, cv2.COLOR_BGR2GRAY)
+                    if self.invertOverlayColorAction.isChecked():
+                        frame = 255 - frame
+                        frame[:, :, 1] = 0
             self.sigRightFrame.emit(frame, pos)
             self.right_tracks = self._flag_tracks({}, tracks)
             if self.showOldTracksAction.isChecked():
@@ -1547,6 +1581,8 @@ class ReviewWidget(qw.QWidget):
         self._wait_cond.set()
         self.playVideo(False)
         self.play_button.setChecked(False)
+        self.left_view.clearAll()
+        self.right_view.clearAll()
         self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int, bool, bool)
@@ -1591,11 +1627,17 @@ class ReviewerMain(qw.QMainWindow):
         self.quitAction.triggered.connect(self.close)
         file_menu.addAction(self.quitAction)
 
+        diff_menu = self.menuBar().addMenu('&Diff settings')
+        diff_menu.addAction(self.review_widget.overlayAction)
+        diff_menu.addAction(self.review_widget.invertOverlayColorAction)
+        diffgrp = qw.QActionGroup(self)
+        diffgrp.addAction(self.review_widget.showDifferenceAction)
+        diffgrp.addAction(self.review_widget.showNewAction)
+        diffgrp.addAction(self.review_widget.showNoneAction)
+        diffgrp.setExclusive(True)
+        diff_menu.addActions(diffgrp.actions())
+        
         view_menu = self.menuBar().addMenu('&View')
-        view_menu.addAction(self.review_widget.zoomInLeftAction)
-        view_menu.addAction(self.review_widget.zoomInRightAction)
-        view_menu.addAction(self.review_widget.zoomOutLeftAction)
-        view_menu.addAction(self.review_widget.zoomOutRightAction)
         view_menu.addAction(self.review_widget.tieViewsAction)
         view_menu.addAction(self.review_widget.showGrayscaleAction)
         view_menu.addAction(self.review_widget.setColorAction)
@@ -1605,20 +1647,23 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.fontSizeAction)
         view_menu.addAction(self.review_widget.relativeFontSizeAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
+        view_menu.addAction(self.review_widget.showBboxAction)
+        view_menu.addAction(self.review_widget.showIdAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)
         view_menu.addAction(self.review_widget.showHistoryAction)
-        diffgrp = qw.QActionGroup(self)
-        diffgrp.addAction(self.review_widget.showDifferenceAction)
-        diffgrp.addAction(self.review_widget.showNewAction)
-        diffgrp.addAction(self.review_widget.showNoneAction)
-        diffgrp.setExclusive(True)
-        view_menu.addActions(diffgrp.actions())
         view_menu.addAction(self.review_widget.showLimitsAction)
         view_menu.addAction(self.review_widget.histlenAction)
         view_menu.addAction(self.review_widget.histGradientAction)
+
         view_menu.addAction(self.review_widget.showChangeListAction)
         view_menu.addAction(self.review_widget.vidinfoAction)
 
+        zoom_menu = self.menuBar().addMenu('&Zoom')        
+        zoom_menu.addAction(self.review_widget.zoomInLeftAction)
+        zoom_menu.addAction(self.review_widget.zoomInRightAction)
+        zoom_menu.addAction(self.review_widget.zoomOutLeftAction)
+        zoom_menu.addAction(self.review_widget.zoomOutRightAction)
+        
         play_menu = self.menuBar().addMenu('Play')
         play_menu.addAction(self.review_widget.disableSeekAction)
         play_menu.addAction(self.review_widget.playAction)

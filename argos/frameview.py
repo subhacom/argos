@@ -25,6 +25,7 @@ class FrameScene(qw.QGraphicsScene):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
     sigArena = qc.pyqtSignal(qg.QPolygonF)
+    sigFontSizePixels = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(FrameScene, self).__init__(*args, **kwargs)
@@ -46,6 +47,8 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
         self.linewidth = 2
         self.linestyle_selected = qc.Qt.DotLine
+        self.showBbox = True
+        self.showId = True
         self.snap_dist = 5
         self.incomplete_item = None
         self.points = []
@@ -201,15 +204,23 @@ class FrameScene(qw.QGraphicsScene):
         pen.setWidth(self.linewidth)
         self.incomplete_item = self.addPath(path, pen)
 
-    @qc.pyqtSlot(np.ndarray)
-    def setArena(self, vertices: np.ndarray):
-        logging.debug(f'Arena: {vertices}')
+    # @qc.pyqtSlot(np.ndarray)
+    # def setArena(self, vertices: np.ndarray):
+    #     logging.debug(f'Arena: {vertices}')
+    #     self.clearItems()
+    #     self.arena = qg.QPolygonF([qc.QPointF(*p) for p in vertices])
+    #     self.addPolygon(self.arena)
+    #     self.sigArena.emit(self.arena)
+    #     self.setSceneRect(self.arena.boundingRect())
+
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setArena(self, poly: qg.QPolygonF):
         self.clearItems()
-        self.arena = qg.QPolygonF([qc.QPointF(*p) for p in vertices])
+        self.arena = qg.QPolygonF(poly)
         self.addPolygon(self.arena)
         self.sigArena.emit(self.arena)
         self.setSceneRect(self.arena.boundingRect())
-
+        
     @qc.pyqtSlot()
     def resetArena(self):
         logging.debug('Resetting arena')
@@ -247,7 +258,19 @@ class FrameScene(qw.QGraphicsScene):
                     print('Error: label deleted', key)                
                 label.setFont(self.font)
                 label.adjustSize()
+            self.sigFontSizePixels.emit(size)
             self.update()
+
+    @qc.pyqtSlot(int)
+    def setFontSizePixels(self, size):
+        self.font.setPixelSize(size)
+        for key, label in self.label_dict.items():
+            if sip.isdeleted(label):
+                print('Error: label deleted', key)                
+            label.setFont(self.font)
+            label.adjustSize()
+        self.update()
+    
 
     @qc.pyqtSlot(qg.QColor)
     def setColor(self, color: qg.QColor) -> None:
@@ -336,7 +359,30 @@ class FrameScene(qw.QGraphicsScene):
         self.incomplete_color = color
         pen = self.incomplete_item.pen()
         pen.setColor(color)
-        self.incomplete_item.setPen(pen)    
+        self.incomplete_item.setPen(pen)
+        self.update()
+
+    @qc.pyqtSlot(bool)
+    def setShowBbox(self, val: bool) -> None:
+        self.showBbox = val
+        if val:
+            for item in self.item_dict.values():
+                item.setOpacity(1.0)
+        else:
+            for item in self.item_dict.values():
+                item.setOpacity(0.0)
+        self.update()
+
+    @qc.pyqtSlot(bool)
+    def setShowId(self, val: bool) -> None:
+        self.showId = val
+        if val:
+            for item in self.label_dict.values():
+                item.setOpacity(1.0)
+        else:
+            for item in self.label_dict.values():
+                item.setOpacity(0.0)
+        self.update()
 
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -354,12 +400,15 @@ class FrameScene(qw.QGraphicsScene):
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color, self.linewidth))
+            if not self.showBbox:
+                item.setOpacity(0)
             self.item_dict[id_] = item
             text = self.addText(str(id_), self.font)
-            self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1])
-            self.item_dict[id_] = item
+            self.label_dict[id_] = text
+            if not self.showId:
+                text.setOpacity(0)
             logging.debug(f'Set {id_}: {rect}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
@@ -385,13 +434,16 @@ class FrameScene(qw.QGraphicsScene):
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
             item = self.addPolygon(polygon, qg.QPen(color, self.linewidth))
+            if not self.showBbox:
+                item.setOpacity(0)
             self.item_dict[id_] = item
             text = self.addText(str(id_), self.font)
             self.label_dict[id_] = text
             text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
-            self.item_dict[id_] = item
+            if not self.showId:
+                text.setOpacity(0)
             # logging.debug(f'Set {id_}: {poly}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
@@ -414,7 +466,8 @@ class FrameScene(qw.QGraphicsScene):
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if self.geom == DrawingGeom.rectangle:
             if len(self.points) > 0:
-                rect = util.points2rect(self.points[0], pos)
+                rect = util.points2rect(self.points[0], pos)                
+                rect = qg.QPolygonF([qc.QPointF(*p) for p in rect])
                 self.points = []
                 if self.geom == DrawingGeom.arena:
                     self.setArena(rect)
@@ -438,7 +491,8 @@ class FrameScene(qw.QGraphicsScene):
                     if self.geom == DrawingGeom.polygon:
                         self._addItem(np.array(self.points))
                     elif self.geom == DrawingGeom.arena:
-                        self.setArena(np.array(self.points))
+                        poly = qg.QPolygonF([qc.QPointF(*p) for p in self.points])
+                        self.setArena(poly)
                     self._clearIncomplete()
                     self.points = []
                     logging.debug(f'YYYY Number of items {len(self.items())}')
@@ -548,6 +602,14 @@ class FrameView(qw.QGraphicsView):
         self.fontSizeAction.triggered.connect(self.setFontSize)
         self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')        
         self.relativeFontSizeAction.triggered.connect(self.setRelativeFontSize)
+        self.showBboxAction = qw.QAction('Show boundaries')
+        self.showBboxAction.setCheckable(True)
+        self.showBboxAction.setChecked(True)
+        self.showBboxAction.triggered.connect(self.frame_scene.setShowBbox)
+        self.showIdAction = qw.QAction('Show Ids')
+        self.showIdAction.setCheckable(True)
+        self.showIdAction.setChecked(True)
+        self.showIdAction.triggered.connect(self.frame_scene.setShowId)
         self.sigSetColor.connect(self.frame_scene.setColor)
         self.setArenaMode.connect(self.frame_scene.setArenaMode)
         self.setRoiRectMode.connect(self.frame_scene.setRoiRectMode)
