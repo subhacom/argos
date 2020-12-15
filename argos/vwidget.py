@@ -38,6 +38,7 @@ class VidInfo(qw.QMainWindow):
         self.frame_width = qw.QLabel('')
         self.height_label = qw.QLabel('Frame height')
         self.frame_height = qw.QLabel('')
+
         layout = qw.QFormLayout()
         layout.addRow(self.vidfile_label, self.vidfile)
         layout.addRow(self.frames_label, self.frames)
@@ -392,6 +393,9 @@ class VideoWidget(qw.QWidget):
         """This function is for playing raw video without any processing
         """
         if play:
+            if self.startTime is None:  # indicates video was just initialized
+                print('Starting at first frame')
+                self.sigGotoFrame.emit(0)
             self.startTime = time.perf_counter()
             self.playAction.setText('Pause')
             t = 1000.0 / self.video_reader.fps
@@ -416,6 +420,7 @@ class VideoWidget(qw.QWidget):
     def resetVideo(self):
         self.pauseVideo()
         self.sigReset.emit()
+        self.startTime = None
         self.sigGotoFrame.emit(0)
 
     @qc.pyqtSlot()

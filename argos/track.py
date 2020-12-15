@@ -320,6 +320,11 @@ class ArgosMain(qw.QMainWindow):
             with open(fname, 'w') as fd:
                 yaml.dump(config, fd)
 
+    @qc.pyqtSlot()
+    def loadConfig(self):
+        """TODO implement loading config file exported in yaml file"""
+        raise NotImplementedError('This function is yet to be implemented')
+
     @qc.pyqtSlot(str)
     def statusMsgSlot(self, msg):
         self.statusBar().showMessage(msg)

@@ -690,3 +690,16 @@ class SegWidget(qw.QWidget):
         settings.setValue('segment/max_pixels', self.worker.pmax)
         settings.setValue('segment/watershed_distthresh',
                           self.worker.wdist_thresh)
+
+    def loadConfig(self, config):
+        """TODO implement loading of configuration from YAML/dict"""
+        raise NotImplementedError('This method is yet to be implemented')
+        if 'blur_width' in config:
+            self._blur_width_edit.setValue(config['blur_width'])
+        if 'blur_sd' in config:
+            self._blur_sd_edit.setValue(config['blur_sd'])
+        if 'thresh_method' in config:
+            if config['thresh_method'] == 'gaussian':
+                self._thresh_method.setCurrentText('Adapative Gaussian')
+            else:
+                self._thresh_method.setCurrentText('Adapative Mean')
