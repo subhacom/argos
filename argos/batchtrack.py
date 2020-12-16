@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 import yaml
 import time
+from datetime import timedelta
 import pandas as pd
 import concurrent.futures as cf
 import torch
@@ -74,9 +75,11 @@ def timed(func):
             return func(*args, **kwargs)
         finally:
             toc = time.perf_counter_ns()
-            msg = f'Total execution time {(toc - tic) / 1e9} s'
+            dt = (toc - tic) / 1e9
+            dt = timedelta(seconds=dt)
+            msg = f'{func}: Total execution time: {dt}'
             print(msg)
-            # logging.debug(msg)
+            logging.info(msg)
 
     return _time_it
 
