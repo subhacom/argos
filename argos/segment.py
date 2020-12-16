@@ -70,13 +70,40 @@ def segment_by_contours(binary_img: np.ndarray) -> List[np.ndarray]:
     for ii, contour in enumerate(contours):
         cv2.drawContours(segmented, [contour], -1, thickness=cv2.FILLED,
                          color=ii + 1)
-    unique_labels = set(segmented.flat)
-    unique_labels.discard(0)
-    ret = [np.argwhere(segmented == label) for label in sorted(unique_labels)]
+    unique_labels = range(1, ii+1)
+    # unique_labels.discard(0)
+    ret = [np.argwhere(segmented == label) for label in unique_labels]
     # Fast swapping of y and x - see answer by blax here:
     # https://stackoverflow.com/questions/4857927/swapping-columns-in-a-numpy-array
     for points in ret:
         points[:, 0], points[:, 1] = points[:, 1], points[:, 0].copy()
+    return ret
+
+
+def segment_by_contour_bbox(binary_img: np.ndarray) -> List[np.ndarray]:
+    """Segment binary image by finding contours of contiguous
+    nonzero pixels. This is faster than filling the contours and then matching
+    point labels. The bounding box is computed later on, and that is the only
+    data saved at the end. [Although original design was to extract all pixel
+    positions on the object, that turned out to be inefficient and unnecessary
+    for current focus].
+
+
+    Parameters
+    ----------
+    binary_img: numpy.ndarray
+        binary input image (obtained by thresholding grayscale image).
+
+    Returns
+    -------
+    list
+        List of coordinate arrays where the n-th entry is the array of
+        positions of the pixels belonging to the n-th segmented object.
+    """
+    contours, hierarchy = cv2.findContours(binary_img,
+                                           cv2.RETR_EXTERNAL,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+    ret = [np.array(contour) for contour in contours]
     return ret
 
 

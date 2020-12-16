@@ -20,6 +20,7 @@ from argos.frameview import FrameView
 from argos.segment import (
     segment_by_dbscan,
     segment_by_contours,
+    segment_by_contour_bbox,
     segment_by_watershed,
     extract_valid,
     get_bounding_poly
@@ -314,7 +315,8 @@ class SegWorker(qc.QObject):
         if self.intermediate == argos.constants.SegStep.threshold:
             self.sigIntermediate.emit(binary, pos)
         if self.seg_method == argos.constants.SegmentationMethod.threshold:
-            seg = segment_by_contours(binary)
+            # seg = segment_by_contours(binary)
+            seg = segment_by_contour_bbox(binary)
         elif self.seg_method == argos.constants.SegmentationMethod.dbscan:
             seg = segment_by_dbscan(binary, self.dbscan_eps,
                                     self.dbscan_min_samples)

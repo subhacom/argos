@@ -341,10 +341,10 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         Set of keys in ``id_bboxes`` whose corresponding bbox values did not
         match anything in ``bboxes``.
     """
-    logging.debug('Current bboxes:\n%s', '\n'.join([str(i) for i in id_bboxes.items()]))
-    logging.debug('New bboxes:\n%r', new_bboxes)
-    logging.debug('Box type: %r', boxtype)
-    logging.debug('Max dist: %r', max_dist)
+    # logging.debug('Current bboxes:\n%s', '\n'.join([str(i) for i in id_bboxes.items()]))
+    # logging.debug('New bboxes:\n%r', new_bboxes)
+    # logging.debug('Box type: %r', boxtype)
+    # logging.debug('Max dist: %r', max_dist)
     if len(id_bboxes) == 0:
         return ({}, set(range(len(new_bboxes))), {})
     labels = list(id_bboxes.keys())
@@ -357,11 +357,18 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     good_cols = set()
     if metric == DistanceMetric.euclidean:
         max_dist *= max_dist
-    for row, col in zip(row_ind, col_ind):
-        if dist_matrix[row, col] < max_dist:
-            good_rows.add(row)
-            good_cols.add(labels[col])
-            matched[labels[col]] = row
+    result = [(row, col, (labels[col], row))
+              for row, col in zip(row_ind, col_ind)
+              if dist_matrix[row, col] < max_dist]
+    # for row, col in zip(row_ind, col_ind):
+    #     if dist_matrix[row, col] < max_dist:
+    #         good_rows.add(row)
+    #         good_cols.add(labels[col])
+    #         matched[labels[col]] = row
+    good_rows, good_cols, matched = zip(*result)
+    good_rows = set(good_rows)
+    good_cols = set(good_cols)
+    matched = dict(matched)
     new_unmatched = set(range(len(new_bboxes))) - good_rows
     old_unmatched = set(id_bboxes.keys()) - good_cols
     return matched, new_unmatched, old_unmatched
