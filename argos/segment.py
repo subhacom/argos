@@ -103,7 +103,7 @@ def segment_by_contour_bbox(binary_img: np.ndarray) -> List[np.ndarray]:
     contours, hierarchy = cv2.findContours(binary_img,
                                            cv2.RETR_EXTERNAL,
                                            cv2.CHAIN_APPROX_SIMPLE)
-    ret = [np.array(contour) for contour in contours]
+    ret = [np.squeeze(contour, axis=1) for contour in contours]
     return ret
 
 

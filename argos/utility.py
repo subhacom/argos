@@ -365,12 +365,17 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     #         good_rows.add(row)
     #         good_cols.add(labels[col])
     #         matched[labels[col]] = row
-    good_rows, good_cols, matched = zip(*result)
-    good_rows = set(good_rows)
-    good_cols = set(good_cols)
-    matched = dict(matched)
-    new_unmatched = set(range(len(new_bboxes))) - good_rows
-    old_unmatched = set(id_bboxes.keys()) - good_cols
+    if len(result) > 0:
+        good_rows, good_cols, matched = zip(*result)
+        good_rows = set(good_rows)
+        good_cols = set(good_cols)
+        matched = dict(matched)
+        new_unmatched = set(range(len(new_bboxes))) - good_rows
+        old_unmatched = set(id_bboxes.keys()) - good_cols
+    else:
+        matched = {}
+        new_unmatched = set(range(len(new_bboxes)))
+        old_unmatched = set(id_bboxes.keys())
     return matched, new_unmatched, old_unmatched
 
 

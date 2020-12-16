@@ -272,7 +272,7 @@ class YolactWidget(qw.QWidget):
         self.overlap_thresh_label = qw.QLabel('Merge overlaps more than')
         self.overlap_thresh_edit = qw.QDoubleSpinBox()
         self.overlap_thresh_edit.valueChanged.connect(self.setOverlapThresh)
-        self.score_thresh_edit.setToolTip('a number > 0 and < 1. If the '
+        self.overlap_thresh_edit.setToolTip('a number > 0 and < 1. If the '
                                           'bounding boxes of two objects '
                                           'overlap more than this, merge them '
                                           'into a single object ')
