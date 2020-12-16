@@ -182,12 +182,11 @@ class YolactWorker(qc.QObject):
                 dist_matrix = pairwise_distance(new_bboxes=boxes, bboxes=boxes,
                                                 boxtype=OutlineStyle.bbox,
                                                 metric=DistanceMetric.ios)
-                bad_boxes = []
-                for ii in range(dist_matrix.shape[0] - 1):
-                    for jj in range(ii+1, dist_matrix.shape[1]):
-                        if dist_matrix[ii, jj] < 1 - self.overlap_thresh:
-                            bad_boxes.append(jj)
-                boxes = np.array([boxes[ii] for ii in range(boxes.shape[0]) if ii not in bad_boxes])
+                bad_idx = [jj for ii in range(dist_matrix.shape[0] - 1) \
+                             for jj in range(ii+1, dist_matrix.shape[1]) \
+                              if dist_matrix[ii, jj] < 1 - self.overlap_thresh]
+                good_idx = list(set(range(boxes.shape[0])) - set(bad_idx))
+                boxes = boxes[good_idx].copy()
 
             toc = time.perf_counter_ns()
             logging.debug('Time to process single _image: %f s',
@@ -251,7 +250,7 @@ class YolactWidget(qw.QWidget):
         self.top_k_label = qw.QLabel('Number of objects to include')
         self.top_k_label.setToolTip(self.top_k_edit.toolTip())
         self.score_thresh_edit = qw.QDoubleSpinBox()
-        saved_val = settings.value('yolact/score_thresh', '0.15')
+        saved_val = settings.value('yolact/score_thresh', 0.15, type=float)
         self.score_thresh_edit.setRange(0.01, 1.0)
         try:
             self.score_thresh_edit.setStepType(
@@ -271,12 +270,12 @@ class YolactWidget(qw.QWidget):
 
         self.overlap_thresh_label = qw.QLabel('Merge overlaps more than')
         self.overlap_thresh_edit = qw.QDoubleSpinBox()
-        self.overlap_thresh_edit.valueChanged.connect(self.setOverlapThresh)
-        self.overlap_thresh_edit.setToolTip('a number > 0 and < 1. If the '
-                                          'bounding boxes of two objects '
-                                          'overlap more than this, merge them '
-                                          'into a single object ')
         self.overlap_thresh_edit.setRange(0.01, 1.1)
+        self.overlap_thresh_edit.setToolTip('a number > 0 and < 1. If the '
+                                            'ratio of overlap between two objects '
+                                            'and the bounding rectangle of the '
+                                            'smaller object more than this, merge '
+                                            'them into a single object ')
         # self.overlap_thresh_edit.setSingleStep(0.01)
         try:
             self.overlap_thresh_edit.setStepType(
@@ -284,8 +283,9 @@ class YolactWidget(qw.QWidget):
         except AttributeError:
             pass  # older Qt versions
         saved_val = settings.value('yolact/overlap_thresh', 1.0, type=float)
-        self.overlap_thresh_edit.setValue(float(saved_val))
-        self.worker.overlap_threshold = float(saved_val)
+        self.overlap_thresh_edit.setValue(saved_val)
+        self.worker.setOverlapThresh(saved_val)
+        self.overlap_thresh_edit.valueChanged.connect(self.setOverlapThresh)
 
         self.ignore = False
         ######################################################

@@ -352,19 +352,11 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     dist_matrix = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
                                     metric=metric)
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
-    matched = {}
-    good_rows = set()
-    good_cols = set()
     if metric == DistanceMetric.euclidean:
         max_dist *= max_dist
     result = [(row, col, (labels[col], row))
               for row, col in zip(row_ind, col_ind)
               if dist_matrix[row, col] < max_dist]
-    # for row, col in zip(row_ind, col_ind):
-    #     if dist_matrix[row, col] < max_dist:
-    #         good_rows.add(row)
-    #         good_cols.add(labels[col])
-    #         matched[labels[col]] = row
     if len(result) > 0:
         good_rows, good_cols, matched = zip(*result)
         good_rows = set(good_rows)

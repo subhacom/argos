@@ -103,9 +103,15 @@ class SORTWidget(qw.QWidget):
         self._dist_metric_combo.addItems(list(distance_metric.keys()))
         metric = settings.value('sortracker/metric', 'iou', type=str)
         self._min_dist_spin = qw.QDoubleSpinBox()
+        try:
+            self._min_dist_spin.setStepType(
+                qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+        except AttributeError:
+            pass     # older versions of Qt don't support this
         if metric == 'iou':
             self._min_dist_label = qw.QLabel('Minimum overlap')
             self._min_dist_spin.setRange(0.1, 1.0)
+            self._min_dist_spin.setSingleStep(0.05)
             value = settings.value('sortracker/iou_mindist', 0.3, type=float)
             self._min_dist_spin.setValue(value)
             self._min_dist_spin.setToolTip(
@@ -114,11 +120,13 @@ class SORTWidget(qw.QWidget):
         else:
             self._min_dist_label = qw.QLabel('Maximum distance')
             self._min_dist_spin.setRange(1, 1000)
+            self._min_dist_spin.setSingleStep(5)
             self._min_dist_spin.setValue(
                 settings.value('sortracker/euclidean_mindist', 5, type=float))
             self._min_dist_spin.setToolTip(
                 'Maximum distance between bounding boxes '
                 'to consider them same object.')
+
         self._disable_check = qw.QCheckBox('Disable tracking')
         self._disable_check.setToolTip('Just show the identified objects. Can '
                                        'be useful for troubleshooting.')
@@ -152,7 +160,7 @@ class SORTWidget(qw.QWidget):
     def setDistMetric(self, text):
         metric = distance_metric[text]
         if metric == argos.constants.DistanceMetric.iou:
-            print('SORT Metric set to IoU')
+            # print('SORT Metric set to IoU')
             settings.setValue('sortracker/metric', 'iou')
             self._min_dist_label.setText('Minimum overlap')
             self._min_dist_spin.setRange(0.01, 1)
