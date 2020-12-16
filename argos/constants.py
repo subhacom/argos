@@ -32,6 +32,7 @@ class DistanceMetric(enum.Enum):
     """Enumeration for distance metrics"""
     iou = enum.auto()
     euclidean = enum.auto()
+    ios = enum.auto()   # intersection over smaller
 
 
 class TrackState(enum.Enum):

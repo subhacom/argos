@@ -181,7 +181,7 @@ class YolactWorker(qc.QObject):
             if self.overlap_thresh < 1:
                 dist_matrix = pairwise_distance(new_bboxes=boxes, bboxes=boxes,
                                                 boxtype=OutlineStyle.bbox,
-                                                metric=DistanceMetric.iou)
+                                                metric=DistanceMetric.ios)
                 bad_boxes = []
                 for ii in range(dist_matrix.shape[0] - 1):
                     for jj in range(ii+1, dist_matrix.shape[1]):

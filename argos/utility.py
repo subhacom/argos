@@ -129,14 +129,18 @@ try:
 
     pyximport.install(setup_args={"include_dirs": np.get_include()},
                       reload_support=True)
-    from cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
+    from argos.cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
                           rect_intersection,
                           rect_iou,
+                          rect_ios,
                           pairwise_distance)
     logging.info('Loaded C-utilities with pyximport')
-except:
+    print('Loaded C-utilities with pyximport')    
+except ImportError as err:
+    print('Could not load C-utilities with pyximport. Using pure Python.')
+    print(err)
     logging.info('Could not load C-utilities with pyximport. Using pure Python.')
-    
+    logging.info(f'{err}')
     def rect2points(rect: np.ndarray) -> np.ndarray:
         """Convert topleft, width, height format rectangle into four anti-clockwise
         vertices"""
@@ -220,6 +224,36 @@ except:
             raise ValueError('Invalid intersection')
         return ret
 
+    def rect_ios(ra: np.ndarray, rb: np.ndarray) -> float:
+        """Compute intersection over area of smaller of two axis-aligned
+        rectangles.
+
+        This is the ratio of the are of intersection to the area of the smaller
+        of the two rectangles.
+        
+        Parameters
+        ----------
+        ra: np.ndarray
+        rb: np.ndarray
+            Axis aligned rectangles specified as (x, y, w, h) where (x, y) is
+            the position of the lower left corner, w and h are width and height.
+
+        Returns
+        -------
+        float
+            The Intersection over area of the smaller of two rectangles.
+        """
+        x, y, dx, dy = rect_intersection(ra, rb)
+        area_i = dx * dy
+        area_a = ra[2] * ra[3]
+        area_b = rb[2] * rb[3]
+        if area_i < 0 or area_a <= 0 or area_b <= 0:
+            raise ValueError('Area not positive')
+        ret = area_i / min(area_a, area_b)
+        if np.isinf(ret) or np.isnan(ret) or ret < 0:
+            raise ValueError('Invalid intersection')
+        return ret
+
 
     def pairwise_distance(new_bboxes: np.ndarray, bboxes: np.ndarray,
                           boxtype: OutlineStyle,
@@ -262,6 +296,11 @@ except:
             else:
                 raise NotImplementedError(
                     'Only handling axis-aligned bounding boxes')
+        elif metric == DistanceMetric.ios and boxtype == OutlineStyle.bbox:
+                for ii in range(len(new_bboxes)):
+                    for jj in range(len(bboxes)):
+                        dist[ii, jj] = 1.0 - rect_ios(bboxes[jj],
+                                                      new_bboxes[ii])
         else:
             raise NotImplementedError(f'Unknown metric {metric}')
         return dist

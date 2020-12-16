@@ -99,6 +99,37 @@ def rect_iou(np.ndarray ra, np.ndarray rb):
     return ret
 
 
+def rect_ios(np.ndarray ra, np.ndarray rb):
+    """Compute intersection over area of smaller of two axis-aligned
+    rectangles.
+
+    This is the ratio of the are of intersection to the area of the smaller
+    of the two rectangles.
+
+    Parameters
+    ----------
+    ra: np.ndarray
+    rb: np.ndarray
+        Axis aligned rectangles specified as (x, y, w, h) where (x, y) is
+        the position of the lower left corner, w and h are width and height.
+
+    Returns
+    -------
+    float
+        The Intersection over area of the smaller of two rectangles.
+    """
+    cdef np.ndarray inter = rect_intersection(ra, rb)
+    cdef float area_i = inter[2] *inter[3]
+    cdef float area_a = ra[2] * ra[3]
+    cdef float area_b = rb[2] * rb[3]
+    if area_i < 0 or area_a <= 0 or area_b <= 0:
+        raise ValueError('Area not positive')
+    cdef float ret = area_i / min(area_a, area_b)
+    if np.isinf(ret) or np.isnan(ret) or ret < 0:
+        raise ValueError('Invalid intersection')
+    return ret
+
+
 def pairwise_distance(np.ndarray new_bboxes, np.ndarray bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible
@@ -138,6 +169,14 @@ def pairwise_distance(np.ndarray new_bboxes, np.ndarray bboxes,
             for ii in range(new_bboxes.shape[0]):
                 for jj in range(bboxes.shape[0]):
                     dist[ii, jj] = 1.0 - rect_iou(bboxes[jj], new_bboxes[ii])
+        else:
+            raise NotImplementedError(
+                'Only handling axis-aligned bounding boxes')
+    elif metric == DistanceMetric.ios:
+        if boxtype == OutlineStyle.bbox:
+            for ii in range(new_bboxes.shape[0]): 
+                for jj in range(bboxes.shape[0]):
+                    dist[ii, jj] = 1.0 - rect_ios(bboxes[jj], new_bboxes[ii])
         else:
             raise NotImplementedError(
                 'Only handling axis-aligned bounding boxes')
