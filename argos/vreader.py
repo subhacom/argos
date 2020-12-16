@@ -85,7 +85,7 @@ class VideoReader(qc.QObject):
             self._waitCond.clear()
         if not self.is_webcam:
             if frame_no >= self._vid.get(cv2.CAP_PROP_FRAME_COUNT):
-                logging.debug('Video at end')
+                logging.info(f'Video at end @ {datetime.now()}')
                 self.mutex.unlock()
                 self.sigVideoEnd.emit()
                 return
@@ -97,26 +97,26 @@ class VideoReader(qc.QObject):
                     f'This video format does not allow correct seek: '
                     f'tried {frame_no}, got {pos}'))
                 return
-            self._frame_no = pos
-        else:
-            self._frame_no += 1
+        self._frame_no = frame_no
         ret, frame = self._vid.read()
         self.mutex.unlock()
         if not ret:
-            logging.debug('Video at end')
+            logging.debug(f'Video at end @{datetime.now()}')
             self.sigVideoEnd.emit()
             return
         if frame is None:
-            logging.info(f'Empty frame at position {frame_no}')
+            logging.info(f'Empty frame at position {frame_no} @ {datetime.now()}')
             self.sigVideoEnd.emit()
             return
         if self.is_webcam and self._outfile is not None:
-            self._frame_no += 1
-            pos = self._frame_no
+            # self._frame_no += 1
+            # pos = self._frame_no
             self._outfile.write(frame)
             ts = datetime.now()
             self._ts_writer.writerow([self._frame_no, ts])
-            logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
+            # logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
+        if self._frame_no == 0:
+            logging.info(f'First frame read @ {datetime.now()}')
         self.sigFrameRead.emit(frame.copy(), pos)
         if self._waitCond is not None:
             self._waitCond.wait()
@@ -133,23 +133,26 @@ class VideoReader(qc.QObject):
             self._waitCond.clear()
         self.mutex.unlock()
         if not ret:
-            logging.debug('Video at end')
+            logging.info(f'Video at end @ {datetime.now()}')
             self.sigVideoEnd.emit()
             return
         if frame is None:
-            logging.info(f'Empty frame at position {self._frame_no}')
+            logging.info(f'Empty frame at position {self._frame_no}'
+                         f' @ {datetime.now()}')
             self.sigVideoEnd.emit()
             return
         # event = threading.Event()
         self._frame_no += 1
+        if self._frame_no == 0:
+            logging.info(f'Read first frame @ {datetime.now()}')
         if self.is_webcam and self._outfile is not None:
             assert self.frame_width == frame.shape[1] and self.frame_height == frame.shape[0]
             self._outfile.write(frame)
             ts = datetime.now()
             self._ts_writer.writerow([self._frame_no, ts])
-            logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
+            # logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
         self.sigFrameRead.emit(frame.copy(), self._frame_no)
-        logging.debug(f'Read frame {self._frame_no}')
+        # logging.debug(f'Read frame {self._frame_no}')
         if self._waitCond is not None:
             self._waitCond.wait()
         # event.wait()

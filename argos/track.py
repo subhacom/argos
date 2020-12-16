@@ -171,6 +171,7 @@ class ArgosMain(qw.QMainWindow):
             self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
+        self._video_widget.sigStatusMsg.connect(self.statusMsgSlot)
         self._seg_grp.triggered.connect(self.switchSegmentation)
         self._track_grp.triggered.connect(self.switchTracking)
         self.sigQuit.connect(self._video_widget.sigQuit)
@@ -318,6 +319,15 @@ class ArgosMain(qw.QMainWindow):
         if len(fname) > 0:
             with open(fname, 'w') as fd:
                 yaml.dump(config, fd)
+
+    @qc.pyqtSlot()
+    def loadConfig(self):
+        """TODO implement loading config file exported in yaml file"""
+        raise NotImplementedError('This function is yet to be implemented')
+
+    @qc.pyqtSlot(str)
+    def statusMsgSlot(self, msg):
+        self.statusBar().showMessage(msg)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,8 @@ import logging
 import threading
 import numpy as np
 import os
+import time
+from datetime import timedelta
 
 from PyQt5 import (
     QtWidgets as qw,
@@ -36,6 +38,7 @@ class VidInfo(qw.QMainWindow):
         self.frame_width = qw.QLabel('')
         self.height_label = qw.QLabel('Frame height')
         self.frame_height = qw.QLabel('')
+
         layout = qw.QFormLayout()
         layout.addRow(self.vidfile_label, self.vidfile)
         layout.addRow(self.frames_label, self.frames)
@@ -61,9 +64,11 @@ class VideoWidget(qw.QWidget):
     sigSetColormap = qc.pyqtSignal(str, int)
     sigArena = qc.pyqtSignal(qg.QPolygonF)
     sigVideoFile = qc.pyqtSignal(str)
+    sigStatusMsg = qc.pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
+        self.currentFrame = -1
         self.display_widget = None
         self.video_reader = None
         self.segmenter = None
@@ -80,6 +85,8 @@ class VideoWidget(qw.QWidget):
         # reader thread
         self.timer = qc.QTimer(self)
         self.timer.setSingleShot(True)
+        self.startTime = None
+        self.endTime = None
         self.openAction = qw.QAction('Open video')
         self.openCamAction = qw.QAction('Open camera')
         self.playAction = qw.QAction('Play')
@@ -126,11 +133,11 @@ class VideoWidget(qw.QWidget):
         if not accept:
             return
         width, accept = qw.QInputDialog.getInt(self, 'Frame width',
-                                                 'Frame width (pixels)', -1)
+                                               'Frame width (pixels)', -1)
         if not accept:
             width = -1
         height, accept = qw.QInputDialog.getInt(self, 'Frame height',
-                                                 'Frame height (pixels)', -1)
+                                                'Frame height (pixels)', -1)
         if not accept:
             height = -1
         self.video_filename = str(cam_idx)
@@ -151,7 +158,7 @@ class VideoWidget(qw.QWidget):
         self.pauseVideo()
         directory = settings.value('video/directory', '.')
         fname, filter_ = qw.QFileDialog.getOpenFileName(self, 'Open video',
-                                                       directory=directory)
+                                                        directory=directory)
         logging.debug(f'Opening file "{fname}"')
         if len(fname) == 0:
             return
@@ -206,6 +213,8 @@ class VideoWidget(qw.QWidget):
                 f'Opened {self.video_filename} with {self.video_reader.frame_count} frames')
             settings.setValue('video/directory',
                               os.path.dirname(self.video_filename))
+            self.currentFrame = -1
+            self.startTime = None
         except IOError as err:
             qw.QMessageBox.critical(self, 'Video open failed', str(err))
             return
@@ -334,13 +343,24 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot()
     def videoEnd(self):
         self.pauseVideo()
-        data_file_str = f'{self.writer.seg_filename}' \
-                        ' and {self.writer.track_filename}' \
-            if self.outfile.endswith('.csv') else f'{self.outfile}'
-        qw.QMessageBox.information(self, 'Finished processing',
-                                   f'Reached the end of the video'
-                                   f' {self.video_filename}.\n'
-                                   f'Data saved in {data_file_str}')
+        self.endTime = time.perf_counter()
+        if self.startTime is not None:
+            ptime = self.endTime - self.startTime
+        else:
+            ptime = 0
+        ptime = timedelta(seconds=ptime)
+        if self.outfile.endswith('.csv'):
+            data_file_str = f'{self.writer.seg_filename}' \
+                        ' and {self.writer.track_filename}'
+        else:
+            data_file_str = f'{self.outfile}'
+
+        qw.QMessageBox.information(
+            self, 'Finished processing',
+            f'Reached the end of the video {self.video_filename} '
+            f'frame # {self.video_reader.frame_count}.\n'
+            f'Time: {ptime}.\n'
+            f'Data saved in {data_file_str}.')
 
     @qc.pyqtSlot(dict, int)
     def setTracked(self, bboxes: dict, pos: int) -> None:
@@ -358,6 +378,7 @@ class VideoWidget(qw.QWidget):
         synchronizing with the reader so it does not swamp us with too
         many frames
         """
+        self.currentFrame = pos
         self.sigSetFrame.emit(frame, pos)
         self.slider.blockSignals(True)
         self.slider.setValue(pos)
@@ -372,9 +393,13 @@ class VideoWidget(qw.QWidget):
         """This function is for playing raw video without any processing
         """
         if play:
+            if self.startTime is None:  # indicates video was just initialized
+                print('Starting at first frame')
+                self.sigGotoFrame.emit(0)
+            self.startTime = time.perf_counter()
             self.playAction.setText('Pause')
-            time = 1000.0 / self.video_reader.fps
-            self.timer.start(time)
+            t = 1000.0 / self.video_reader.fps
+            self.timer.start(t)
         else:
             self.pauseVideo()
 
@@ -383,11 +408,19 @@ class VideoWidget(qw.QWidget):
         self.playAction.setChecked(False)
         self.timer.stop()
         self.playAction.setText('Play')
+        self.endTime = time.perf_counter()
+        if self.startTime != None:
+            ptime = timedelta(seconds=self.endTime - self.startTime)
+            msg = f'Processed till frame # {self.currentFrame}'    \
+                  f' in time: {ptime}.'
+            logging.info(msg)
+            self.sigStatusMsg.emit(msg)
 
     @qc.pyqtSlot()
     def resetVideo(self):
         self.pauseVideo()
         self.sigReset.emit()
+        self.startTime = None
         self.sigGotoFrame.emit(0)
 
     @qc.pyqtSlot()
