@@ -30,6 +30,7 @@ from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
     segment_by_contours,
+    segment_by_contour_bbox,
     segment_by_dbscan,
     segment_by_watershed,
     extract_valid
@@ -251,7 +252,7 @@ def create_seg_func_list(args):
 
     seg_method = args.seg_method
     if seg_method == 'threshold':
-        seg_func = segment_by_contours
+        seg_func = segment_by_contour_bbox
     elif seg_method == 'watershed':
         seg_func = partial(segment_by_watershed, dist_thresh=args.dist_thresh)
     elif seg_method == 'dbscan':
