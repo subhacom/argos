@@ -125,10 +125,10 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
 # Try to import cython version of these functions, otherwise define them in
 # pure python
 try:
-    import pyximport
+    #import pyximport
 
-    pyximport.install(setup_args={"include_dirs": np.get_include()},
-                      reload_support=True)
+    #pyximport.install(setup_args={"include_dirs": np.get_include()},
+    #                  reload_support=True)
     from argos.cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
                           rect_intersection,
                           rect_iou,

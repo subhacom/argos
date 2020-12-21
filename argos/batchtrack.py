@@ -298,7 +298,10 @@ def run_fn_seq(fn_args):
 def batch_segment(args):
     """Segment frames in parallel and save the bboxes of segmented objects in
     an HDF file for later tracking"""
-    cpu_count = mp.cpu_count()
+    if 'SLURM_JOB_ID' in os.envviron:  # this is a slurm job, use slurm env var or safe number of 2
+        cpu_count = int(os.environ.get('SLURM_CPUS_PER_TASK', '2'))  
+    else:
+         cpu_count = mp.cpu_count()
     max_workers = args.max_proc if args.max_proc > 0 else cpu_count
     if args.seg_method == 'yolact':
         seg_fn = partial(segment_yolact, score_threshold=args.score_thresh,
