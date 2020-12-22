@@ -360,7 +360,7 @@ def capture(params):
                                       params['tb'], cv2.FILLED)
                     cv2.putText(frame, tstring, (params['tx'], params['ty']),
                                 cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
-                                params['tc'], 2)
+                                params['tc'], 2, cv2.LINE_AA)
                 if params['show_contours'] and (len(contours) > 0):
                     print('Color:', params['tc'])
                     cv2.drawContours(frame, contours, -1, params['tc'], 2)

@@ -20,7 +20,7 @@ from argparse import ArgumentParser
 
 def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
                 bbox_alpha=(0.0, 1.0), plot_alpha=1.0,
-                quiver=True, qcmap='hot', vidfile=None, frame=0):
+                quiver=True, qcmap='hot', vidfile=None, frame=-1):
     if trackfile.endswith('.csv'):
         tracks = pd.read_csv(trackfile)
     else:
@@ -30,10 +30,14 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
     img = None
     if vidfile is not None:
         cap = cv2.VideoCapture(vidfile)
+        if frame < 0:
+            frame = cap.get(cv2.CAP_PROP_FRAME_COUNT) - 1
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
         ret, img = cap.read()
         if img is None:
             print('Could not read image')
+        elif img.shape[-1] == 3:  # BGR
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     fig, ax = plt.subplots()
     if img is not None:
         ax.imshow(img, origin='upper')
@@ -78,7 +82,7 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
 
 def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
                 fthickness=1,
-                torigfile=None, tmtfile=None):
+                torigfile=None, tmtfile=None, vout=None, outfmt='MJPG', fps=None):
     cap = cv2.VideoCapture(vidfile)
     frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     if not cap.isOpened():
@@ -105,8 +109,8 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
     if timestamps is None:
         tstart = datetime.fromtimestamp(time.mktime(time.localtime(
             os.path.getmtime(vidfile))))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        dt = np.arange(frame_count) / fps
+        infps = cap.get(cv2.CAP_PROP_FPS)
+        dt = np.arange(frame_count) / infps
         ts = tstart + pd.to_timedelta(dt, unit='s')
         timestamps = pd.DataFrame({'frame': np.arange(frame_count),
                                    'timestamp': ts})
@@ -123,6 +127,16 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
 
         else:
             colors[ii] = (0, 0, 255)
+    out = None
+    if vout is not None:
+        fourcc = cv2.VideoWriter_fourcc(*outfmt)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if fps is None:
+            fps = infps
+        out = cv2.VideoWriter(vout, fourcc, fps,
+                              (width, height))
+        print(f'Saving video with tracks in {vout}. Video format {outfmt}')
 
     for frame_no, trackdata in tracks.groupby('frame'):
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_no))
@@ -131,11 +145,12 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
             print('End at frame', frame_no)
             break
         cv2.putText(frame, str(int(frame_no)), (100, 100),
-                    cv2.FONT_HERSHEY_COMPLEX, 1.0, (255, 255, 0), 2)
+                    cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
+                    fthickness, cv2.LINE_AA)
         ts = timestamps[timestamps['frame'] == frame_no]['timestamp'].iloc[0]
         cv2.putText(frame, str(ts), (frame.shape[1] - 200, 100),
                     cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
-                    fthickness)
+                    fthickness, cv2.LINE_AA)
         for idx, row in trackdata.iterrows():
             # print(f'{row.x}\n{row.y}\n{row.w}\n=====')
             id_ = int(row.trackid)
@@ -145,11 +160,15 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
                           colors[id_], lw)
             cv2.putText(frame, str(id_), (int(row.x), int(row.y)),
                         cv2.FONT_HERSHEY_COMPLEX, fontscale, colors[id_],
-                        fthickness)
+                        fthickness, cv2.LINE_AA)
         cv2.imshow(win, frame)
+        if out is not None:
+            out.write(frame)
         key = cv2.waitKey(100)
         if key == ord('q') or key == 27:
             break
+    if out is not None:
+        out.release()
     cap.release()
 
 
@@ -175,6 +194,10 @@ def make_parser():
                         help='When displaying bounding box, alpha value at last frame')
     parser.add_argument('--ap', default=1.0, type=float,
                         help='Alpha value of plot lines')
+    parser.add_argument('--wp', default=8.0, type=float,
+                        help='Width of plot figure in inches')
+    parser.add_argument('--hp', default=6.0, type=float,
+                        help='Height of plot figure in inches')
     parser.add_argument('--ms', default=1, type=int,
                         help='Marker size of plot lines')
     parser.add_argument('--vlw', default=2, type=int,
@@ -185,10 +208,17 @@ def make_parser():
                         help='Font scale to use in video display')
     parser.add_argument('--ft', default=10, type=int,
                         help='Font thickness to use in video display')
+    parser.add_argument('--fps', default=10, type=int,
+                        help='Frames per second in output video')
     parser.add_argument('--bgframe', default=0, type=int,
                         help='Display tracks on background with frame #')
     parser.add_argument('--fplot', type=str,
                         help='Save plot in this file')
+    parser.add_argument('--vout', type=str,
+                        help='Save video in this file')
+    parser.add_argument('--vfmt', type=str, default='MJPG',
+                        help='Output video format')
+
     return parser
 
 
@@ -198,10 +228,15 @@ if __name__ == '__main__':
         play_tracks(args.video, args.data, lw=args.vlw, fontscale=args.fs,
                     fthickness=args.ft,
                     torigfile=args.torig,
-                    tmtfile=args.tmt)
-    fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms, show_bbox=args.bbox, bbox_alpha=(args.af, args.al), plot_alpha=args.ap,
-                quiver=args.quiver, qcmap=args.qcmap,
-                frame=args.bgframe)
+                    tmtfile=args.tmt,
+                    vout=args.vout,
+                    outfmt=args.vfmt, fps=args.fps)
+    fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms,
+                      show_bbox=args.bbox, bbox_alpha=(args.af, args.al),
+                      plot_alpha=args.ap,
+                      quiver=args.quiver, qcmap=args.qcmap,
+                      frame=args.bgframe)
+    fig.set_size_inches(args.wp, args.hp)
     if args.fplot is not None:
         fig.savefig(args.fplot, transparent=True)
     plt.show()
