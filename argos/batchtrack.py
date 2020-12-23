@@ -6,6 +6,7 @@
 This works using multiple processes to utilize multiple CPU cores.
 """
 import argparse
+import os
 from collections import namedtuple
 import sys
 import logging
@@ -298,7 +299,7 @@ def run_fn_seq(fn_args):
 def batch_segment(args):
     """Segment frames in parallel and save the bboxes of segmented objects in
     an HDF file for later tracking"""
-    if 'SLURM_JOB_ID' in os.envviron:  # this is a slurm job, use slurm env var or safe number of 2
+    if 'SLURM_JOB_ID' in os.environ:  # this is a slurm job, use slurm env var or safe number of 2
         cpu_count = int(os.environ.get('SLURM_CPUS_PER_TASK', '2'))  
     else:
          cpu_count = mp.cpu_count()
@@ -312,7 +313,10 @@ def batch_segment(args):
         max_workers = max(1, min(cpu_count, torch.cuda.device_count()))
     else:
         thresh_fn, seg_fn, limit_fn, bbox_fn = create_seg_func_list(args)
-    logging.debug(f'Running segmentation with {max_workers} worker processes')
+    cv2.setNumThreads(cpu_count)
+    torch.set_num_threads(cpu_count)
+    print('Workers:', max_workers, 'CPUs:', cpu_count)
+    logging.info(f'Running segmentation with {max_workers} worker processes on system with {cpu_count} cpus.')
     video = cv2.VideoCapture(args.infile)
     data = []
     with cf.ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -353,6 +357,7 @@ def batch_segment(args):
     data = pd.DataFrame(data)
     data.sort_values(by='frame', inplace=True)
     data.to_hdf(args.outfile, 'segmented')
+    logging.info(f'Data saved in {args.outfile} under /segmented')
 
 
 @timed
@@ -389,6 +394,7 @@ def batch_track(args):
     results = pd.DataFrame(results)
     results.sort_values(by='frame', inplace=True)
     results.to_hdf(args.outfile, 'tracked')
+    logging.info(f'Tracking data saved in {args.outfile} under /tracked.')
 
 
 def make_parser():
