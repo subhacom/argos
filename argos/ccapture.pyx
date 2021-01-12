@@ -1,3 +1,4 @@
+cimport cython
 import sys
 import os
 import argparse
@@ -17,6 +18,7 @@ cimport numpy as np
 CV2_MAJOR, CV2_MINOR, _ = cv2.__version__.split(".")
 CV2_MAJOR = int(CV2_MAJOR)
 CV2_MINOR = int(CV2_MINOR)
+cpdef int LARGE_FRAME_SIZE = 10000
 
 
 def get_roi(input_, width, height):
@@ -46,6 +48,33 @@ def get_roi(input_, width, height):
     return (int(x), int(y), int(w), int(h), int(width), int(height))
         
 
+def get_camera_fps(devid, width, height, fps=30, nframes=120):
+    if sys.platform == 'win32':
+        cap = cv2.VideoCapture(devid, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(devid)
+    start = datetime.now()
+    assert cap.isOpened(), 'Could not open camera'
+    if width < 0 or height < 0:
+        width = LARGE_FRAME_SIZE
+        height = LARGE_FRAME_SIZE
+        print('Trying maximum possible resolution')
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    for ii in range(nframes):
+        ret, frame = cap.read()
+    cap.release()
+    end = datetime.now()
+    delta = end - start
+    interval = delta.seconds + delta.microseconds * 1e-6
+    fps = nframes / interval
+    return fps, width, height
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef bint check_motion(np.ndarray[unsigned char, ndim=3] current,
                         np.ndarray[unsigned char, ndim=3] prev,
                         int threshold,
@@ -79,16 +108,18 @@ cpdef bint check_motion(np.ndarray[unsigned char, ndim=3] current,
     return len(moving_contours) > 0
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef void vcapture(str input_, str output, str fmt, int fps,
-                  bint interactive, int width, int height,
-                  int roi_x, int roi_y, int roi_w, int roi_h,
-                  long interval,
-                  double duration,
-                   long max_frames,
-                   bint motion_based=False,
-                   int threshold=100,
-                   int min_area=100,
-                   int kernel_width=21):
+                    bint interactive, int width, int height,
+                    int roi_x, int roi_y, int roi_w, int roi_h,
+                    long interval,
+                    double duration,
+                    long max_frames,
+                    bint motion_based=False,
+                    int threshold=100,
+                    int min_area=100,
+                    int kernel_width=21):
 
     cdef int w_
     cdef int h_

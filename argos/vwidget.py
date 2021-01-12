@@ -140,6 +140,9 @@ class VideoWidget(qw.QWidget):
                                                 'Frame height (pixels)', -1)
         if not accept:
             height = -1
+        fps, accept = qw.QInputDialog.getDouble(self, 'Frames per second', 'Frames per second', 30)
+        if not accept:
+            fps = 30
         self.video_filename = str(cam_idx)
         directory = settings.value('video/directory', '.')
         fourcc, accept = qw.QInputDialog.getText(
@@ -151,7 +154,7 @@ class VideoWidget(qw.QWidget):
         fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save video as',
                                                   directory,
                                                   filter='AVI (*.avi)')
-        self._initIO(fname, fourcc, width=width, height=height)
+        self._initIO(fname, fourcc, width=width, height=height, fps=fps)
 
     @qc.pyqtSlot()
     def openVideo(self):
@@ -201,11 +204,11 @@ class VideoWidget(qw.QWidget):
         self.colormapAction.setChecked(True)
         self.sigSetColormap.emit(input, max_colors)
 
-    def _initIO(self, outfpath=None, codec=None, width=-1, height=-1):
+    def _initIO(self, outfpath=None, codec=None, width=-1, height=-1, fps=30):
         # Open input
         try:
             self.video_reader = VideoReader(self.video_filename, width=width,
-                                            height=height)
+                                            height=height, fps=fps)
             if self.video_reader.is_webcam and \
                     outfpath is not None and codec is not None:
                 self.video_reader.setVideoOutFile(outfpath, codec)

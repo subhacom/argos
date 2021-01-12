@@ -1,3 +1,4 @@
+cimport cython
 import numpy as np
 
 import enum
@@ -6,7 +7,8 @@ cimport numpy as np
 
 from argos.constants import OutlineStyle, DistanceMetric
 
-
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef np.ndarray[np.int_t, ndim=2] rect2points(np.ndarray[np.int_t, ndim=1] rect):
     """Convert topleft, width, height format rectangle into four anti-clockwise
     vertices"""
@@ -16,14 +18,20 @@ cpdef np.ndarray[np.int_t, ndim=2] rect2points(np.ndarray[np.int_t, ndim=1] rect
                  (rect[0] + rect[2], rect[1])])
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef np.ndarray[np.float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
     cdef np.ndarray ret = np.asanyarray(rect, dtype=np.float)
-    ret[:2] += ret[2:] * 0.5
+    ret[0] += ret[2] * 0.5
+    ret[1] += ret[3] * 0.5
+    # ret[:2] += ret[2:] * 0.5
     ret[2] /= ret[3]
     return ret
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[np.float_t, ndim=1] rect):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
@@ -35,6 +43,8 @@ cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[np.float_t, ndim=1] rect
     return ret
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Find if two axis-aligned rectangles intersect.
 
@@ -68,6 +78,8 @@ cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1
     return result
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef float rect_iou(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Compute Intersection over Union of two axis-aligned rectangles.
 
@@ -99,6 +111,8 @@ cpdef float rect_iou(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=
     return ret
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Compute intersection over area of smaller of two axis-aligned
     rectangles.
@@ -130,6 +144,8 @@ cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=
     return ret
 
 
+# @cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 cpdef np.ndarray[np.float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim=2] new_bboxes, np.ndarray[np.int_t, ndim=2] bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible

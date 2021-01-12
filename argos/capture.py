@@ -59,7 +59,7 @@ CV2_MINOR = int(CV2_MINOR)
 LARGE_FRAME_SIZE = 10000
 
 try:
-    from argos.ccapture import vcapture, get_roi
+    from argos.ccapture import vcapture, get_roi, get_camera_fps
     ccapture = True
 except ImportError as err:
     print('Could not load C-function for video capture with pyximport. Using pure Python.')
@@ -305,7 +305,7 @@ except ImportError as err:
                 if params['interactive']:
                     cv2.imshow(win_name, frame)
                 key = cv2.waitKey(1) & 0xFF
-                # if the `q` key is pressed, break from the lop
+                # if `q` or ESCAPE is pressed, break from the loop
                 if key == ord('q') or key == 27:
                     break
         except KeyboardInterrupt:
@@ -320,7 +320,7 @@ except ImportError as err:
             cv2.destroyAllWindows()
 
 
-    def get_camera_fps(devid, width, height, nframes=120):
+    def get_camera_fps(devid, width, height, fps=30, nframes=120):
         if sys.platform == 'win32':
             cap = cv2.VideoCapture(devid, cv2.CAP_DSHOW)
         else:
@@ -333,9 +333,9 @@ except ImportError as err:
             print('Trying maximum possible resolution')
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS, fps)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
         for ii in range(nframes):
             ret, frame = cap.read()
         cap.release()

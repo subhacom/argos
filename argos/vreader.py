@@ -24,7 +24,7 @@ class VideoReader(qc.QObject):
     sigSeekError = qc.pyqtSignal(Exception)
     sigVideoEnd = qc.pyqtSignal()
 
-    def __init__(self, path: str, width=-1, height=-1, waitCond: threading.Event=None):
+    def __init__(self, path: str, width=-1, height=-1, fps=30, waitCond: threading.Event=None):
         super(VideoReader, self).__init__()
         # TODO check if I really need the mutex just for reading
         self.mutex = qc.QMutex()
@@ -40,12 +40,14 @@ class VideoReader(qc.QObject):
         if self.is_webcam:
             # Camera FPS opens a temporary VideoCapture with the camera
             # - so do that before initializing current VideoCapture
-            self.mutex.lock()
-            self.fps, self.frame_width, self.frame_height = cu.get_camera_fps(int(path), width, height)
+            self.mutex.lock()            
+            self.fps, self.frame_width, self.frame_height = cu.get_camera_fps(int(path), width, height, fps, nframes=30)
             self.mutex.unlock()
+            print(f'Camera settings: w={self.frame_width}, h={self.frame_height}, fps={self.fps}')
             self._vid = cv2.VideoCapture(int(path))
             self._vid.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
             self._vid.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            self._vid.set(cv2.CAP_PROP_FPS, fps)
             self.frame_count = -1
             self._outpath = f'{path}.avi'
         else:
@@ -112,7 +114,7 @@ class VideoReader(qc.QObject):
             # self._frame_no += 1
             # pos = self._frame_no
             self._outfile.write(frame)
-            ts = datetime.now()
+            ts = datetime.now().isoformat()
             self._ts_writer.writerow([self._frame_no, ts])
             # logging.debug(f'Wrote timestamp for frame {self._frame_no}: {ts}')
         if self._frame_no == 0:
