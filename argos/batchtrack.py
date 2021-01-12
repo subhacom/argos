@@ -381,7 +381,7 @@ def batch_track(args):
     for frame, fgrp in segments.groupby('frame'):
         if len(fgrp) == 0:
             continue
-        tracked = tracker.update(fgrp[['x', 'y', 'w', 'h']].values)
+        tracked = tracker.update(fgrp[['x', 'y', 'w', 'h']].astype(np.int_).values)
         for tid, bbox in tracked.items():
             results.append({'frame': frame,
                             'trackid': tid,
