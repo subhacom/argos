@@ -186,6 +186,7 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
         # top-left, width, height format
         if len(boxes) > 0:
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
+        boxes = np.asanyarray(np.rint(boxes), dtype=np.int_)
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
                                             boxtype=OutlineStyle.bbox,
@@ -196,7 +197,7 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
                     if dist_matrix[ii, jj] < 1 - overlap_thresh:
                         bad_boxes.append(jj)
             boxes = np.array([boxes[ii] for ii in range(boxes.shape[0]) if
-                              ii not in bad_boxes])
+                              ii not in bad_boxes], dtype=np.int_)
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s',
                       1e-9 * (toc - tic))

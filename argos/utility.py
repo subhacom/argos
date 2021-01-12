@@ -348,7 +348,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     if len(id_bboxes) == 0:
         return ({}, set(range(len(new_bboxes))), {})
     labels = list(id_bboxes.keys())
-    bboxes = np.array(list(id_bboxes.values()), dtype=float)
+    bboxes = np.array(np.rint(list(id_bboxes.values())), dtype=np.int_)
     dist_matrix = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
                                     metric=metric)
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)

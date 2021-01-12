@@ -178,6 +178,7 @@ class YolactWorker(qc.QObject):
                 self.sigProcessed.emit(boxes, pos)
                 return
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
+            boxes = np.asanyarray(boxes, dtype=np.int_)
             if self.overlap_thresh < 1:
                 dist_matrix = pairwise_distance(new_bboxes=boxes, bboxes=boxes,
                                                 boxtype=OutlineStyle.bbox,
@@ -190,7 +191,7 @@ class YolactWorker(qc.QObject):
 
             toc = time.perf_counter_ns()
             logging.debug('Time to process single _image: %f s',
-                          1e-9 * (toc - tic))
+                          1e-9 * (toc - tic))            
             self.sigProcessed.emit(boxes, pos)
             logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
 

@@ -23,6 +23,12 @@ ext_modules = [
         include_dirs=[numpy.get_include()],
         extra_compile_args=[]
     ),
+    Extension(
+        'argos.ccapture',
+        sources=['argos/ccapture.pyx'],
+        include_dirs=[numpy.get_include()],
+        extra_compile_args=[]
+    ),
 ]
 setup(
     name="argos",

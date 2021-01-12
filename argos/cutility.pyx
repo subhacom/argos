@@ -7,7 +7,7 @@ cimport numpy as np
 from argos.constants import OutlineStyle, DistanceMetric
 
 
-def rect2points(np.ndarray rect):
+cpdef np.ndarray[np.int_t, ndim=2] rect2points(np.ndarray[np.int_t, ndim=1] rect):
     """Convert topleft, width, height format rectangle into four anti-clockwise
     vertices"""
     return np.vstack([rect[:2],
@@ -16,26 +16,26 @@ def rect2points(np.ndarray rect):
                  (rect[0] + rect[2], rect[1])])
 
 
-def tlwh2xyrh(np.ndarray rect):
+cpdef np.ndarray[np.float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
-    cdef np.ndarray ret = np.asanyarray(rect, dtype=float)
+    cdef np.ndarray ret = np.asanyarray(rect, dtype=np.float)
     ret[:2] += ret[2:] * 0.5
     ret[2] /= ret[3]
     return ret
 
 
-def xyrh2tlwh(np.ndarray rect):
+cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[np.float_t, ndim=1] rect):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
     cdef float w = rect[2] * rect[3]
-    cdef np.ndarray ret = np.asanyarray((rect[0] - w / 2.0,
-                                         rect[1] - rect[3] / 2.0,
-                                         w, rect[3]),
+    cdef np.ndarray ret = np.asanyarray((round(rect[0] - w / 2.0),
+                                         round(rect[1] - rect[3] / 2.0),
+                                         round(w), round(rect[3])),
                                         dtype=int)
     return ret
 
 
-def rect_intersection(np.ndarray ra, np.ndarray rb):
+cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Find if two axis-aligned rectangles intersect.
 
     This runs almost 50 times faster than Polygon intersection in shapely.
@@ -56,10 +56,10 @@ def rect_intersection(np.ndarray ra, np.ndarray rb):
     """
     cdef int x, y, dx, dy
     cdef np.ndarray result = np.zeros((4,), dtype=np.int)
-    x = max(ra[0], rb[0])
-    y = max(ra[1], rb[1])
-    dx = min(ra[0] + ra[2], rb[0] + rb[2]) - x
-    dy = min(ra[1] + ra[3], rb[1] + rb[3]) - y
+    x = int(max(ra[0], rb[0]))
+    y = int(max(ra[1], rb[1]))
+    dx = int(min(ra[0] + ra[2], rb[0] + rb[2]) - x)
+    dy = int(min(ra[1] + ra[3], rb[1] + rb[3]) - y)
     if (dx > 0) and (dy > 0):
         result[0] = x
         result[1] = y
@@ -68,7 +68,7 @@ def rect_intersection(np.ndarray ra, np.ndarray rb):
     return result
 
 
-def rect_iou(np.ndarray ra, np.ndarray rb):
+cpdef float rect_iou(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Compute Intersection over Union of two axis-aligned rectangles.
 
     This is the ratio of the are of intersection to the area of the union
@@ -87,7 +87,7 @@ def rect_iou(np.ndarray ra, np.ndarray rb):
         The Intersection over Union of two rectangles.
     """
     cdef np.ndarray inter = rect_intersection(ra, rb)
-    cdef int area_i, area_u
+    cdef float area_i, area_u
     cdef float ret
     area_i = inter[2] * inter[3]
     area_u = ra[2] * ra[3] + rb[2] * rb[3] - area_i
@@ -99,7 +99,7 @@ def rect_iou(np.ndarray ra, np.ndarray rb):
     return ret
 
 
-def rect_ios(np.ndarray ra, np.ndarray rb):
+cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
     """Compute intersection over area of smaller of two axis-aligned
     rectangles.
 
@@ -130,7 +130,7 @@ def rect_ios(np.ndarray ra, np.ndarray rb):
     return ret
 
 
-def pairwise_distance(np.ndarray new_bboxes, np.ndarray bboxes,
+cpdef np.ndarray[np.float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim=2] new_bboxes, np.ndarray[np.int_t, ndim=2] bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible
     pair.
