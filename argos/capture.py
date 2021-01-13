@@ -44,72 +44,26 @@ import sys
 import os
 import argparse
 import time
-import re
 from datetime import datetime, timedelta
 import csv
 import cv2
-# import logging
-# from logging.handlers import MemoryHandler
 from matplotlib import colors
 
+from argos import caputil
 
-CV2_MAJOR, CV2_MINOR, _ = cv2.__version__.split(".")
-CV2_MAJOR = int(CV2_MAJOR)
-CV2_MINOR = int(CV2_MINOR)
-LARGE_FRAME_SIZE = 10000
+
+has_ccapture = False
 
 try:
-    from argos.ccapture import vcapture, get_roi, get_camera_fps
-    ccapture = True
+    from argos.ccapture import vcapture
+    has_ccapture = True
+    print('Loaded C-function for video capture.')
 except ImportError as err:
-    print('Could not load C-function for video capture with pyximport. Using pure Python.')
+    print('Could not load C-function for video capture.'
+          ' Using pure Python.')
     print(err)
-    # logging.info('Could not load C-function with pyximport. Using pure Python.')
-    # logging.info(f'{err}')
-    ccapture = False
+
     
-    def check_params(args):
-        params = {}
-        params.update(args)
-        input_ = params['input']
-        try:
-            input_ = int(input_)
-            params['input'] = input_
-        except ValueError:
-            assert len(input_.strip()) > 0, \
-                'Input must be a number or path to a video file'
-        camera = isinstance(input_, int)  # recording from camera
-        if params['fps'] <= 0:
-            if camera:
-                fps, width, height = get_camera_fps(input_, params['width'],
-                                               params['height'], 33)
-                params['fps'] = fps
-                params['width'] = width
-                params['height'] = height
-            else:
-                params['fps'] = get_video_fps(input_)
-            print(f'Found FPS = {params["fps"]}')
-        if len(params['output'].strip()) == 0:
-            # Windows forbids ':' in filename
-            ts = datetime.now().isoformat().replace(':', '')
-            params['output'] = f'video_{ts}.avi'
-        duration = params['duration']
-        if len(duration) > 0:
-            duration = parse_interval(duration)
-            params['duration'] = duration.total_seconds()
-        else:
-            params['duration'] = -1
-        print(f'Duration {duration}, {params["duration"]}')
-        r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tc'])]
-        params['tc'] = (b, g, r)
-        if len(params['tb']) > 0:
-            r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tb'])]
-            params['tb'] = (b, g, r)
-        else:
-            params['tb'] = None
-
-        return params
-
     def check_motion(current, prev, threshold, min_area, kernel_width=21,
                      show_diff=False):
         gray_cur = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
@@ -126,9 +80,9 @@ except ImportError as err:
         # unmodified
         contour_info = cv2.findContours(thresh_img, cv2.RETR_EXTERNAL,
                                         cv2.CHAIN_APPROX_SIMPLE)
-        if CV2_MAJOR == 3:
+        if caputil.CV2_MAJOR == 3:
             _, contours, hierarchy = contour_info
-        elif CV2_MAJOR == 4:
+        elif caputil.CV2_MAJOR == 4:
             contours, hierarchy = contour_info
         # Useful for debugging and for exploring motion detection parameters
         if show_diff:
@@ -144,35 +98,12 @@ except ImportError as err:
                            if cv2.contourArea(contour) > min_area]
         return len(moving_contours) > 0
 
-
-    def get_roi(input_, width, height):
-        roi = 'Select ROI. Press ENTER when done, C to try again'
-        cv2.namedWindow(roi, cv2.WINDOW_NORMAL)
-        x, y, w, h = 0, 0, 0, 0
-        try:
-            input_ = int(input_)
-        except ValueError:
-            pass
-        capture = cv2.VideoCapture(input_)
-        if not capture.isOpened():
-            print(f'Could not open video {input_}')
-            return None
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        width = capture.get(cv2.CAP_PROP_FRAME_WIDTH)
-        height = capture.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        while True:
-            ret, frame = capture.read()
-            x, y, w, h = cv2.selectROI(roi, frame)
-            print('ROI', x, y, w, h)
-            if w > 0 and h > 0:
-                break
-        capture.release()
-        cv2.destroyAllWindows()
-        return (int(x), int(y), int(w), int(h), int(width), int(height))
-
+    
     def vcapture(params):
-        input_ = params['input']
+        try:
+            input_ = int(params['input'])
+        except ValueError:
+            input_ = params['input']
         win_name = 'Video'
         if params['interactive']:
             cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
@@ -291,12 +222,10 @@ except ImportError as err:
                         cv2.putText(frame, tstring, (params['tx'], params['ty']),
                                     cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
                                     params['tc'], 2, cv2.LINE_AA)
+                    out.write(frame)
                     if params['show_contours'] and (len(contours) > 0):
                         print('Color:', params['tc'])
                         cv2.drawContours(frame, contours, -1, params['tc'], 2)
-                    # TODO In production writing should happen before drawing contours
-                    #      Displaying contours is good for debugging
-                    out.write(frame)
                     tswriter.writerow([read_frames - 1, writ_frames - 1, tstring])
                     # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
                     writ_frames = ((writ_frames + 1) % params['max_frames']) \
@@ -320,57 +249,68 @@ except ImportError as err:
             cv2.destroyAllWindows()
 
 
-    def get_camera_fps(devid, width, height, fps=30, nframes=120):
-        if sys.platform == 'win32':
-            cap = cv2.VideoCapture(devid, cv2.CAP_DSHOW)
+def parse_interval(tstr):
+    h = 0
+    m = 0
+    s = 0
+    values = tstr.split(':')
+    if len(values) < 1:
+        raise ValueError('At least the number of seconds must be specified')
+    elif len(values) == 1:
+        s = int(values[0])
+    elif len(values) == 2:
+        m, s = [int(v) for v in values]
+    elif len(values) == 3:
+        h, m, s = [int(v) for v in values]
+    else:
+        raise ValueError('Expected duration in hours:minutes:seconds format')
+    t = timedelta(hours=h, minutes=m, seconds=s)
+    return t
+
+
+def check_params(args):
+    params = {}
+    params.update(args)
+    input_ = params['input']
+    try:
+        input_ = int(input_)
+        camera = True
+    except ValueError:
+        assert len(input_.strip()) > 0, \
+            'Input must be a number or path to a video file'
+        
+    if params['fps'] <= 0:
+        if camera:
+            fps, width, height = caputil.get_camera_fps(
+                input_,
+                params['width'],
+                params['height'], fps=30, nframes=30)
+            params['fps'] = fps
+            params['width'] = width
+            params['height'] = height
         else:
-            cap = cv2.VideoCapture(devid)
-        start = datetime.now()
-        assert cap.isOpened(), 'Could not open camera'
-        if width < 0 or height < 0:
-            width = LARGE_FRAME_SIZE
-            height = LARGE_FRAME_SIZE
-            print('Trying maximum possible resolution')
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        cap.set(cv2.CAP_PROP_FPS, fps)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        for ii in range(nframes):
-            ret, frame = cap.read()
-        cap.release()
-        end = datetime.now()
-        delta = end - start
-        interval = delta.seconds + delta.microseconds * 1e-6
-        fps = nframes / interval
-        return fps, width, height
+            params['fps'] = caputil.get_video_fps(input_)
+        print(f'Found FPS = {params["fps"]}')
+    if len(params['output'].strip()) == 0:
+        # Windows forbids ':' in filename
+        ts = datetime.now().isoformat().replace(':', '')
+        params['output'] = f'video_{ts}.avi'
+    duration = params['duration']
+    if len(duration) > 0:
+        duration = parse_interval(duration)
+        params['duration'] = duration.total_seconds()
+    else:
+        params['duration'] = -1
+    print(f'Duration {duration}, {params["duration"]}')
+    r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tc'])]
+    params['tc'] = (b, g, r)
+    if len(params['tb']) > 0:
+        r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tb'])]
+        params['tb'] = (b, g, r)
+    else:
+        params['tb'] = None
 
-
-    def get_video_fps(fname):
-        cap = cv2.VideoCapture(fname)
-        assert cap.isOpened(), f'Could not open video file {fname}'
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
-        return fps
-
-
-    def parse_interval(tstr):
-        h = 0
-        m = 0
-        s = 0
-        values = tstr.split(':')
-        if len(values) < 1:
-            raise ValueError('At least the number of seconds must be specified')
-        elif len(values) == 1:
-            s = int(values[0])
-        elif len(values) == 2:
-            m, s = [int(v) for v in values]
-        elif len(values) == 3:
-            h, m, s = [int(v) for v in values]
-        else:
-            raise ValueError('Expected duration in hours:minutes:seconds format')
-        t = timedelta(hours=h, minutes=m, seconds=s)
-        return t
+    return params
 
 
 def make_parser():
@@ -473,45 +413,38 @@ def make_parser():
     return parser
 
 
-
-
 if __name__ == '__main__':
     parser = make_parser()
     args = parser.parse_args()
-    roi = get_roi(args.input, args.width, args.height)
+    params = check_params(vars(args))
+    roi = caputil.get_roi(params['input'], params['width'], params['height'])
     if roi is not None:
         roi_x, roi_y, roi_w, roi_h, width, height = roi
     else:
         roi_x, roi_y, roi_w, roi_h = 0, 0, args.width, args.height
-        width = args.width,
-        height = args.height
+    params.update({'roi_x': roi_x,
+                   'roi_y': roi_y,
+                   'roi_w': roi_w,
+                   'roi_h': roi_h,
+                   'width': width,
+                   'height': height})
 
-    if not ccapture:
-        params = check_params(vars(args))
-        params.update({'roi_x': roi_x,
-                      'roi_y': roi_y,
-                      'roi_w': roi_w,
-                      'roi_h': roi_h,
-                      'width': width,
-                       'height': height})
-                      
-        # setup_logger(f'{params["output"]}.log', params['logbuf'])
-        vcapture(params)
+    if has_ccapture:
+        vcapture(params['input'], params['output'], params['format'],
+                 params['fps'],
+                 params['interactive'],
+                 params['width'], params['height'],
+                 params['roi_x'], params['roi_y'],
+                 params['roi_w'], params['roi_h'],
+                 params['interval'],
+                 params['duration'],
+                 params['max_frames'],
+                 params['motion_based'],
+                 params['threshold'],
+                 params['min_area'],
+                 params['kernel_width'])
     else:
-        if len(args.duration) > 0:
-            duration = parse_interval(args.duration).total_seconds()
-        else:
-            duration = -1
-        vcapture(args.input, args.output, args.format, args.fps, args.interactive,
-                 width, height, roi_x, roi_y, roi_w, roi_h,
-                 args.interval,
-                 duration,
-                 args.max_frames,
-                 args.motion_based,
-                 args.threshold,
-                 args.min_area,
-                 args.kernel_width)
-        
+        vcapture(params)
 
 #
 # capture.py ends here
