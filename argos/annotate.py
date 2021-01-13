@@ -1,12 +1,46 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-29 4:52 PM
-"""Widget to generate training data for YOLACT"""
+
+"""
+=================================
+Generate training data for YOLACT
+=================================
+
+Usage: python -m argos.annotate
+
+This program helps you annotate a set of images and export the images and
+annotation in a way that YOLACT can process for training. Note that this is for
+a single category of objects.
+
+Preparation
+===========
+Create a folder and copy all the images you want to annotate into it.
+
+If you have videos instead, you need to extract some video
+frames. There are many programs, inlcuding most video players, which
+can do this. Argos includes a small utility script
+:py:mod:`argos.extract_frames` if you need.
+
+Upon startup the program will prompt you to choose the folder
+containing the images to be annotated. Browse to the desired image
+folder. All the images should be directly in this folder, no
+subfolders.
+
+Annotate new images
+===================
+After you select the image folder, the annotator will show you the
+main window, with an empty display like below.
+
+.. image::images/annotate_00.png
+   :width: 400
+   :alt: Screenshot of annotate tool at startup
+"""
 import sys
-import time
+# import time
 import logging
 import os
-from collections import OrderedDict
+# from collections import OrderedDict
 import random
 import pickle
 from typing import Dict
@@ -20,14 +54,14 @@ from PyQt5 import (
     QtWidgets as qw,
     QtGui as qg)
 
-import argos.constants
-from argos.constants import OutlineStyle
+from argos.constants import OutlineStyle, SegmentationMethod, DrawingGeom
 from argos import utility as ut
-from argos import frameview
+# from argos import frameview
 from argos.frameview import FrameView
 from argos.segwidget import SegWidget
 from argos.limitswidget import LimitsWidget
 from yolact import config as yconfig
+
 
 settings = ut.init()
 
@@ -83,7 +117,7 @@ class TrainingWidget(qw.QMainWindow):
     # send refined segmentation data
     sigSegmented = qc.pyqtSignal(dict, int)
     # set geometry mode of drawing widget
-    sigSetDisplayGeom = qc.pyqtSignal(argos.constants.DrawingGeom)
+    sigSetDisplayGeom = qc.pyqtSignal(DrawingGeom)
 
     def __init__(self, *args, **kwargs):
         super(TrainingWidget, self).__init__(*args, **kwargs)
@@ -117,6 +151,7 @@ class TrainingWidget(qw.QMainWindow):
         self.categoryName = 'object'
         self.segDict = {}  # dict containing segmentation info for each file
         self.segWidget = SegWidget()
+        self.segWidget.setSegmentationMethod('Contour')
         self.segWidget.outline_combo.setCurrentText('contour')
         self.segWidget.setOutlineStyle('contour')
         self.limitsWidget = LimitsWidget()
@@ -364,9 +399,9 @@ class TrainingWidget(qw.QMainWindow):
 
     def outlineStyleToBoundaryMode(self, style):
         if style == OutlineStyle.bbox:
-            self.sigSetDisplayGeom.emit(argos.constants.DrawingGeom.rectangle)
+            self.sigSetDisplayGeom.emit(DrawingGeom.rectangle)
         else:
-            self.sigSetDisplayGeom.emit(argos.constants.DrawingGeom.polygon)
+            self.sigSetDisplayGeom.emit(DrawingGeom.polygon)
 
     def openImageDir(self):
         directory = settings.value('training/imagedir', '.')

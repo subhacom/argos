@@ -4,7 +4,7 @@
 # Description: 
 # Author: Subhasis Ray
 # Created: Tue Jan 12 23:21:16 2021 (-0500)
-# Last-Updated: Wed Jan 13 00:56:35 2021 (-0500)
+# Last-Updated: Wed Jan 13 16:44:37 2021 (-0500)
 #           By: Subhasis Ray
 # 
 
@@ -106,7 +106,6 @@ def get_camera_fps(devid, width, height, fps=30, nframes=120):
         cap = cv2.VideoCapture(devid, cv2.CAP_DSHOW)
     else:
         cap = cv2.VideoCapture(devid)
-    start = datetime.now()
     assert cap.isOpened(), 'Could not open camera'
     if width < 0 or height < 0:
         width = LARGE_FRAME_SIZE
@@ -117,13 +116,13 @@ def get_camera_fps(devid, width, height, fps=30, nframes=120):
     cap.set(cv2.CAP_PROP_FPS, fps)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    start = datetime.now()
     for ii in range(nframes):
         ret, frame = cap.read()
-    cap.release()
     end = datetime.now()
     delta = end - start
-    interval = delta.seconds + delta.microseconds * 1e-6
-    fps = nframes / interval
+    fps = nframes / delta.total_seconds()
+    cap.release()
     return fps, width, height
 
 

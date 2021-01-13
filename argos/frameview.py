@@ -430,7 +430,7 @@ class FrameScene(qw.QGraphicsScene):
             else:
                 color = self.color
             self.polygons[id_] = poly
-            logging.debug(f'Polygon {id_} poins shape: {poly.shape}')
+            # logging.debug(f'Polygon {id_} points shape: {poly.shape}')
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
             item = self.addPolygon(polygon, qg.QPen(color, self.linewidth))

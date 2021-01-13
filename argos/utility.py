@@ -82,8 +82,20 @@ def cond_bbox_overlap(ra, rb, min_iou):
 
 
 def cond_minrect_overlap(ra, rb, min_iou):
-    """Check if IoU of minimum area (rotated) bounding rectangles is at least `min_iou`.
-    ra, rb: box points with coordinates of the four corners.
+    """Check if IoU of minimum area (rotated) bounding rectangles is at least
+    `min_iou`.
+    Parameters
+    ----------
+    ra: array like
+        First rectangle defined by the coordinates of four corners.
+    rb: array like
+        Second rectangle defined by the coordinates of four corners.
+    min_iou: float
+        Minimum overlap defined by intersection over union of bounding boxes.
+    Returns
+    -------
+    bool
+        True if area of overlap is greater or equal `min_iou`.
     """
     area_i, _ = cv2.intersectConvexConvex(ra, rb)
     area_u = cv2.contourArea(ra) + cv2.contourArea(rb) - area_i
@@ -100,6 +112,20 @@ def cond_proximity(points_a, points_b, min_dist):
 
     (x1 - x2) / sqrt(sigma_1_x * sigma_2_x)
     (y1 - y2) / sqrt(sigma_1_y * sigma_2_y)
+
+    Parameters
+    ----------
+    points_a: array like
+        Sequence of points
+    points_b: array like
+        Sequence of points
+    min_dist: float
+        Minimum distance.
+    Returns
+    -------
+    bool
+        `True` if the centres of mass (mean position) of `points_a` and
+        `points_b` are closer than `min_dist`, `False` otherwise.
     """
     sigma = np.std(points_a, axis=0) * np.std(points_b, axis=0)
     dx2 = (np.mean(points_a[:, 0]) - np.mean(points_b[:, 0])) ** 2 / sigma[0]
@@ -108,7 +134,23 @@ def cond_proximity(points_a, points_b, min_dist):
 
 
 def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
-    """Convert BGR/gray/bw frame into QImage"""
+    """Convert BGR/gray/bw frame from array into QImage".
+    
+    OpenCV reads images into 2D or 3D matrix. This function converts it into
+    Qt QImage.
+
+    Parameters
+    ----------
+    frame: numpy.ndarray
+        Input image data as a 2D (black and white, gray() or 3D (color, OpenCV
+        reads images in BGR instead of RGB format) array.
+    copy: bool, default False
+        If True Make a copy of the image data.
+    Returns
+    -------
+    QtGui.QImage
+        Converted image.
+    """
     if (len(frame.shape) == 3) and (frame.shape[2] == 3):
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, c = img.shape
@@ -125,22 +167,26 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
 # Try to import cython version of these functions, otherwise define them in
 # pure python
 try:
-    #import pyximport
+    # import pyximport
 
-    #pyximport.install(setup_args={"include_dirs": np.get_include()},
+    # pyximport.install(setup_args={"include_dirs": np.get_include()},
     #                  reload_support=True)
     from argos.cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
-                          rect_intersection,
-                          rect_iou,
-                          rect_ios,
-                          pairwise_distance)
+                                rect_intersection,
+                                rect_iou,
+                                rect_ios,
+                                pairwise_distance)
+
     logging.info('Loaded C-utilities with pyximport')
-    print('Loaded C-utilities with pyximport')    
+    print('Loaded C-utilities with pyximport')
 except ImportError as err:
     print('Could not load C-utilities with pyximport. Using pure Python.')
     print(err)
-    logging.info('Could not load C-utilities with pyximport. Using pure Python.')
+    logging.info(
+        'Could not load C-utilities with pyximport. Using pure Python.')
     logging.info(f'{err}')
+
+
     def rect2points(rect: np.ndarray) -> np.ndarray:
         """Convert topleft, width, height format rectangle into four anti-clockwise
         vertices"""
@@ -224,11 +270,12 @@ except ImportError as err:
             raise ValueError('Invalid intersection')
         return ret
 
+
     def rect_ios(ra: np.ndarray, rb: np.ndarray) -> float:
         """Compute intersection over area of smaller of two axis-aligned
         rectangles.
 
-        This is the ratio of the are of intersection to the area of the smaller
+        This is the ratio of the area of intersection to the area of the smaller
         of the two rectangles.
         
         Parameters
@@ -258,8 +305,7 @@ except ImportError as err:
     def pairwise_distance(new_bboxes: np.ndarray, bboxes: np.ndarray,
                           boxtype: OutlineStyle,
                           metric: DistanceMetric) -> np.ndarray:
-        """Takes two lists of boxes and computes the distance between every possible
-        pair.
+        """Computes the distance between all pairs of rectangles.
 
         Parameters
         ----------
@@ -267,17 +313,18 @@ except ImportError as err:
            Array of bounding boxes, each row as (x, y, w, h)
         bboxes: np.ndarray
            Array of bounding boxes, each row as (x, y, w, h)
-        boxtype: OutlineStyle
+        boxtype: {OutlineStyle.bbox, OulineStyle.minrect}
            OutlineStyle.bbox for axis aligned rectangle bounding box or
            OulineStyle.minrect for minimum area rotated rectangle
-        metric: DistanceMetric
-           iou or euclidean. When euclidean, the squared Euclidean distance is
-           used (calculating square root is expensive and unnecessary. If iou, use
-           the area of intersection divided by the area of union.
+        metric: {DistanceMetric.euclidean, DistanceMetric.iou}
+           When `DistanceMetric.euclidean`, the squared Euclidean distance is
+           used (calculating square root is expensive and unnecessary. If
+           `DistanceMetric.iou`, use the area of intersection divided by the
+           area of union.
         Returns
         --------
         np.ndarray
-            row ``ii``, column ``jj`` contains the computed distance `between
+            Row ``ii``, column ``jj`` contains the computed distance between
             ``new_bboxes[ii]`` and ``bboxes[jj]``.
          """
         dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]), dtype=np.float)
@@ -297,10 +344,10 @@ except ImportError as err:
                 raise NotImplementedError(
                     'Only handling axis-aligned bounding boxes')
         elif metric == DistanceMetric.ios and boxtype == OutlineStyle.bbox:
-                for ii in range(len(new_bboxes)):
-                    for jj in range(len(bboxes)):
-                        dist[ii, jj] = 1.0 - rect_ios(bboxes[jj],
-                                                      new_bboxes[ii])
+            for ii in range(len(new_bboxes)):
+                for jj in range(len(bboxes)):
+                    dist[ii, jj] = 1.0 - rect_ios(bboxes[jj],
+                                                  new_bboxes[ii])
         else:
             raise NotImplementedError(f'Unknown metric {metric}')
         return dist
@@ -311,8 +358,8 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
                  metric: DistanceMetric = DistanceMetric.euclidean,
                  max_dist: float = 10000
                  ) -> Tuple[Dict[int, int], Set[int], Set[int]]:
-    """Match the bboxes in `new_bboxes` to the closest object in the
-    ``id_bboxes`` dictionary.
+    """Match the rectangular bounding boxes in `new_bboxes` to the closest
+    object in the `id_bboxes` dictionary.
 
     Parameters
     ----------
@@ -322,12 +369,14 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         Array of new bounding boxes to be matched to those in ``id_bboxes``.
     boxtype: {OutlineStyle.bbox, OutlineStyle.minrect}
         Type of bounding box to match.
-    max_dist: int
+    max_dist: int, default 10000
         Anything that is more than this distance from all of the bboxes in
         ``id_bboxes`` are put in the unmatched list
     metric: {DistanceMetric.euclidean, DistanceMetric.iou}
-        iou for area of inetersection over union of the rectangles,
-        and euclidean for Euclidean distance between centers.
+        `DistanceMetric.euclidean` for Euclidean distance between centers of the
+        boxes. `DistanceMetric.iou` for area of inetersection over union of the
+        boxes,
+
 
     Returns
     -------
@@ -372,7 +421,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
 
 
 def reconnect(signal, newhandler=None, oldhandler=None):
-    """Disconnect signal from oldhandler and connect to newhandler"""
+    """Disconnect PyQt signal from oldhandler and connect to newhandler"""
     while True:
         try:
             if oldhandler is not None:
@@ -410,7 +459,22 @@ def make_color(num: int) -> Tuple[int]:
 
 def get_cmap_color(num, maxnum, cmap):
     """Get rgb based on specified colormap `cmap` for index `num` where the
-    total range of values is (0, maxnum]"""
+    total range of values is (0, maxnum].
+
+    Parameters
+    ----------
+    num: real number
+        Position into colormap.
+    maxnum: real number
+        Normalize `num` by this value.
+    cmap: str
+        Name of colormap
+    Returns
+    -------
+    tuple: (r, g, b)
+        The red, green and blue value for the color at position `num`/`maxnum`
+        in the (0, 1) range of the colormap.
+    """
     rgba = cm.get_cmap(cmap)(float(num) / maxnum)
-    int_rgb = [max(0, min(255, floor(v * 256))) for v in rgba[:3]]
+    int_rgb = (max(0, min(255, floor(v * 256))) for v in rgba[:3])
     return int_rgb

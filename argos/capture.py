@@ -4,38 +4,86 @@
 # Code:
 
 
-"""Program to capture video using OpenCV.
+"""
+========================
+Capture or process video
+========================
 
-usage: python argos/capture.py -i myvideo.mpg -o myvideo_motion_cap.avi  \\
---format=DIVX -m --threshold=20 -a 10
+``Usage: python -m argos.capture -i 0 -o myvideo_motion_cap.avi``
 
-We allow motion based recording: only when there is significant change
-in scene.
+To see a list of all options try `python -m argos.capture -h`
 
-Each frame can be marked with timestamp. It will also create a logfile
-with timestamps for each frame.
+This is a simple tool to capture video along with timestamp for each
+frame using a camera. It can also be used for recording videos only
+when some movement is detected. When applied to a pre-recorded video
+file, this means it will extract only the frames between which
+significant movement has been detected.
 
-This uses OpenCV 3: `conda install opecv-python`
+What is significant movement?
 
-Saving in X264 format requires H.264 library:
+- The movement detection works by first converting the image into
+  gray-scale and blurring it to make it smooth. The size of the
+  Gaussian kernel used for blurring is specified by the
+  ``--kernel_width`` parameter.
+- Next, this blurred grayscale image is thresholded with threshold
+  value specified by the ``--threshold`` parameter.
+- The resulting binary frame is compared with the blurred and
+  thresholded version of the last saved frame. If there is any patch
+  bigger than ``--min_area`` pixels, then this is considered
+  significant motion.
 
-Linux: `conda install -c anaconda openh264`
+Not all video formats are available on all platforms. The default is
+MJPG with AVI as container, which is supported natively by OpenCV.
 
-Windows: download released binary from here:
-https://github.com/cisco/openh264/releases and save them in your
-library path (could be this directory).
+If you need high compression, X264 is a good option. Saving in X264
+format requires H.264 library, which can be installed as follows:
 
-Error:
-```
-Creating output file video_2020_02_28__12_52_33.mp4
-OpenCV: FFMPEG: tag 0x34363248/'H264' is not supported with codec id 27 and
-format 'mp4 / MP4 (MPEG-4 Part 14)'
-OpenCV: FFMPEG: fallback to use tag 0x31637661/'avc1'
+- On Linux: ``conda install -c anaconda openh264``
+- On Windows: download released binary from here:
+  https://github.com/cisco/openh264/releases and save them in your
+  library path.
 
-        OpenH264 Video Codec provided by Cisco Systems, Inc.
-```
+Common problem 
+-------------- 
 
-Solution: Use .avi instead of .mp4 extension
+When trying to use H264 format for saving video, you may see the
+following error:
+::
+    Creating output file video_filename.mp4
+    OpenCV: FFMPEG: tag 0x34363248/'H264' is not supported with codec id 27 and
+    format \'mp4 / MP4 (MPEG-4 Part 14)\'
+    OpenCV: FFMPEG: fallback to use tag 0x31637661/\'avc1\'
+    
+            OpenH264 Video Codec provided by Cisco Systems, Inc.
+
+
+Solution: Use .avi instead of .mp4 extension when specifying output filename.
+
+Examples
+--------
+Read video from file ``myvideo.mpg`` and save output in
+``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
+10`` part tells the program to detect any movement such that more than
+10 contiguous pixels have changed in the frame thresholded at 20:
+frames
+::
+    python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
+    --format=DIVX -m --threshold=20 -a 10
+
+
+Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi
+
+Record from camera# 0 for 24 hours, saving every 10,000 frames into a
+separate file:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
+    --duration=24:00:00 --max_frames=10000
+
+Record a frame every 3 seconds:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
 
 """
 
@@ -192,10 +240,9 @@ except ImportError as err:
                 # Check if current time is more than specified duration since start.
                 # If so, stop recording.
                 time_from_start = ts - tstart
-                time_from_start = time_from_start.seconds + \
-                    time_from_start.microseconds * 1e-6
+                time_from_start = time_from_start.total_seconds()
                 time_delta = ts - t_prev
-                time_delta = time_delta.seconds + time_delta.microseconds * 1e-6
+                time_delta = time_delta.total_seconds()
                 # print(f'Time from start {time_from_start}, specified duration {params["duration"]} s')
                 if (params['duration'] > 0) and (time_from_start > params['duration']):
                     break
@@ -208,7 +255,7 @@ except ImportError as err:
                                         show_diff=params['show_diff'])
                 elif params['interval'] > 0:
                     save = time_delta >= params['interval']
-
+                    
                 if save:
                     prev_frame = frame.copy()
                     tstring = ts.isoformat()
@@ -250,6 +297,17 @@ except ImportError as err:
 
 
 def parse_interval(tstr):
+    """Convert string for time interval into `timedelta`.
+
+    Parameters
+    ----------
+    tstrt: str
+        String representing time interval. Should be in `HH:MM:SS` format.
+        The seconds part can have fractional part.
+    Returns
+    -------
+        datetime.timedelta
+    """
     h = 0
     m = 0
     s = 0
@@ -257,11 +315,11 @@ def parse_interval(tstr):
     if len(values) < 1:
         raise ValueError('At least the number of seconds must be specified')
     elif len(values) == 1:
-        s = int(values[0])
+        s = float(values[0])
     elif len(values) == 2:
-        m, s = [int(v) for v in values]
+        m, s = (int(values[0]), float(values[1]))
     elif len(values) == 3:
-        h, m, s = [int(v) for v in values]
+        h, m, s = (int(values[0]), int(values[1]), float(values[2]))
     else:
         raise ValueError('Expected duration in hours:minutes:seconds format')
     t = timedelta(hours=h, minutes=m, seconds=s)
@@ -269,6 +327,9 @@ def parse_interval(tstr):
 
 
 def check_params(args):
+    """Check/cleanup parameter values in `args` and convert to a `dict`.
+
+    """
     params = {}
     params.update(args)
     input_ = params['input']
@@ -279,18 +340,19 @@ def check_params(args):
         assert len(input_.strip()) > 0, \
             'Input must be a number or path to a video file'
         
+    if camera:
+        fps, width, height = caputil.get_camera_fps(
+            input_,
+            params['width'],
+            params['height'], fps=30, nframes=30)
+    else:
+        fps = caputil.get_video_fps(input_)
+    print(f'Detected effective input FPS = {fps}')        
     if params['fps'] <= 0:
-        if camera:
-            fps, width, height = caputil.get_camera_fps(
-                input_,
-                params['width'],
-                params['height'], fps=30, nframes=30)
             params['fps'] = fps
-            params['width'] = width
-            params['height'] = height
-        else:
-            params['fps'] = caputil.get_video_fps(input_)
-        print(f'Found FPS = {params["fps"]}')
+    if params['width'] <= 0 or params['height'] <= 0:
+        params['width'] = width
+        params['height'] = height
     if len(params['output'].strip()) == 0:
         # Windows forbids ':' in filename
         ts = datetime.now().isoformat().replace(':', '')
@@ -417,11 +479,14 @@ if __name__ == '__main__':
     parser = make_parser()
     args = parser.parse_args()
     params = check_params(vars(args))
-    roi = caputil.get_roi(params['input'], params['width'], params['height'])
-    if roi is not None:
-        roi_x, roi_y, roi_w, roi_h, width, height = roi
+    width, height = params['width'], params['height']
+    print('Width', width, 'Height', height)
+    if params['roi'] == 0:
+        roi_x, roi_y, roi_w, roi_h = 0, 0, width, height
     else:
-        roi_x, roi_y, roi_w, roi_h = 0, 0, args.width, args.height
+        roi_x, roi_y, roi_w, roi_h, width, height = caputil.get_roi(
+            params['input'], params['width'], params['height'])
+        
     params.update({'roi_x': roi_x,
                    'roi_y': roi_y,
                    'roi_w': roi_w,

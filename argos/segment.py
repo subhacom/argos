@@ -98,7 +98,7 @@ def segment_by_contour_bbox(binary_img: np.ndarray) -> List[np.ndarray]:
     -------
     list
         List of coordinate arrays where the n-th entry is the array of
-        positions of the pixels belonging to the n-th segmented object.
+        points defining the contour of the n-th segmented object.
     """
     contours, hierarchy = cv2.findContours(binary_img,
                                            cv2.RETR_EXTERNAL,
@@ -215,7 +215,7 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
     if len(mr_size) == 0:
         return []
     mr_size.sort(axis=1)
-    p_size = np.array([len(points) for points in points_list])
+    p_size = np.array([cv2.contourArea(points) for points in points_list])
     good = (p_size >= pmin) & (p_size < pmax) \
            & (mr_size[:, 0] >= wmin) & (mr_size[:, 0] < wmax) \
            & (mr_size[:, 1] >= hmin) & (mr_size[:, 1] < hmax) \

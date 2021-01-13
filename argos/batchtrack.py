@@ -30,7 +30,6 @@ from argos.sortracker import SORTracker
 from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
-    segment_by_contours,
     segment_by_contour_bbox,
     segment_by_dbscan,
     segment_by_watershed,
@@ -92,6 +91,7 @@ config = None
 
 
 def load_config(filename):
+    """Load YOLACT configuration."""
     global config
     config = yconfig.cfg
     if filename == '':
@@ -106,6 +106,7 @@ def load_config(filename):
 
 
 def load_weights(filename, cuda):
+    """Load YOLACT network weights"""
     global ynet
     if filename == '':
         raise ValueError('Empty filename for network weights')
@@ -127,6 +128,7 @@ def load_weights(filename, cuda):
 
 @timed
 def init_yolact(cfgfile, netfile, cuda):
+    """Initialize YOLACT"""
     load_config(cfgfile)
     load_weights(netfile, cuda)
 
@@ -135,16 +137,30 @@ def init_yolact(cfgfile, netfile, cuda):
 # @timed
 def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
                    netfile, cuda):
-    """:returns (classes, scores, boxes)
+    """Segment objects in frame using YOLACT.
 
-    where `boxes` is an array of bounding boxes of detected objects in
-    (xleft, ytop, width, height) format.
-
-    `classes` is the class ids of the corresponding objects.
-
-    `scores` are the computed class scores corresponding to the detected objects.
-    Roughly high score indicates strong belief that the object belongs to
-    the identified class.
+    Parameters
+    ----------
+    frame: numpy.ndarray
+        (WxHxC) integer array with the image content.
+    score_threshold: float 
+        Minimum score to include object, should be in `(0, 1)`.
+    top_k: int
+        The number of segmented objects to keep.
+    overlap_thresh: float
+        Merge objects whose bounding boxes overlap (intersection over union)
+        more than this amount.
+    cfgfile: str
+        Path to YOLACT configuration file.
+    netfile: str
+        Path to YOLACT network weights file.
+    cuda: bool
+        Whether to use CUDA.
+    Returns 
+    -------
+    numpy.ndarray
+        An array of bounding boxes of detected objects in 
+        (xleft, ytop, width, height) format.
     """
     global ynet
     global config
@@ -160,9 +176,7 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
             frame = torch.from_numpy(frame).float()
         batch = FastBaseTransform()(frame.unsqueeze(0))
         preds = ynet(batch)
-        frame_gpu = frame / 255.0
         h, w, _ = frame.shape
-        save = config.rescore_bbox
         config.rescore_bbox = True
         classes, scores, boxes, masks = oututils.postprocess(
             preds, w, h,
@@ -189,8 +203,8 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
         boxes = np.asanyarray(np.rint(boxes), dtype=np.int_)
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
-                                            boxtype=OutlineStyle.bbox,
-                                            metric=DistanceMetric.iou)
+                                               boxtype=OutlineStyle.bbox,
+                                               metric=DistanceMetric.iou)
             bad_boxes = []
             for ii in range(dist_matrix.shape[0] - 1):
                 for jj in range(ii + 1, dist_matrix.shape[1]):
@@ -214,6 +228,19 @@ def read_frame(video):
 
 
 def threshold(frame: np.ndarray, params: ThreshParam):
+    """Adaptive threshold image after converting to grayscale and blurring.
+
+    Parameters
+    ----------
+    frame: numpy.ndarray
+        Image data.
+    params: ThreshParam
+        Parameters for thresholding.
+    Returns
+    -------
+    np.ndarray
+        Binary image from thresholding.
+    """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, ksize=(params.blur_width, params.blur_width),
                             sigmaX=params.blur_sd)
@@ -243,6 +270,21 @@ def bbox_func(points_list):
 
 
 def create_seg_func_list(args):
+    """Create a sequence of functions to be applied on image for
+    segmentation using classical methods.
+
+    Classical segmentation involves blurring and thresholding followed
+    by additional procedures depending on the specific method.
+
+    Parameters
+    ----------
+    args: dict
+        Argument dictionary.
+    Returns
+    -------
+    list
+        List of functions to be applied in sequence on the input image.
+    """
     thresh_params = ThreshParam(blur_width=args.blur_width,
                                 blur_sd=args.blur_sd,
                                 invert=args.thresh_invert,
@@ -262,7 +304,6 @@ def create_seg_func_list(args):
                            min_samples=args.min_samples)
     else:
         raise ValueError(f'Unknown segmentation method: {seg_method}')
-
 
     limit_func = partial(extract_valid,
                          pmin=args.pmin,

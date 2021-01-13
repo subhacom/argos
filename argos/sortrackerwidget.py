@@ -2,7 +2,7 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-11-28 11:45 PM
 import logging
-
+import time
 import numpy as np
 from collections import OrderedDict
 from PyQt5 import QtCore as qc, QtWidgets as qw
@@ -62,6 +62,7 @@ class QSORTracker(qc.QObject):
 
     @qc.pyqtSlot(dict, int)
     def track(self, bboxes: np.ndarray, pos: int) -> None:
+        _ts = time.perf_counter()
         logging.debug(f'Received from {self.sender()} bboxes: {bboxes}')
         _ = qc.QMutexLocker(self._mutex)
         if len(bboxes) == 0:
@@ -70,7 +71,8 @@ class QSORTracker(qc.QObject):
             ret = self.tracker.update(bboxes)
         logging.debug(f'SORTracker: frame {pos}, Rectangles: \n{ret}')
         self.sigTracked.emit(ret, pos)
-
+        _dt = time.perf_counter() - _ts
+        logging.debug(f'{__name__}.{self.__class__.__name__}.track: Runtime: {_dt}s')
 
 class SORTWidget(qw.QWidget):
     sigTrack = qc.pyqtSignal(np.ndarray, int)

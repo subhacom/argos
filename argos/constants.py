@@ -14,8 +14,9 @@ class OutlineStyle(enum.Enum):
 
 
 class SegmentationMethod(enum.Enum):
-    dbscan = enum.auto()
     threshold = enum.auto()
+    contour = enum.auto()
+    dbscan = enum.auto()
     watershed = enum.auto()
 
 

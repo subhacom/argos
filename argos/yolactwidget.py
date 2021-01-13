@@ -136,6 +136,7 @@ class YolactWorker(qc.QObject):
         Roughly high score indicates strong belief that the object belongs to
         the identified class.
         """
+        _ts = time.perf_counter()
         logging.debug(f'Received frame {pos}')
         if self.net is None:
             self.sigError.emit(YolactException('Network not initialized'))
@@ -194,7 +195,8 @@ class YolactWorker(qc.QObject):
                           1e-9 * (toc - tic))            
             self.sigProcessed.emit(boxes, pos)
             logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
-
+        _dt = time.perf_counter() - _ts
+        logging.debug(f'{__name__}.{self.__class__.__name__}.process: Runtime: {_dt}s')
 
 class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker

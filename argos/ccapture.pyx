@@ -57,7 +57,7 @@ cpdef bint check_motion(np.ndarray[unsigned char, ndim=3] current,
 cpdef void vcapture(str input_, str output, str fmt, int fps,
                     bint interactive, int width, int height,
                     int roi_x, int roi_y, int roi_w, int roi_h,
-                    long interval,
+                    double interval,
                     double duration,
                     long max_frames,
                     bint motion_based=False,
@@ -159,6 +159,7 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
             ttot_ = ts - tstart
             ttot = ttot_.total_seconds()
             tdelta_ = ts - tprev
+            
             tdelta = tdelta_.total_seconds()
     
             if (duration > 0.0) and (ttot > duration):
@@ -172,7 +173,9 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
                                     kernel_width)
             elif interval > 0:
                 save = tdelta >= interval
+            
             if save:
+                tprev = ts
                 prev_frame = roi.copy()
                 tstring = ts.isoformat()
                 outfile.write(roi)
