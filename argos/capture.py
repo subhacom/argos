@@ -8,16 +8,17 @@
 ========================
 Capture or process video
 ========================
+Usage: 
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
-``Usage: python -m argos.capture -i 0 -o myvideo_motion_cap.avi``
-
-To see a list of all options try `python -m argos.capture -h`
+To see a list of all options try ``python -m argos.capture -h``
 
 This is a simple tool to capture video along with timestamp for each
 frame using a camera. It can also be used for recording videos only
 when some movement is detected. When applied to a pre-recorded video
-file, this means it will extract only the frames between which
-significant movement has been detected.
+file, enabling motion-based capture will keep only those frames
+between which *significant movement* has been detected.
 
 What is significant movement?
 
@@ -25,11 +26,13 @@ What is significant movement?
   gray-scale and blurring it to make it smooth. The size of the
   Gaussian kernel used for blurring is specified by the
   ``--kernel_width`` parameter.
+
 - Next, this blurred grayscale image is thresholded with threshold
   value specified by the ``--threshold`` parameter.
+
 - The resulting binary frame is compared with the blurred and
   thresholded version of the last saved frame. If there is any patch
-  bigger than ``--min_area`` pixels, then this is considered
+  of change bigger than ``--min_area`` pixels, then this is considered
   significant motion.
 
 Not all video formats are available on all platforms. The default is
@@ -39,6 +42,7 @@ If you need high compression, X264 is a good option. Saving in X264
 format requires H.264 library, which can be installed as follows:
 
 - On Linux: ``conda install -c anaconda openh264``
+
 - On Windows: download released binary from here:
   https://github.com/cisco/openh264/releases and save them in your
   library path.

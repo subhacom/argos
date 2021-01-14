@@ -6,8 +6,9 @@
 =================================
 Generate training data for YOLACT
 =================================
-
-Usage: python -m argos.annotate
+Usage:
+::
+    python -m argos.annotate
 
 This program helps you annotate a set of images and export the images and
 annotation in a way that YOLACT can process for training. Note that this is for
@@ -32,9 +33,254 @@ Annotate new images
 After you select the image folder, the annotator will show you the
 main window, with an empty display like below.
 
-.. image::images/annotate_00.png
-   :width: 400
+.. figure:: ../doc/images/annotate_00.png
+   :width: 100%
    :alt: Screenshot of annotate tool at startup
+
+   Screenshot of annotate tool at startup
+
+The ``Files/Dirs`` pane on the bottom right lists all the files in the
+image directory selected at startup. (Note that this pane may take up
+too mich screen space. You can close any of the panes using the 'x'
+button on their titlebar or or move them around by dragging them with
+left mouse button).
+
+The ``Segmentation settings`` pane on right allows you to choose the
+parameters for segmentation. See below for details on these settings.
+
+
+You can press ``PgDn`` key, or click on any of the file names listed
+in ``Files/Dirs`` pane to start segmenting the image files. Keep
+pressing ``PgDn`` to go to next image, and ``PgUp`` to go back to
+previous image.
+
+It can take about a second to segment an image, depending on the image
+size and the method of segmentation. Once the image is segmented, the
+segment IDs will be listed in ``Segmented objects`` pane on the left.
+
+.. figure:: ../doc/images/annotate_01.png
+   :width: 100%
+   :alt: Screenshot of annotate tool after segmenting an image.
+
+   Screenshot of annotate tool after segmenting an image.
+
+The image above shows some locusts in a box with petri dishes
+containing paper strips. As you can see, the segmentation includes
+spots on the paper floor, edges of the petri dishes as well as the
+animals. 
+
+We want to train the YOLACT network to detect the locusts. So we must
+remove any segmented objects that are no locusts. To do this, click on
+the ID of an unwanted object on the left pane listing ``Segmented
+objects``. The selected object will be outlined with dotted blue line. 
+
+You can click the ``Remove selected objects`` button on the panel at
+the bottom left, or press ``x`` on the keyboard to delete this
+segmented object.
+
+.. figure:: ../doc/images/annotate_02.png
+   :width: 100%
+   :alt: Screenshot of annotate tool for selecting a segmented object.
+
+   Screenshot of annotate tool for selecting a segmented
+   object. Segmented object 16 is part of the petri-dish edge and we
+   want to exclude it from the list of annotated objects in this
+   image.
+
+Alternatively, if the number of animals is small compared to the
+spuriously segmented objects, you can select all the animals by
+keeping the ``Ctrl`` key pressed while left-clicking on the IDs of the
+animals on the left pane. Then clicking ``Keep selected objects`` or
+pressing ``k`` on the keyboard will delete all other segmented
+objects.
+
+By default, objects are outlined with solid green line, and selected
+objects are outlined with dotted blue line. But you can change this
+from ``View`` menu. 
+
+In the ``View`` menu you can check ``Autocolor`` to make the program
+automatically use a different color for each object. In this case, the
+selected object is outlined in a dotted line of the same color, while
+all other object outlines are dimmed.
+
+You can also choose ``Colormap`` from the view menu and specify the
+number of colors to use. Each object will be outlined in one of these
+colors, going back to the first color when all the colors have been
+used.
+
+Segmentation settings
+---------------------
+
+The segmentation settings pane allows you to control how each image is
+segmented. The segmentation here is done in the following steps:
+
+1. Convert the image to gray-scale 
+
+2. Smooth the gray-scale image by Gaussian blurring. For this the
+   following parameters can be set:
+
+   - Blur width: diameter of the 2D Gaussian window in pixels 
+
+   - Blur sd: Standard deviation of the Gaussian curve used for
+     blurring.
+
+3. Threshold the blurred image. For this the following parameters can
+   be set:
+
+   - Invert thresholding: instead of taking the pixels above threshold
+     value, take those below. This should be checked when the objects
+     of interest are darker than background.
+
+   - Thresholding method: Choice between Adaptive Gaussian and
+     Adaptive Mean. These are the two adaptive thresholding methods
+     provided by the OpenCV library. In practice it does not seem to
+     matter much.
+
+   - Threshold maximum intensity: pixel values above threshold are set
+     to this value. It matters only for the Watershed algorithm for
+     segmentation (see below). Otherwise, any value above the threshold
+     baseline is fine.
+
+   - Threshold baseline: the actual threshold value for each pixel is
+     based on this value. When using adaptive mean, the threshold
+     value for a pixel is the mean value in its ``block size``
+     neighborhood minus this baseline value. For adaptive Gaussian,
+     the threshold value is the Gaussian-weighted sum of the values in
+     its neighborhood minus this baseline value.
+
+   - Thresholding block size: size of the neighborhood considered for
+     each pixel.
+
+   - Segmentation method: This combo box allows you to choose between
+     several thresholding methods. 
+
+     - ``Threshold`` and ``Contour`` are essentially the same, with
+       slight difference in speed. They both find the blobs in the
+       thresholded image and consider them as objects.
+
+     - ``Watershed`` uses the watershed algorithm from OpenCV
+       library. This is good for objects covering large patches (100s
+       of pixels) in the image, but not so good for very small
+       objects. It is also slower than ``Contour/Thresholding``
+       methods.
+
+     - ``DBSCAN`` uses the DBSCAN clustering algorithm from
+       ``scikit-learn`` package to spatially cluster the non-zero
+       pixels in the thresholded image. This is the slowest method,
+       but may be good for intricate structures (for example legs of
+       insects in an image are often missed by the other algorithms,
+       but DBSCAN may keep them depending on the parameter
+       settings). When you choose this method, there are additional
+       parameters to be specified. For a better understanding of
+       DBSCAN algorithm and relevant references see its documentation
+       in ``scikit-learn`` package:
+       https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html
+       
+       - DBSCAN minimum samples: The core points of a cluster should
+         include these many neighbors.
+
+       - DBSCAN epsilon: this is the neighborhood size, i.e., each
+         core point of a cluster should have ``minimum samples``
+         neighbors within this radius. Experiment with it (try values
+         like 0.1, 1, 5, etc)!
+
+    - Minimum pixels: filter out segmented objects with fewer than
+      these many pixels.
+
+    - Maximum pixels: filter out segmented objects with more than
+      these many pixels.
+
+    - Show intermediate steps: used for debugging. Default is
+      ``Final`` which does nothing. Other choices, ``Blurred``,
+      ``Thresholded``, ``Segmented`` and ``Filtered`` show the output
+      of the selected step in a separate window.
+
+    - Boundary style: how to show the boundary of the objects. Default
+      is ``contour``, which outlines the segmented objects. ``bbox``
+      will show the bounding horizontal rectangles, ``minrect`` will
+      show smallest rectangles bounding the objects at any angle, and
+      ``fill`` will fill the contours of the objects with color.
+
+
+    - Minimum width: the smaller side of the bounding rectangle of an
+      object should be greater or equal to these many pixels.
+
+    - Maximum width: the smaller side of the bounding rectangle of an
+      object should be less than these many pixels.
+
+    - Minimum length: the bigger side of the bounding rectangle of an
+      object should be greater or equal to these many pixels.
+
+    - Maximum length: the bigger side of the bounding rectangle of an
+      object should be less than these many pixels.
+
+Save segmentation
+-----------------
+
+You can save all the data for currently segmented images in a file by
+pressing ``Ctrl+S`` on keyboard or selecting ``File->Save segmentation`` from the
+menu bar. This will be a Python pickle file (extension ``.pkl`` or
+``.pickle``).
+
+Load segmentation
+-----------------
+
+You can load segmentation data saved before by pressing ``Ctrl+O`` on
+keyboard or by selecting ``File->Open saved segmentation`` from the
+menu bar.
+
+Export training and validation data
+-----------------------------------
+
+Press ``Ctrl+E`` on keyboard or select ``File->Export training and
+validation data`` from menubar to export the annotation data in a
+format that YOLACT can read for training.
+
+This will prompt you to choose an export directory. Once that is done,
+it will bring up a dialog box as below for you to enter some metadata
+and the split of training and validation set.
+
+.. figure:: ../doc/images/annotate_03.png
+   :width: 100%
+   :alt: Screenshot of export dialog
+
+   Screenshot of annotate tool export annotation dialog
+
+
+- ``Object class``: here, type in the name of the objects of interest.
+
+- ``Neural-Net base configuration``: select the backbone neural
+  network if you are trying something new. The default
+  ``yolact_base_config`` should work with the pretrained ``resnet
+  101`` based network that is distributd with YOLACT. Other options
+  have not been tested much.
+
+- ``Use % of images for validation``: by default we do a 70-30 split
+  of the available images. That is 70% of the images are used for
+  training and 30% for validation.
+
+- ``Split into subregions``: when the image is bigger than the neural
+  network's input size (550x550 pixels in most cases), randomly split
+  the image into blocks of this size, taking care to keep at least one
+  segmented object in each block. These blocks are then saved as
+  individual training images.
+
+- ``Export boundaries as``: you can choose to give the detailed
+  contour of each segmented object, or its axis-aligned bounding
+  rectangle, or its minimum-area rotated bounding rectangle
+  here. Contour provides the most information.
+
+  Once done, you will see a message titled ``Data saved`` showing the
+  command to be used for training YOLACT. It is also copied to the
+  clipboard, so you can just use the ``paste`` action on your
+  operating system to run the training from a command line.
+
+.. figure:: ../doc/images/annotate_04.png
+   :width: 100%
+   :alt: Screenshot of suggested command line after exporting annotations.
+
+   Screenshot of suggested command line after exporting annotations.
+
 """
 import sys
 # import time
@@ -54,7 +300,10 @@ from PyQt5 import (
     QtWidgets as qw,
     QtGui as qg)
 
-from argos.constants import OutlineStyle, SegmentationMethod, DrawingGeom
+from argos.constants import (
+    OutlineStyle,
+    DrawingGeom)
+
 from argos import utility as ut
 # from argos import frameview
 from argos.frameview import FrameView

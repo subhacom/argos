@@ -1,9 +1,90 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-14 1:39 PM
-"""Batch processing utility for tracking object in video.
+"""
+==============================
+Tracking objects in batch mode
+==============================
+Usage:
+::
+     python -m argos.batchtrack -i {input_file} -o {output_file}
+     -c {config_file}
 
-This works using multiple processes to utilize multiple CPU cores.
+Try ``python -m argos.batchtrack -h`` for details of command-line
+options.
+
+This program allows non-interactive tracking of objects in a video.
+When using classical segmentation this can speed things up by
+utilizing multiple CPU cores.
+
+It may be easier to use the interactive tracking :py:mod:`argos.track`
+to play with the segmentation parameters to see what work best for
+videos in a specific setting. The optimal setting can then be exported
+to a configuration file which will then be passed with ``-c`` command
+line option .
+
+Examples
+--------
+Use YOLACT for segmentation and SORT for tracking:
+::
+    python -m argos.batchtrack -i video.avi -o video.h5 -m yolact \\
+    --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
+    --overlap_thresh=0.3 --cuda=True \\
+    --pmin=10 --pmax=500 --wmin=5 --wmax=100 --hmin=5 --hmax=100 \\
+    -x 0.3 --min_hits=3 --max_age=20
+
+The above command tells the ``batchtrack`` script to read the input
+video ``video.avi`` and write the output to the file ``video.h5``. The
+rest of the arguments:
+
+- ``-m yolact`` tells it to use YOLACT as the segmentation method.
+
+- ``--yconfig=config/yolact.yml`` - Read YOLACT settings from the file
+``config/yolact.yml``
+
+- ``-w config/weights.pth`` - Read YOLACT neural network weights from
+the file ``config/weights.pth``.
+
+- ``-s 0.1`` - Include detections with score above 0.1
+
+- ``-k 10`` - Keep only the top 10 detections.
+
+- ``--overlap_thresh=0.3`` - At segmentation stage, merge detections
+  whose bounding boxes overlap more than 0.3 of their total area.
+
+- ``--cuda=True`` - use GPU acceleration.
+
+- ``--pmin=10`` - Include objects at least 10 pixels in bounding box
+  area.
+
+- ``--pmax=500`` - Include objects at most 500 pixels in bounding box
+  area.
+
+- ``--wmin=5`` - Include objects at least 5 pixels wide.
+
+- ``--wmax=100`` - Include objects at most 100 pixels wide.
+
+- ``--hmin=5`` - Include objects at least 5 pixels long.
+
+- ``--hmax=100`` - Include objects at most 100 pixels long.
+
+- ``-x 0.3`` - In the tracking stage, if objects in two successive
+  frames overlap more than 0.3 times their combined area, then
+  consider them to be the same object.
+
+- ``--min_hits=3`` - An object must be detcted at least in 3
+  consecutive frames to be included in the tracks.
+
+- ``--max_age=20`` - If an object cannot be matched to any detected
+  object across 20 successive frames, then discard it (possibly it
+  exited the view). [Remember that if you have a 30 frames per second
+  video, 20 frames means 2/3 second in real time.]
+
+
+All of this can be more easily set graphically in
+:py:mod:`argos.track` and exported into a file, which can then be
+passed with ``-c {config_file}``.
+
 """
 import argparse
 import os
