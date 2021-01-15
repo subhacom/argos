@@ -2,7 +2,12 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-16 5:05 PM
 
-"""CSRT algorithm built into OpenCV"""
+"""
+===================================================================
+Wrapper to use CSRT algorithm from OpenCV to track multiple objects
+===================================================================
+
+"""
 import logging
 from typing import Tuple
 import numpy as np
@@ -20,7 +25,9 @@ settings = init()
 
 class CSRTracker(object):
     """Wrapper around OpenCV CSRT to maintain age information and
-    reinitialization against segmentation data,"""
+    reinitialization against segmentation data.
+
+    """
 
     def __init__(self, frame: np.ndarray, bbox: np.ndarray, tid: int):
         self.id_ = tid

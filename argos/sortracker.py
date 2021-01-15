@@ -1,6 +1,30 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-01 11:50 PM
+
+"""
+===========================================
+SORT algorithm for multiple object tracking
+===========================================
+
+Implemented with OpenCV's builtin Kalman filter.
+
+This algorithm was originally developed and published by Alex Bewly [2]_.
+
+Original implementation of SORT_ and DeepSORT_
+
+References
+----------
+.. [2] Bewley, A., Ge, Z., Ott, L., Ramos, F. & Upcroft, B. Simple
+   Online and Realtime Tracking. 2016 IEEE International Conference on
+   Image Processing (ICIP) 34643468 (2016)
+   doi:10.1109/ICIP.2016.7533003.
+
+.. _SORT: https://github.com/abewley/sort
+
+.. _DeepSORT: https://github.com/nwojke/deep_sort.
+
+"""
 import logging
 import numpy as np
 import cv2

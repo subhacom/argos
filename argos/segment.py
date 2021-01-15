@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-11-27 8:34 PM
-import logging
+"""
+=======================
+Segmentation functions
+=======================
+"""
 from typing import List, Tuple
 
 import cv2
@@ -12,7 +16,7 @@ from sklearn import cluster
 from argos import utility as ut
 
 
-def segment_by_dbscan(binary_img: np.ndarray, eps: float=5,
+def segment_by_dbscan(binary_img: np.ndarray, eps: float=5.0,
                       min_samples: int=10) -> List[np.ndarray]:
     """Use DBSCAN clustering to segment binary image.
 

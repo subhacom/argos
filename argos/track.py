@@ -11,18 +11,165 @@ Usage:
     python -m argos.track
 
 
+In Argos, this is the main tool for tracking objects
+automatically. Argos tracks objects in two stages, first it segments
+the individual objects (called instance segmentation) in a frame, and
+then matches the positions of these segments to that in the previous
+frame.
+
+The segmentation can be done by a trained neural network via the
+YOLACT library, or by classical image processing algorithms. Each of
+these has its advantages and disadvantages.
+
+Basic usage
+-----------
+
+This assumes you have a YOLACT network trained with images of your
+target object. YOLACT comes with a network pretrained with a variety
+of objects from the COCO database. If your target object is not
+included in this, you can use the Argos annotation tool
+(:py:mod:`argos.annotate`) to train a backbone network.
+
+When you start Argos tracker, a window with an empty central widget is
+presented (:numref:`track_startup`).
+
+.. _track_startup:
+.. figure:: ../doc/images/track_00.png
+   :width: 100%
+   :alt: Screenshot of tracking tool at startup
+
+   Screenshot of tracking tool at startup
+
+
+1. Use the ``File`` menu to open the desired video.  After selecting
+   the video file, you will be prompted to:
+
+    1. Select output data directory/file. You have a choice of CSV
+       (text) or HDF5 (binary) format. HDF5 is recommended.
+
+    2. Select Yolact configuration file, go to the `config` directory
+       inside argos directory and select `yolact.yml`.
+
+    3. File containing trained network weights, and here you should
+       select the `babylocust_resnet101_119999_240000.pth` file.
+
+2. This will show the first frame of the video in the central
+   widget. On the right hand side you can set some parameters for the
+   segmentation (:numref:`track_loaded`).
+
+   .. _track_loaded:
+   .. figure:: ../doc/images/track_01.png
+      :width: 100%
+      :alt: Tracking tool after loading video and YOLACT configuration and network weights.
+   
+      Tracking tool after loading video and YOLACT configuration and
+      network weights.
+
+   The top panel on the right is ``Yolact settings`` with the
+   following fields:
+
+
+   1. ``Number of objects to include``: keep at most these many
+      detected objects.
+
+   2. ``Detection score minimum``: YOLACT assigns a score between 0
+      and 1 to each detected object to indicate how close it is to
+      something the network is trained to detect. By setting this
+      value higher, you can exclude spurious detection. Set it too
+      high, and decent detections may be rejected.
+
+   3. ``Merge overlaps more than``: If two detcted objects' bounding
+       boxes overlap more than this fraction of the smaller one, then
+       consider them parts of the same object.
+
+   The next panel, ``Size limits`` allows you to filter objects that
+   are too big or too small. Here you can specify the minimum and
+   maximum width and length of the bounding boxes, and any detection
+   which does not fit will be removed.
+
+   The bottom panel, ``SORTracker settings`` allows you to parametrize
+   the actual tracking. SORTracker matches objects between frames by
+   their distance. Default distance measure is ``Intersection over
+   Union`` or IoU. This is the ratio of the area of intersection to
+   the union of the two bounding boxes. 
+
+   - ``Minimum overlap``: if the overlap between predicted position of
+     an object and the actual detected position in the current frame is
+     less than this, it is considered to be a new object. Thus, if an
+     animal jumps from one position to a totally different position, the
+     algorithm will think that a new object has appeared in the new
+     location.
+
+   - ``Minimum hits``: to avoid spurious detections, do not believe a
+     detected object to be real unless it is detected in this many
+     consecutive frames.
+
+   - ``Maximum age``: if an object goes undetected for this many
+     frames, remove it from the tracks, assuming it has gone out of
+     view.
+
+
+3. Start tracking: click the ``Play/Pause`` button and you should see
+   the tracked objects with their bounding rectangles and Ids. The
+   data will be saved in the filename you entered in step above
+   (:numref:`track_running`).
+
+   .. _track_running:
+   .. figure:: ../doc/images/track_02.png
+      :width: 100%
+      :alt: Tracking in progress
+   
+      Tracking in progress. The bounding boxes of detected objects are
+      outlined in green. Some spurious detections are visible which can
+      be later corrected with the :py:mod:`argos.review` tool.
+
+
+   If you choose CSV above, the bounding boxes of the segmented
+   objects will be saved in ``{videofile}.seg.csv`` with each row
+   containing `frame-no,x,y,w,h` where (x, y) is the coordinate of
+   the top left corner of the bounding box and ``w`` and ``h`` are its
+   width and height respectively.
+   
+   The tracks will be saved in ``{videofile}.trk.csv``. Each row in this
+   file contains ``frame-no,track-id,x,y,w,h``.
+   
+   If you choose HDF5 instead, the same data will be saved in a single
+   file compatible with the Pandas library. The segementation data
+   will be saved in the group ``/segmented`` and tracks will be saved in
+   the group ``/tracked``. The actual values are in the dataset named
+   ``table`` inside each group, with columns in same order as described
+   above for CSV file. You can load the tracks in a Pandas data frame
+   in python with the code fragment:
+   ::
+           tracks = pandas.read_hdf(tracked_filename, 'tracked')
+
+
+Classical segmentation
+----------------------
+
+Using the ``Segmentation method`` menu you can switch from YOLACT to
+classical image segmentation for detecting target objects.  This
+method uses patterns in the pixel values in the image to detect
+contiguous patches. If your target objects are small but have high
+contrast with the background, this may give tighter bounding boxes,
+and thus more accurate tracking.
+   
+When this is enabled, the right panel will allow you to set the
+parameters.  The parameters are detailed in
+:py:mod:`argos.annotate`.
+
+Briefly, the classical segmentation methods work by first converting
+the image to gray-scale and then blurring the image so that sharp
+edges of objects are smoothed out. The blurred image is then
+thresholded using an adaptive method that adjusts the threshold value
+based on local intensity. Thresholding produces a binary image which
+is then processed to detect contiguous patches of pixels using one of
+the available algorithms.
+
 """
 import sys
-import os
-import time
-import enum
-import threading
-import collections
 import logging
 import yaml
-import argos.utility
-import numpy as np
-import cv2
 from PyQt5 import (
     QtWidgets as qw,
     QtCore as qc,
@@ -210,9 +357,10 @@ class ArgosMain(qw.QMainWindow):
 
     @qc.pyqtSlot()
     def clearSettings(self):
-        button = qw.QMessageBox.question(self,
-                                         'Reset settings to default',
-                                         'Are you sure to clear all saved settings?')
+        button = qw.QMessageBox.question(
+            self,
+            'Reset settings to default',
+            'Are you sure to clear all saved settings?')
         if button == qw.QMessageBox.NoButton:
             return
         settings.clear()
@@ -323,9 +471,10 @@ class ArgosMain(qw.QMainWindow):
             config['cuda'] = settings.value('yolact/cuda', True, type=bool)
 
         directory = settings.value('video/directory', '.')
-        fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save configuration as',
-                                                  directory,
-                                                  filter='yaml (*.yml *.yaml)')
+        fname, _ = qw.QFileDialog.getSaveFileName(
+            self, 'Save configuration as',
+            directory,
+            filter='yaml (*.yml *.yaml)')
         if len(fname) > 0:
             with open(fname, 'w') as fd:
                 yaml.dump(config, fd)

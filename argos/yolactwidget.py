@@ -1,7 +1,21 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-01 5:05 PM
-"""Interface to YOLACT for segmentation"""
+"""
+====================================
+Interface to YOLACT for segmentation
+====================================
+
+YOLACT_ was originally developed and published by Bolya et al [1]_.
+
+References
+----------
+.. _YOLACT: https://github.com/dbolya/yolact
+
+.. [1] Bolya, D., Zhou, C., Xiao, F. & Lee, Y. J. YOLACT: Real-time
+   Instance Segmentation. (2019).
+
+"""
 
 import os
 import time

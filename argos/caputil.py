@@ -4,13 +4,17 @@
 # Description: 
 # Author: Subhasis Ray
 # Created: Tue Jan 12 23:21:16 2021 (-0500)
-# Last-Updated: Wed Jan 13 16:44:37 2021 (-0500)
+# Last-Updated: Thu Jan 14 20:42:28 2021 (-0500)
 #           By: Subhasis Ray
 # 
 
 # Code:
 
-"""Common utility functions and constants for capturing video"""
+"""
+==========================================================
+Common utility functions and constants for capturing video
+==========================================================
+"""
 
 import sys
 from datetime import datetime

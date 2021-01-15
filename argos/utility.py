@@ -463,7 +463,7 @@ def make_color(num: int) -> Tuple[int]:
 
     """
     val = murmurhash3_32(num, positive=True).to_bytes(8, 'little')
-    color = qg.QColor(val[0], val[1], val[2])
+    # color = qg.QColor(val[0], val[1], val[2])
     return val[:3]
 
 
