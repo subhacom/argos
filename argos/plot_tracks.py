@@ -1,18 +1,48 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-06-04 8:56 PM
-"""Utility to display the tracks
+"""
+=============================
+Utility to display the tracks
+=============================
 
-Usage: python plot_tracks.py videofile trackfile OPTIONAL: original-time-file motiontracked-time-file
+Usage:
+::
+    python -m argos.plot_tracks -v {videofile} -f {trackfile} \\
+    --torig {original-timestamps-file} \\
+    --tmt {motiontracked-timestamps-file} \\
+    --fplot {plotfile} \\
+    --vout {video-output-file}
+
+Try ``python -m argos.plot_tracks -h`` for a listing of all the
+command line options.
+
+This program allows displaying the (possibly motion-tracked) video
+with the bounding boxes and IDs of the tracked objects overlaid.
+Finally, it plots the tracks over time, possibly on a frame of the
+video.
+
+With ``--torig`` and ``--tmt`` options it will try to read the
+timestamps from these files, which should have comma separated values
+(.csv) with the columns ``inframe, outframe, timestamp`` (If you use
+:py:module:``argos.capture`` to capture video, these will be aleady
+generated for you). The frame-timestamp will be displayed on each
+frame in the video. It will also be color-coded in the plot by
+default.
+
+With the ``--fplot`` option, it will save the plot in the filename
+passed after it.
+
+With the ``--vout`` option, it will save the video with bounding boxes
+in the filename passed after it.
+
 """
 import os
-import sys
 import cv2
 import numpy as np
 from datetime import datetime
 import time
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import pandas as pd
 from sklearn.utils.murmurhash import murmurhash3_32
 from argparse import ArgumentParser
@@ -43,14 +73,13 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
         ax.imshow(img, origin='upper')
     for trackid, trackgrp in tracks.groupby('trackid'):
         pos = trackgrp.sort_values(by='frame')
-        print(pos.shape)
         cx = pos.x + pos.w / 2.0
+        # The Y axis is inverted when using image.
+        # Keep it consistent when no image is used.
         if img is None:
             cy = - (pos.y + pos.h / 2.0)
-            y = - pos.y
         else:
             cy = pos.y + pos.h / 2.0
-            y = pos.y
 
         val = murmurhash3_32(int(trackid), positive=True).to_bytes(8, 'little')
         color = (val[0] / 255.0, val[1] / 255.0, val[2] / 255.0)
@@ -80,9 +109,10 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
     return fig
 
 
-def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
-                fthickness=1,
-                torigfile=None, tmtfile=None, vout=None, outfmt='MJPG', fps=None):
+def play_tracks(vidfile, trackfile, lw=2, color='auto',
+                fontscale=1, fthickness=1,
+                torigfile=None, tmtfile=None,
+                vout=None, outfmt='MJPG', fps=None):
     cap = cv2.VideoCapture(vidfile)
     frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     if not cap.isOpened():
@@ -99,7 +129,8 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto', fontscale=1,
         tmt = pd.read_csv(tmtfile)
         timestamps = pd.merge(torig, tmt, left_on='outframe',
                               right_on='inframe')
-        timestamps.drop(['outframe_x', 'timestamp_y', 'inframe_x', 'inframe_y'],
+        timestamps.drop(['outframe_x', 'timestamp_y', 'inframe_x',
+                         'inframe_y'],
                         axis=1, inplace=True)
         timestamps.rename({'inframe_x': 'origframe', 'inframe_y': 'inframe',
                            'timestamp_x': 'timestamp', 'outframe_y': 'frame'},
@@ -181,17 +212,21 @@ def make_parser():
     parser.add_argument('--torig', type=str,
                         help='Timestamp file for original video')
     parser.add_argument('--tmt', type=str,
-                        help='Timestamp file for video with movement detection')
+                        help='Timestamp file for video with movement'
+                        ' detection')
     parser.add_argument('-q', '--quiver', action='store_true',
                         help='Show quiver plot for tracks')
     parser.add_argument('--qcmap', default='hot',
-                        help='Colormap used in quiver plot')
+                        help='Colormap used in quiver plot. This can be any'
+                        ' colormap name defined in the matplotlib library')
     parser.add_argument('-b', '--bbox', action='store_true',
                         help='Show bounding boxes of tracked objects')
     parser.add_argument('--af', default=0.0, type=float,
-                        help='When displaying bounding box, alpha value at first frame')
+                        help='When displaying bounding box, alpha value at'
+                        ' first frame.')
     parser.add_argument('--al', default=1.0, type=float,
-                        help='When displaying bounding box, alpha value at last frame')
+                        help='When displaying bounding box, alpha value at'
+                        ' last frame.')
     parser.add_argument('--ap', default=1.0, type=float,
                         help='Alpha value of plot lines')
     parser.add_argument('--wp', default=8.0, type=float,

@@ -8,20 +8,11 @@ Welcome to Argos's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Contents:	     
 
-.. automodule:: argos
-   :members:
-
-.. automodule:: argos.capture
-
-.. automodule:: argos.annotate
+   user 
+   api
 		
-.. automodule:: argos.track
-
-.. automodule:: argos.batchtrack		
-
-.. automodule:: argos.review		
 
 Indices and tables
 ==================

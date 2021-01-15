@@ -1,17 +1,308 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-09 1:20 PM
-"""Review and correct tracks"""
+"""
+=========================
+Review and correct tracks
+=========================
+Usage:
+::
+    python -m argos.review
+
+
+Basic operation
+---------------
+At startup it will show a window with two empty panes separated in the
+middle by three empty lists titled ``Left tracks``, ``All tracks`` and
+``Right tracks`` like :numref:`review_startup` below.
+
+.. _review_startup:
+.. figure:: ../doc/images/review_00.png
+   :width: 100%
+   :alt: Screenshot of review tool at startup
+
+   Screenshot of review tool at startup
+
+
+To start reviewing tracked data, select ``File->Open tracked data``
+from the menubar or press ``Ctrl+O`` on keyboard. This will prompt you
+to pick a data file. Once you select the data file, it will then
+prompt you to select the corresponding video file. Once done, you
+should see the first frame of the video on the right pane with the
+bounding boxes (referred to as *bbox* for short) and IDs of the tracked
+objects (:numref:`review_loaded`).
+
+.. _review_loaded:
+.. figure:: ../doc/images/review_01.png
+   :width: 100%
+   :alt: Screenshot of review tool after loading data
+
+   Screenshot of review tool after loading data
+
+Here you notice that trackid ``4`` is spurious. So you select it by
+clicking on the entry in ``Right tracks`` list. As you select the
+enetry, its bbox and ID on the image change color (and line style)
+(:numref:`review_select`). If the ``Show track position`` button is
+checked, like in the screenshot, then you will also see some points
+turning from dark purple to light yellow, indicating all the position
+this object takes across the video.
+
+.. _review_select:
+.. figure:: ../doc/images/review_02.png
+   :width: 100%
+   :alt: Screenshot of review tool after selecting object
+
+   Screenshot of review tool after selecting object
+
+Now delete object ``4`` by pressing ``x`` or ``Delete`` on keyboard,
+or selecting ``Delete track`` from ``Action`` in menubar
+(:numref:`review_delete`).
+
+.. _review_delete:
+.. figure:: ../doc/images/review_03.png
+   :width: 100%
+   :alt: Screenshot of review tool deleting object
+
+   Screenshot of review tool deleting object
+
+Once you delete ``4``, selection will change to the next object
+(#``5``) and the path taken by it over time will be displayed in the
+same purple-to-yellow color code (:numref:`review_post_delete`).
+
+.. _review_post_delete:
+.. figure:: ../doc/images/review_04.png
+   :width: 100%
+   :alt: Screenshot of review tool after deleting object
+
+   Screenshot of review tool after deleting object, as the next object
+   is selected.
+
+Now to play the video, click the ``play`` button at bottom. The right
+frame will be transfereed to the left pane, and the next frame will
+appear in the right pane.
+
+You will notice the spinbox on bottom right updates the current frame
+number as we go forward in the video. Instead of playing the video,
+you can also move one frame at a time by clicking the up-arrow in the
+spinbox, or by pressing ``PgDn`` on keyboard.
+
+It is useful to pause and inspect the tracks whenever a new object is
+dected. In order to pause the video when there is a new trackid, check
+the ``Show popup message for new tracks`` item in the ``Diff
+settings`` menu (:numref:`review_diff_popup_new`).
+
+.. _review_diff_popup_new:
+.. figure:: ../doc/images/review_05.png
+   :width: 100%
+   :alt: Screenshot Diff settings - popup on new tracks menu
+
+   Enable popup message when a new trackid appears
+
+If you you already played through the video, then all trackids are
+old. In order to go back to a prestine state, click the ``Reset``
+button at bottom right. If you play the video now, as soon as a new
+track appears, the video will pause and a popup message will tell you
+the new tracks that appeared between the last frame and the current
+frame (:numref:`review_new_track_popup`).
+
+.. _review_new_track_popup:
+.. figure:: ../doc/images/review_06.png
+   :width: 100%
+   :alt: Popup message on new track(s)
+
+   Popup message when a new trackid appears
+
+After you click ``OK`` to dispose of the popup window, the status
+message will remind you of the last change
+(:numref:`review_status_msg`).
+
+.. _review_status_msg:
+.. figure:: ../doc/images/review_07.png
+   :width: 100%
+   :alt: Status message on new track(s)
+
+   Status message after a new trackid appears
+
+You can also choose ``Show popup message for left/right mismatch`` in
+the ``Diff settings`` menu. In this case whenever the trackids on the
+left frame are different from those on the right frame, the video will
+be paused with a popup message.
+
+If you want to just watch the video without interruption, select ``No
+popup message for tracks``.
+
+The other option ``Overlay previous frame``, if selected, will overlay
+the previous frame on the right pane in a different color. This may be
+helpful for looking at differences between the two frames if the left
+and right display is not good enough (:numref:`review_overlay`).
+
+.. _review_overlay:
+.. figure:: ../doc/images/review_08.png
+   :width: 100%
+   :alt: Overlaid previous and current frame.
+
+   Overlaid previous and current frame. The previous frame is in the
+   red channel and the current frame in the blue channel, thus
+   producing shades of magenta where they have similar values, and
+   more red or blue in pixels where they mismatch.
+
+
+The track lists 
+---------------
+
+The three lists between the left and right video frame in the GUI
+present the track Ids of the detected objects. These allow you to
+display the tracks and carry out modifications of the tracks described
+later).
+
+- ``Left tracks`` shows the tracks detected in the left (previous)
+  frame. If you select an entry here, its detected track across frames
+  will be overlayed on the previous frame in the left pane
+  (:numref:`review_track_hist`).
+
+- ``All tracks`` in the middle shows all the tracks seen so far
+  (including those that have been lost in the previous or the current
+  frame). If you select an entry here, its detected track across
+  frames will be overlayed on the previous frame in the left pane. If
+  you select different entries in ``Left tracks`` and ``All tracks``,
+  the last selected track will be displayed.
+
+- ``Right tracks`` shows the tracks detected in the current frame.  If
+  you select an entry here, its detected track across frames will be
+  overlayed on the current frame in the right pane.
+
+.. _review_track_hist:
+.. figure:: ../doc/images/review_09.png
+   :width: 100%
+   :alt: Track of the selected object
+
+   The track of the selected object (track Id) in ``Left tracks`` or
+   ``All tracks`` is displayed on the left pane. That of the selected
+   object in the ``Right tracks`` is displayed on the right pane.
+
+
+Moving around and break points
+------------------------------
+
+To speed up navigation of tracked data, Argos review tool provides
+several shortcuts. The corresponding actions are also available in the
+``Play`` menu. To play the video, or to stop a video that is already
+playing, press the ``Space bar`` on keyboard. You can try to double
+the play speed by pressing ``Ctrl + Up Arrow`` and halve the speed by
+pressing ``Ctrl + Down Arrow``. The maximum speed is limited by the
+time needed to read and display a frame.
+
+Instead of going through the entire video, you can jump to the next
+frame where a new trackid was introduced, press ``N`` key (``Jump to
+next new track``).
+
+You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
+backward by pressing ``Ctrl + PgUp`` on the keyboard.
+
+To jump to a specific frame number, press ``G`` (``Jump to frame``)
+and enter the frame number in the dialog box that pops up.
+
+To remember the current location (frame number) in the video, you can
+press ``Ctrl+B`` (``Set breakpoint at current frame``) to set a
+breakpoint. You can go to other parts of the video and jump back to
+this location by pressing ``J`` (``Jump to breakpoint frame``).  To
+clear the breakpoint, press ``Shift+J`` (``Clear frame breakpoint``).
+
+You can set a breakpoint on the appearance of a particular trackid
+using ``Set breakpoint on appearance`` (keyboard ``A``), and entering
+the track id in the dialog box. When playing the video, it will pause
+on the frame where this trackid appears next. Similarly you can set
+breakpoint on disappearance of a trackid using ``Set breakpoint on
+disappearance`` (keyboard ``D``). You can clear these breakpoints by
+pressing ``Shift + A`` and ``Shift + D`` keys respectively.
+
+Finally, if you made any changes (assign, swap, or delete tracks),
+then you can jump to the frame corresponding to the next change (after
+current frame) by pressing ``C`` and to the last change (before
+current frame) by pressing ``Shift + C`` on the keyboard.
+
+
+Correcting tracks
+-----------------
+
+- Deleting
+
+  You already saw that one can delete spurious tracks by selecting it
+  on the ``Right tracks`` list and delete it with ``x`` or ``Delete``
+  key.
+
+- Replacing/Assigning
+
+  Now for example, you can see at frame 111, what has been marked as
+  ``12`` was originally animal ``5``, which happened to jump from the
+  left wall of the arena to its middle (For this I had to actually
+  press ``PgUp`` to go backwards in the video, keeping an eye on this
+  animal, until I could be sure where it appeared from). To correct
+  the new trackid, we need to assign ``5`` to track id ``12``.
+
+  The easiest way to do this is to use the left mouse button to drag
+  the entry ``5`` from either the ``Left tracks`` list or the ``All
+  tracks list`` and drop it on entry ``12`` in the ``Right tracks``
+  list.  You can also select ``5`` in the left or the middle list and
+  ``12`` in the right list and then select ``Replace track`` from the
+  ``Action`` menu.
+
+- Swapping
+
+  In some cases, especially when one object crosses over another, the
+  automatic algorithm can confuse their Ids. You can correct this by
+  swapping them.
+
+  To do this, use the right mouse button to drag and drop one entry
+  from the ``All tracks`` or ``Left tracks`` list on the other in the
+  ``Right tracks`` list. You can also select the track Ids in the
+  lists and then click the ``Swap tracks`` entry in the ``Action``
+  menu.
+
+- Renaming
+
+  To rename a track with a different, nonexistent Id, select the track
+  in one of the ``Right tracks`` list and then press the ``R`` key, or
+  use the ``Action`` menu to get a prompt for the new Id number. Note
+  that normally Argos does not use negative track Id numbers, so for
+  temporary use it is safe to use negative numbers and it will not
+  conflict with any existing track numbers.
+
+All these actions, however, are not immediately made prmanent. This
+allows you to undo changes that have been made by mistake. You can see
+the list of changes you suggested by selecting ``Show list of
+changes`` in the view menu, or by using the ``Alt+C`` keyboard
+shortcut (:numref:`review_track_changes`). To undo a change, go to the
+frame on which it was suggested, and press ``Ctrl+Z``, or select
+``Undo changes in current frame`` in the ``Action`` menu.
+
+.. _review_track_changes:
+.. figure:: ../doc/images/review_10.png
+   :width: 100%
+   :alt: List of changes suggested to tracks
+
+   List of changes to be applied to the tracks. The first entry when
+   applied will delete the track Id 8 from frame # 24 onwards. The
+   last entry will assign the Id 5 to the track 12 in all frames from
+   frame # 111 onwards.
+
+You can save the list of changes into a text file with comma separated
+values and load them later using entries in the ``File`` menu. The
+changes will become permanent once you save the data (``File->Save
+reviewed data``). However, the resulting HDF5 file will include the
+list of changes inside a time-stamped group, so you can refer back to
+past changes applied to the data
+
+"""
 
 import sys
 import os
 import csv
-from queue import PriorityQueue
-from typing import List, Tuple, Union, Dict
+
+from typing import List, Dict
 import logging
 import threading
-from collections import defaultdict, OrderedDict
-from operator import attrgetter
+from collections import OrderedDict
 import numpy as np
 from datetime import datetime
 import cv2
@@ -38,8 +329,9 @@ settings = ut.init()
 class TrackReader(qc.QObject):
     """Class to read the tracking data.
 
-    It also keeps a list of changes made by the user and applies them before
-    handing over the track information.
+    It also keeps a list of changes made by the user and applies them
+    before handing over the track information.
+
     """
     sigEnd = qc.pyqtSignal()
     sigSavedFrames = qc.pyqtSignal(int)
@@ -52,14 +344,17 @@ class TrackReader(qc.QObject):
             self.track_data = pd.read_csv(self.data_path)
         else:
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
-        self.track_data = self.track_data.astype({'frame': int, 'trackid': int})
+        self.track_data = self.track_data.astype({'frame': int,
+                                                  'trackid': int})
         self.last_frame = self.track_data.frame.max()
         self.wmin = 0
         self.wmax = 1000
         self.hmin = 0
         self.hmax = 1000
+
         def keyfn(change):
             return (change.frame, change.idx)
+
         self.change_list = SortedKeyList(key=keyfn)
         self._change_idx = 0
         self.undone_changes = set()
@@ -86,8 +381,26 @@ class TrackReader(qc.QObject):
 
     def getTrackId(self, track_id, frame_no=None, hist=10):
         """Get all entries for a track across frames.
-        frame_no: if specified, only entries around this frame are returned.
-        hist: at most these many past and future entries around `frame_no` are returned.
+
+        Parameters
+        ----------
+        frame_no: int, default None
+            If specified, only entries around this frame are
+            returned. If `None`, return all entries for this track.
+        hist: int, default 10
+            Number of past and future entries around `frame_no`
+            to select.
+
+        Returns
+        -------
+        pd.DataFrame
+            The data for track `track_id` for frames `frame_no` -
+            `hist` to `frame_no` + `hist`. 
+
+            If `frame_no` is `None`, data for `track_id` across all frames.
+
+            `None` if no track matches the specified `track_id` in frame `frame_no`.
+
         """
         track = self.track_data[self.track_data.trackid == track_id].copy()
         if frame_no is None:
@@ -268,7 +581,7 @@ class TrackReader(qc.QObject):
             for change in self.change_list:
                 if change.frame not in self.undone_changes:
                     writer.writerow([change.frame, change.change, change.orig,
-                                 change.new])
+                                     change.new])
 
     @qc.pyqtSlot(str)
     def loadChangeList(self, fname: str) -> None:
@@ -280,7 +593,7 @@ class TrackReader(qc.QObject):
                 if not first and len(row) > 0:
                     new = int(row[3]) if len(row[3]) > 0 else None
                     change = Change(frame=int(row[0]), change=int(row[1]),
-                               orig=int(row[2]), new=new)
+                                    orig=int(row[2]), new=new)
                     self.change_list.add(change)
                 first = False
         self.sigChangeList.emit(self.change_list)
@@ -294,6 +607,7 @@ class ReviewScene(FrameScene):
         self.hist_gradient = 1
         self.track_hist = []
         self.path_cmap = 'viridis'
+        self.track_dia = 5
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
@@ -302,7 +616,7 @@ class ReviewScene(FrameScene):
     @qc.pyqtSlot(str)
     def setPathCmap(self, color: str) -> None:
         self.path_cmap = color
-
+    
     @qc.pyqtSlot(np.ndarray)
     def showTrackHist(self, track: np.ndarray) -> None:
         for item in self.track_hist:
@@ -310,13 +624,16 @@ class ReviewScene(FrameScene):
         self.track_hist = []
         for ii, t in enumerate(track):
             color = qg.QColor(*get_cmap_color(ii, len(track), self.path_cmap))
-            self.track_hist.append(self.addEllipse(
-                t[0] - 1,
-                t[1] - 1,
-                2 * self.linewidth,
-                2 * self.linewidth,
-                qg.QPen(color)))
+            self.track_hist.append(self.addEllipse(t[0] - 1,
+                                                   t[1] - 1,
+                                                   self.track_dia + 2,
+                                                   self.track_dia + 2,
+                                                   qg.QPen(color)))
         # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+
+    @qc.pyqtSlot(int)
+    def setTrackDia(self, val):
+        self.track_dia = val
     
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -371,10 +688,12 @@ class TrackView(FrameView):
     """Visualization of bboxes of objects on video frame with facility to set
     visible area of scene"""
     sigSelected = qc.pyqtSignal(list)
+    sigTrackDia = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(TrackView, self).__init__(*args, **kwargs)
         self.sigSelected.connect(self.scene().setSelected)
+        self.sigTrackDia.connect(self.scene().setTrackDia)
 
     def setViewportRect(self, rect: qc.QRectF) -> None:
         self.fitInView(rect.x(), rect.y(),
@@ -385,6 +704,15 @@ class TrackView(FrameView):
     def _makeScene(self):
         self.frame_scene = ReviewScene()
         self.setScene(self.frame_scene)
+
+    @qc.pyqtSlot()
+    def setTrackDia(self):
+        input_, accept = qw.QInputDialog.getInt(
+            self, 'Diameter of track markers',
+            'pixels',
+            self.frame_scene.track_dia, min=0, max=500)
+        if accept:
+            self.sigTrackDia.emit(input_)        
 
 
 class TrackList(qw.QListWidget):
@@ -635,20 +963,29 @@ class ReviewWidget(qw.QWidget):
         self.right_list.sigSelected.connect(self.right_view.sigSelected)
         self.right_list.sigSelected.connect(self.projectTrackHist)
         self.left_list.sigSelected.connect(self.projectTrackHist)
-        self.right_view.showBboxAction.triggered.connect(self.left_view.showBboxAction.trigger)
+        self.right_view.showBboxAction.triggered.connect(
+            self.left_view.showBboxAction.trigger)
+        
+        self.right_view.sigTrackDia.connect(
+            self.left_view.frame_scene.setTrackDia)
         self.showBboxAction = self.right_view.showBboxAction
-        self.right_view.showIdAction.triggered.connect(self.left_view.showIdAction.trigger)
+        self.right_view.showIdAction.triggered.connect(
+            self.left_view.showIdAction.trigger)
         self.showIdAction = self.right_view.showIdAction
-        self.sigProjectTrackHist.connect(self.right_view.frame_scene.showTrackHist)
-        self.sigProjectTrackHistAll.connect(self.left_view.frame_scene.showTrackHist)
+        self.sigProjectTrackHist.connect(
+            self.right_view.frame_scene.showTrackHist)
+        self.sigProjectTrackHistAll.connect(
+            self.left_view.frame_scene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
         self.play_button.clicked.connect(self.playVideo)
         self.play_button.setCheckable(True)
         self.slider.valueChanged.connect(self.gotoFrame)
         self.pos_spin.valueChanged.connect(self.gotoFrame)
         self.pos_spin.lineEdit().setEnabled(False)
-        self.right_view.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
-        self.right_view.sigSetColor.connect(self.left_view.frame_scene.setColor)
+        self.right_view.sigSetColormap.connect(
+            self.left_view.frame_scene.setColormap)
+        self.right_view.sigSetColor.connect(
+            self.left_view.frame_scene.setColor)
         # self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
         # self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
 
@@ -659,7 +996,9 @@ class ReviewWidget(qw.QWidget):
         
         for sel in  selected:
             if self.sender() == self.right_list:
-                track = self.track_reader.getTrackId(sel, self.frame_no, self.history_length)
+                track = self.track_reader.getTrackId(sel,
+                                                     self.frame_no,
+                                                     self.history_length)
             else:
                 track = self.track_reader.getTrackId(sel, None)
             if track is None:
@@ -847,6 +1186,8 @@ class ReviewWidget(qw.QWidget):
         self.relativeFontSizeAction = self.right_view.relativeFontSizeAction
         self.right_view.frame_scene.sigFontSizePixels.connect(
             self.left_view.frame_scene.setFontSizePixels)
+        self.setTrackDiaAction = qw.QAction('Set track marker diameter')
+        self.setTrackDiaAction.triggered.connect(self.right_view.setTrackDia)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
         self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
@@ -1298,15 +1639,17 @@ class ReviewWidget(qw.QWidget):
             if self.left_frame is not None:
                 self.sigLeftFrame.emit(self.left_frame, pos - 1)
             self.right_frame = frame
-            if self.overlayAction.isChecked() and self.left_frame is not None:
-                tmp = frame
-                frame = np.zeros((frame.shape[0], frame.shape[1], 3), dtype=np.uint8)
-                if len(frame.shape) == 3:  # bgr
-                    frame[:, :, 0] = cv2.cvtColor(tmp, cv2.COLOR_BGR2GRAY)
-                    frame[:, :, 2] = cv2.cvtColor(self.left_frame, cv2.COLOR_BGR2GRAY)
-                    if self.invertOverlayColorAction.isChecked():
-                        frame = 255 - frame
-                        frame[:, :, 1] = 0
+            if self.overlayAction.isChecked() and   \
+               (self.left_frame is not None) and len(frame.shape) == 3:
+                tmp = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frame = np.zeros((frame.shape[0], frame.shape[1], 3),
+                                 dtype=np.uint8)
+                frame[:, :, 1] = 0
+                frame[:, :, 0] = tmp
+                frame[:, :, 2] = cv2.cvtColor(self.left_frame,
+                                              cv2.COLOR_BGR2GRAY)
+                if self.invertOverlayColorAction.isChecked():
+                    frame = 255 - frame
             self.sigRightFrame.emit(frame, pos)
             self.left_tracks = self.right_tracks
             self.right_tracks = self._flag_tracks({}, tracks)
@@ -1333,15 +1676,17 @@ class ReviewWidget(qw.QWidget):
         elif pos == self.frame_no:
             logging.debug(f'right frame: {pos}')
             self.right_frame = frame
-            if self.overlayAction.isChecked() and (self.left_frame is not None):
-                tmp = frame
-                frame = np.zeros((frame.shape[0], frame.shape[1], 3), dtype=np.uint8)
-                if len(frame.shape) == 3:  # bgr
-                    frame[:, :, 0] = cv2.cvtColor(tmp, cv2.COLOR_BGR2GRAY)
-                    frame[:, :, 2] = cv2.cvtColor(self.left_frame, cv2.COLOR_BGR2GRAY)
-                    if self.invertOverlayColorAction.isChecked():
-                        frame = 255 - frame
-                        frame[:, :, 1] = 0
+            if self.overlayAction.isChecked() and  \
+               (self.left_frame is not None) and len(frame.shape) == 3:
+                tmp = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frame = np.zeros((frame.shape[0], frame.shape[1], 3),
+                                 dtype=np.uint8)
+                frame[:, :, 1] = 0
+                frame[:, :, 0] = tmp
+                frame[:, :, 2] = cv2.cvtColor(self.left_frame,
+                                              cv2.COLOR_BGR2GRAY)
+                if self.invertOverlayColorAction.isChecked():
+                    frame = 255 - frame
             self.sigRightFrame.emit(frame, pos)
             self.right_tracks = self._flag_tracks({}, tracks)
             if self.showOldTracksAction.isChecked():
@@ -1647,6 +1992,7 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.review_widget.fontSizeAction)
         view_menu.addAction(self.review_widget.relativeFontSizeAction)
         view_menu.addAction(self.review_widget.lineWidthAction)
+        view_menu.addAction(self.review_widget.setTrackDiaAction)
         view_menu.addAction(self.review_widget.showBboxAction)
         view_menu.addAction(self.review_widget.showIdAction)
         view_menu.addAction(self.review_widget.showOldTracksAction)

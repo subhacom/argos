@@ -7,15 +7,39 @@ cimport numpy as np
 
 from argos.constants import OutlineStyle, DistanceMetric
 
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.int_t, ndim=2] rect2points(np.ndarray[np.int_t, ndim=1] rect):
+cpdef np.ndarray points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
+    """Convert diagonally opposite vertices into (x, y, w, h) format
+    rectangle.
+
+    Returns
+    -------
+    np.array:
+        Rectangle with diagonal corners `p0` and `p1` after scaling
+        by `scale`. This will work with both top-left - bottom-right
+        and bottom-left - top-right diagonals.
+
+    """
+    x = p0[0], p1[0]
+    y = p0[1], p1[1]
+    xleft = min(x)
+    w = max(x) - xleft
+    ytop = min(y)
+    h = max(y) - ytop
+    return np.array((xleft, ytop, w, h))
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef np.ndarray[np.int_t, ndim=2] rect2points(
+    np.ndarray[np.int_t, ndim=1] rect):
     """Convert topleft, width, height format rectangle into four anti-clockwise
     vertices"""
     return np.vstack([rect[:2],
-                 (rect[0], rect[1] + rect[3]),
-                 rect[:2] + rect[2:],
-                 (rect[0] + rect[2], rect[1])])
+                      (rect[0], rect[1] + rect[3]),
+                      rect[:2] + rect[2:],
+                      (rect[0] + rect[2], rect[1])])
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function

@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-04-25 12:03 AM
-"""Some utility functions for geometry"""
+"""
+=========================
+General utility functions
+=========================
+
+"""
 from typing import Tuple, List, Dict, Set
 import sys
 import cv2
@@ -19,6 +24,7 @@ from argos.constants import OutlineStyle, DistanceMetric
 
 
 def init():
+    """Initialize logging and Qt settings."""
     qc.QCoreApplication.setOrganizationName('NIH')
     qc.QCoreApplication.setOrganizationDomain('nih.gov')
     qc.QCoreApplication.setApplicationName('Argos')
@@ -34,49 +40,28 @@ def init():
     return settings
 
 
-def rectpoly_points(p0: tuple, p1: tuple) -> tuple:
-    """Generate four clockwise corner positions starting from
-    top left of the rectangle with any pair of diagonal points `p0` and `p1`"""
-    x = p0[0], p1[0]
-    y = p0[1], p1[1]
-    xleft = min(x)
-    w = max(x) - xleft
-    ytop = min(y)
-    h = max(y) - ytop
-    return rect2points(np.array((xleft, ytop, w, h)))
-
-
-def points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
-    """:returns a rectangle with diagonal corners `p0` and `p1`
-    after scaling by `scale`. This will work with both top-left - bottom-right
-    and bottom-left - top-right diagonals.
-    """
-    x = p0[0], p1[0]
-    y = p0[1], p1[1]
-    xleft = min(x)
-    w = max(x) - xleft
-    ytop = min(y)
-    h = max(y) - ytop
-    return np.array((xleft, ytop, w, h))
-
-
-def poly2xyrh(vtx):
-    """Convert clockwise vertices into centre, aspect ratio, height format"""
-    x0, y0 = vtx[0]
-    x1, y1 = vtx[2]
-    w = x1 - x0
-    h = y1 - y0
-    return (x0 + x1) / 2.0, (y0 + y1) / 2.0, w / float(h), float(h)
-
-
 def to_qpolygon(points, scale=1.0):
+    """Convert a sequence of (x, y) points into a `qg.QPolygonF`.
+
+    """
     return qg.QPolygonF(
         [qc.QPointF(p0 * scale, p1 * scale) for p0, p1 in points])
 
 
 def cond_bbox_overlap(ra, rb, min_iou):
-    """Check if IoU of axis-aligned bounding boxes is at least `min_iou`
-    ra, rb: rectangles specified as (x, y, w, h)
+    """Check if IoU of axis-aligned bounding boxes overlap.
+
+    Parameters
+    ----------
+    ra, rb: array like
+        Rectangles specified as (x, y, w, h)
+    min_iou: flat
+        Minimum value of IoU to consider overlap.
+
+    Returns
+    -------
+    bool
+        True if `ra` and `rb` have IoU >= `min_iou`. False otherwise.
     """
     return rect_iou(ra, rb) >= min_iou
 
@@ -84,6 +69,7 @@ def cond_bbox_overlap(ra, rb, min_iou):
 def cond_minrect_overlap(ra, rb, min_iou):
     """Check if IoU of minimum area (rotated) bounding rectangles is at least
     `min_iou`.
+
     Parameters
     ----------
     ra: array like
@@ -92,10 +78,11 @@ def cond_minrect_overlap(ra, rb, min_iou):
         Second rectangle defined by the coordinates of four corners.
     min_iou: float
         Minimum overlap defined by intersection over union of bounding boxes.
+
     Returns
     -------
     bool
-        True if area of overlap is greater or equal `min_iou`.
+        True if area of overlap is greater or equal to `min_iou`.
     """
     area_i, _ = cv2.intersectConvexConvex(ra, rb)
     area_u = cv2.contourArea(ra) + cv2.contourArea(rb) - area_i
@@ -121,6 +108,7 @@ def cond_proximity(points_a, points_b, min_dist):
         Sequence of points
     min_dist: float
         Minimum distance.
+
     Returns
     -------
     bool
@@ -146,9 +134,10 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
         reads images in BGR instead of RGB format) array.
     copy: bool, default False
         If True Make a copy of the image data.
+
     Returns
     -------
-    QtGui.QImage
+    qg.QImage
         Converted image.
     """
     if (len(frame.shape) == 3) and (frame.shape[2] == 3):
@@ -185,6 +174,27 @@ except ImportError as err:
     logging.info(
         'Could not load C-utilities with pyximport. Using pure Python.')
     logging.info(f'{err}')
+
+
+    def points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
+        """Convert diagonally opposite vertices into (x, y, w, h) format
+        rectangle.
+
+        Returns
+        -------
+        np.ndarray:
+            Rectangle with diagonal corners `p0` and `p1` after scaling
+            by `scale`. This will work with both top-left - bottom-right
+            and bottom-left - top-right diagonals.
+
+        """
+        x = p0[0], p1[0]
+        y = p0[1], p1[1]
+        xleft = min(x)
+        w = max(x) - xleft
+        ytop = min(y)
+        h = max(y) - ytop
+        return np.array((xleft, ytop, w, h))
 
 
     def rect2points(rect: np.ndarray) -> np.ndarray:
@@ -321,6 +331,7 @@ except ImportError as err:
            used (calculating square root is expensive and unnecessary. If
            `DistanceMetric.iou`, use the area of intersection divided by the
            area of union.
+
         Returns
         --------
         np.ndarray
@@ -376,7 +387,6 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         `DistanceMetric.euclidean` for Euclidean distance between centers of the
         boxes. `DistanceMetric.iou` for area of inetersection over union of the
         boxes,
-
 
     Returns
     -------
@@ -469,6 +479,7 @@ def get_cmap_color(num, maxnum, cmap):
         Normalize `num` by this value.
     cmap: str
         Name of colormap
+
     Returns
     -------
     tuple: (r, g, b)
