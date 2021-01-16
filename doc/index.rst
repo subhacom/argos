@@ -8,8 +8,9 @@ Welcome to Argos's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:	     
+   :caption: Contents:
 
+   install
    user 
    api
 		
