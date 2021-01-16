@@ -78,9 +78,9 @@ presented (:numref:`track_startup`).
       value higher, you can exclude spurious detection. Set it too
       high, and decent detections may be rejected.
 
-   3. ``Merge overlaps more than``: If two detcted objects' bounding
-       boxes overlap more than this fraction of the smaller one, then
-       consider them parts of the same object.
+   3. ``Merge overlaps more than``: If the bounding boxes of two
+       detcted objects overlap more than this fraction of the smaller
+       one, then consider them parts of the same object.
 
    The next panel, ``Size limits`` allows you to filter objects that
    are too big or too small. Here you can specify the minimum and

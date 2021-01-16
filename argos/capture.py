@@ -14,11 +14,22 @@ Usage:
 
 To see a list of all options try ``python -m argos.capture -h``
 
-This is a simple tool to capture video along with timestamp for each
-frame using a camera. It can also be used for recording videos only
-when some movement is detected. When applied to a pre-recorded video
-file, enabling motion-based capture will keep only those frames
-between which *significant movement* has been detected.
+The above command will take a snapshot with the default camera on your
+computer and ask you to select the region of interest. Click your left
+mouse button on one corner of the region of interest and drag to draw
+a rectangle. Press ``Enter`` key when done (you may need to press it
+twice). If you want to change the selection, or moved the camera to
+adjust focus or frame, press ``C`` on the keyboard to update the image
+and draw the ROI again. Press ``Enter`` to start recording. This will
+create two files, ``myvideo_motion_cap.avi`` containing the recorded
+video and ``myvideo_motion_cap.avi.csv`` with the timestamp of each
+frame.
+
+`argos.capture` is a simple tool to capture video along with timestamp
+for each frame using a camera. It can also be used for recording
+videos only when some movement is detected. When applied to a
+pre-recorded video file, enabling motion-based capture will keep only
+those frames between which *significant movement* has been detected.
 
 What is significant movement?
 
