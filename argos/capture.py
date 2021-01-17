@@ -191,6 +191,8 @@ except ImportError as err:
             print(f'Suggested size: {params["width"]}x{params["height"]}')
             print(f'Actual size: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x'
                   f'{cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}')
+            if params['config']:
+                cap.set(cv2.CAP_PROP_SETUP, 1)
         else:
             tstart = datetime.fromtimestamp(time.mktime(time.localtime(
                 os.path.getmtime(input_))))
@@ -485,6 +487,8 @@ def make_parser():
                               help='Frame width')
     camera_group.add_argument('--height', type=int, default=-1,
                               help='Frame height')
+    parser.add_argument('--config', action='store_true',
+                        help='Show dialog to configure camera.')
     # parser.add_argument('--logbuf', action='store_true',
     #                     help='Buffer the log messages to improve speed')
     return parser
@@ -520,6 +524,7 @@ if __name__ == '__main__':
                  params['duration'],
                  params['max_frames'],
                  params['motion_based'],
+                 params['config'],
                  params['threshold'],
                  params['min_area'],
                  params['kernel_width'])

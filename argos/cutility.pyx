@@ -10,7 +10,7 @@ from argos.constants import OutlineStyle, DistanceMetric
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
+cpdef np.ndarray points2rect(p0: np.ndarray, p1: np.ndarray):
     """Convert diagonally opposite vertices into (x, y, w, h) format
     rectangle.
 

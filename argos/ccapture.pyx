@@ -61,6 +61,7 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
                     double duration,
                     long max_frames,
                     bint motion_based=False,
+                    bint config=False,
                     int threshold=100,
                     int min_area=100,
                     int kernel_width=21):
@@ -94,6 +95,8 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         if fps > 0:
             cap.set(cv2.CAP_PROP_FPS, fps)
+        if config:
+            cap.set(cv2.CAP_PROP_SETTINGS, 1)
         print(f'Camera FPS set to {fps}')
         tstart = datetime.now()
         w_ = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
