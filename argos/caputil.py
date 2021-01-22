@@ -1,12 +1,12 @@
-# caputil.py --- 
-# 
+# caputil.py ---
+#
 # Filename: caputil.py
-# Description: 
+# Description:
 # Author: Subhasis Ray
 # Created: Tue Jan 12 23:21:16 2021 (-0500)
-# Last-Updated: Thu Jan 14 20:42:28 2021 (-0500)
+# Last-Updated: Fri Jan 22 17:00:35 2021 (-0500)
 #           By: Subhasis Ray
-# 
+#
 
 # Code:
 
@@ -49,7 +49,7 @@ def get_roi(input_, width, height):
     Returns
     -------
     tuple
-        (x, y, w, h, width, height) where the first four specify ROI, 
+        (x, y, w, h, width, height) where the first four specify ROI,
         the last two actual frame width and height.
     """
     roi = 'Select ROI. Press ENTER when done, C to try again'
@@ -139,15 +139,20 @@ def get_video_fps(fname):
         File path.
     Returns
     -------
-    float
+    fps: float
         Frame rate of video (frames per second).
+    width: int
+        Actual frame width.
+    height: int
+        Actual frame height.
     """
-    
     cap = cv2.VideoCapture(fname)
     assert cap.isOpened(), f'Could not open video file {fname}'
     fps = cap.get(cv2.CAP_PROP_FPS)
+    width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     cap.release()
-    return fps
+    return fps, int(width), int(height)
 
-# 
+#
 # caputil.py ends here
