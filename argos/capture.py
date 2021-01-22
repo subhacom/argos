@@ -167,7 +167,7 @@ except ImportError as err:
             input_ = int(params['input'])
         except ValueError:
             input_ = params['input']
-        win_name = 'Video'
+        win_name = f'Input: {input_}'
         if params['interactive']:
             cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         print(f'Opening input: {input_} of type '
