@@ -8,7 +8,7 @@
 ========================
 Capture or process video
 ========================
-Usage: 
+Usage:
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
@@ -58,8 +58,8 @@ format requires H.264 library, which can be installed as follows:
   https://github.com/cisco/openh264/releases and save them in your
   library path.
 
-Common problem 
--------------- 
+Common problem
+--------------
 
 When trying to use H264 format for saving video, you may see the
 following error:
@@ -68,7 +68,7 @@ following error:
     OpenCV: FFMPEG: tag 0x34363248/'H264' is not supported with codec id 27 and
     format \'mp4 / MP4 (MPEG-4 Part 14)\'
     OpenCV: FFMPEG: fallback to use tag 0x31637661/\'avc1\'
-    
+
             OpenH264 Video Codec provided by Cisco Systems, Inc.
 
 
@@ -126,7 +126,7 @@ except ImportError as err:
           ' Using pure Python.')
     print(err)
 
-    
+
     def check_motion(current, prev, threshold, min_area, kernel_width=21,
                      show_diff=False):
         gray_cur = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
@@ -161,13 +161,13 @@ except ImportError as err:
                            if cv2.contourArea(contour) > min_area]
         return len(moving_contours) > 0
 
-    
+
     def vcapture(params):
         try:
             input_ = int(params['input'])
         except ValueError:
             input_ = params['input']
-        win_name = 'Video'
+        win_name = f'Input: {input_}'
         if params['interactive']:
             cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         print(f'Opening input: {input_} of type '
@@ -272,7 +272,7 @@ except ImportError as err:
                                         show_diff=params['show_diff'])
                 elif params['interval'] > 0:
                     save = time_delta >= params['interval']
-                    
+
                 if save:
                     prev_frame = frame.copy()
                     tstring = ts.isoformat()
@@ -350,21 +350,22 @@ def check_params(args):
     params = {}
     params.update(args)
     input_ = params['input']
+    camera = False
     try:
         input_ = int(input_)
         camera = True
     except ValueError:
         assert len(input_.strip()) > 0, \
             'Input must be a number or path to a video file'
-        
+
     if camera:
         fps, width, height = caputil.get_camera_fps(
             input_,
             params['width'],
             params['height'], fps=30, nframes=30)
     else:
-        fps = caputil.get_video_fps(input_)
-    print(f'Detected effective input FPS = {fps}')        
+        fps, width, height = caputil.get_video_fps(input_)
+    print(f'Detected effective input FPS = {fps}')
     if params['fps'] <= 0:
             params['fps'] = fps
     if params['width'] <= 0 or params['height'] <= 0:
@@ -505,7 +506,7 @@ if __name__ == '__main__':
     else:
         roi_x, roi_y, roi_w, roi_h, width, height = caputil.get_roi(
             params['input'], params['width'], params['height'])
-        
+
     params.update({'roi_x': roi_x,
                    'roi_y': roi_y,
                    'roi_w': roi_w,
