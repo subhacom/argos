@@ -49,8 +49,9 @@ from argparse import ArgumentParser
 
 
 def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
-                bbox_alpha=(0.0, 1.0), plot_alpha=1.0,
-                quiver=True, qcmap='hot', vidfile=None, frame=-1):
+                bbox_alpha=(0.0, 1.0), plot_alpha=1.0, quiver=True,
+                qcmap='hot', vidfile=None, frame=-1, gray=False,
+                axes=False):
     if trackfile.endswith('.csv'):
         tracks = pd.read_csv(trackfile)
     else:
@@ -58,6 +59,7 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
     tracks.describe()
     print('%%%%', bbox_alpha)
     img = None
+    fig, ax = plt.subplots()
     if vidfile is not None:
         cap = cv2.VideoCapture(vidfile)
         if frame < 0:
@@ -67,10 +69,23 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
         if img is None:
             print('Could not read image')
         elif img.shape[-1] == 3:  # BGR
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    fig, ax = plt.subplots()
+            if gray:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)                
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        elif len(img.shape) == 2:
+            gray = True
     if img is not None:
-        ax.imshow(img, origin='upper')
+        if gray:
+            ax.imshow(img, origin='upper', cmap='gray')
+        else:
+            ax.imshow(img, origin='upper')
+        if not axes:
+            ax.xaxis.set_visible(False)
+            ax.yaxis.set_visible(False)
+            [ax.spines[s].set_visible(False)
+             for s in ['left', 'bottom', 'top', 'right']]
+        
     for trackid, trackgrp in tracks.groupby('trackid'):
         pos = trackgrp.sort_values(by='frame')
         cx = pos.x + pos.w / 2.0
@@ -112,7 +127,12 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
 def play_tracks(vidfile, trackfile, lw=2, color='auto',
                 fontscale=1, fthickness=1,
                 torigfile=None, tmtfile=None,
-                vout=None, outfmt='MJPG', fps=None):
+                vout=None, outfmt='MJPG', fps=None,
+                timestamp=False, skipempty=False):
+    """
+    skipempty: bool
+        skip frames without any track 
+    """
     cap = cv2.VideoCapture(vidfile)
     frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     if not cap.isOpened():
@@ -168,21 +188,25 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
         out = cv2.VideoWriter(vout, fourcc, fps,
                               (width, height))
         print(f'Saving video with tracks in {vout}. Video format {outfmt}')
-
-    for frame_no, trackdata in tracks.groupby('frame'):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_no))
+    frame_no = -1
+    while True:
         ret, frame = cap.read()
         if frame is None:
             print('End at frame', frame_no)
             break
-        cv2.putText(frame, str(int(frame_no)), (100, 100),
-                    cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
-                    fthickness, cv2.LINE_AA)
-        ts = timestamps[timestamps['frame'] == frame_no]['timestamp'].iloc[0]
-        cv2.putText(frame, str(ts), (frame.shape[1] - 200, 100),
-                    cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
-                    fthickness, cv2.LINE_AA)
-        for idx, row in trackdata.iterrows():
+        frame_no += 1
+        trackdata = tracks[tracks.frame == frame_no]
+        if (len(trackdata) == 0) and skipempty:
+            continue
+        if timestamp:
+            cv2.putText(frame, str(int(frame_no)), (100, 100),
+                        cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
+                        fthickness, cv2.LINE_AA)
+            ts = timestamps[timestamps['frame'] == frame_no]['timestamp'].iloc[0]
+            cv2.putText(frame, str(ts), (frame.shape[1] - 200, 100),
+                        cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
+                        fthickness, cv2.LINE_AA)
+        for row in trackdata.itertuples():
             # print(f'{row.x}\n{row.y}\n{row.w}\n=====')
             id_ = int(row.trackid)
             print(id_, colors[id_])
@@ -253,24 +277,33 @@ def make_parser():
                         help='Save video in this file')
     parser.add_argument('--vfmt', type=str, default='MJPG',
                         help='Output video format')
-
+    parser.add_argument('--gray', action='store_true',
+                        help='Make plot background image gray')    
+    parser.add_argument('--timestamp', action='store_true',
+                        help='Enable time stamp and frame no in video display')
+    parser.add_argument('--axes', action='store_true',
+                        help='Show axes in plot overlayed on image')
+    parser.add_argument('--play', action='store_true',
+                        help='Play video with bounding boxes')
     return parser
 
 
 if __name__ == '__main__':
     args = make_parser().parse_args()
-    if args.video is not None:
+    if (args.video is not None) and args.play:
         play_tracks(args.video, args.data, lw=args.vlw, fontscale=args.fs,
                     fthickness=args.ft,
                     torigfile=args.torig,
                     tmtfile=args.tmt,
                     vout=args.vout,
-                    outfmt=args.vfmt, fps=args.fps)
+                    outfmt=args.vfmt, fps=args.fps, timestamp=args.timestamp)
     fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms,
                       show_bbox=args.bbox, bbox_alpha=(args.af, args.al),
                       plot_alpha=args.ap,
                       quiver=args.quiver, qcmap=args.qcmap,
-                      frame=args.bgframe)
+                      frame=args.bgframe,
+                      gray=args.gray,
+                      axes=args.axes)
     fig.set_size_inches(args.wp, args.hp)
     if args.fplot is not None:
         fig.savefig(args.fplot, transparent=True)

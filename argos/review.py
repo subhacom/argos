@@ -565,7 +565,13 @@ class TrackReader(qc.QObject):
             data.to_csv(filepath, index=False)
         else:
             data.to_hdf(filepath, 'tracked', mode='a')
-            changes = pd.DataFrame(data=self.change_list, columns=Change._fields)
+            changes = [(change.frame, change.change.name,
+                        change.change.value, change.orig, change.new)
+                       for change in self.change_list if change.frame
+                       not in self.undone_changes]
+            changes = pd.DataFrame(data=changes,
+                                   columns=['frame', 'change',
+                                            'code', 'orig', 'new'])
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             changes.to_hdf(filepath, f'changes/changelist_{ts}', mode='a')
         self.track_data = data
@@ -1516,8 +1522,8 @@ class ReviewWidget(qw.QWidget):
             return
         change_frames = [change.frame for change in
                          self.track_reader.change_list
-                           if
-                           change.frame not in self.track_reader.undone_changes]
+                         if change.frame not in
+                         self.track_reader.undone_changes]
         pos = np.searchsorted(change_frames, self.frame_no, side='right')
         if pos > len(change_frames):
             return
@@ -1529,8 +1535,8 @@ class ReviewWidget(qw.QWidget):
             return
         change_frames = [change.frame for change in
                          self.track_reader.change_list
-                         if
-                         change.frame not in self.track_reader.undone_changes]
+                         if change.frame not in
+                         self.track_reader.undone_changes]
         pos = np.searchsorted(change_frames, self.frame_no, side='left') - 1
         if pos < 0:
             return
@@ -1573,7 +1579,8 @@ class ReviewWidget(qw.QWidget):
             self.changelist_widget.setVisible(False)
             return
         change_list = [change for change in self.track_reader.change_list
-                        if change.frame not in self.track_reader.undone_changes]
+                        if change.frame not in
+                       self.track_reader.undone_changes]
         self.changelist_widget.setChangeList(change_list)
         self.changelist_widget.setVisible(True)
 
@@ -1882,7 +1889,8 @@ class ReviewWidget(qw.QWidget):
         # self._wait_cond.set()
         self.vid_info.close()
         self.changelist_widget.close()
-        if self.track_reader is not None and len(self.track_reader.change_list) > 0:
+        if self.track_reader is not None and  \
+                       len(self.track_reader.change_list) > 0:
             self.saveReviewedTracks()
         diff = 0
         if self.showNewAction.isChecked():
@@ -1890,7 +1898,8 @@ class ReviewWidget(qw.QWidget):
         elif self.showDifferenceAction.isChecked():
             diff = 2
         settings.setValue('review/showdiff', diff)
-        settings.setValue('review/disable_seek', self.disableSeekAction.isChecked())
+        settings.setValue('review/disable_seek',
+                          self.disableSeekAction.isChecked())
         self.sigQuit.emit()
 
     @qc.pyqtSlot(bool)
