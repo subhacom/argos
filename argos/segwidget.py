@@ -574,10 +574,10 @@ class SegWidget(qw.QWidget):
         layout.addRow(self._intermediate_label, self._intermediate_combo)
 
         self._outline_label = qw.QLabel('Boundary style')
-        self.outline_combo = qw.QComboBox()
-        self.outline_combo.addItems(list(outline_dict.keys()))
-        self.outline_combo.currentTextChanged.connect(self.setOutlineStyle)
-        layout.addRow(self._outline_label, self.outline_combo)
+        self.outlineCombo = qw.QComboBox()
+        self.outlineCombo.addItems(list(outline_dict.keys()))
+        self.outlineCombo.currentTextChanged.connect(self.setOutlineStyle)
+        layout.addRow(self._outline_label, self.outlineCombo)
 
         self.setLayout(layout)
 
@@ -652,8 +652,8 @@ class SegWidget(qw.QWidget):
         self.sigSetOutlineStyle.emit(outline_dict[style])
 
     def fixBboxOutline(self) -> None:
-        self.outline_combo.setCurrentText('bbox')
-        self.outline_combo.setEnabled(False)
+        self.outlineCombo.setCurrentText('bbox')
+        self.outlineCombo.setEnabled(False)
         # self.sigSetOutlineStyle.emit(outline_dict['bbox'])
 
     @qc.pyqtSlot(str)

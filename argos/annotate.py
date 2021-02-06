@@ -375,7 +375,7 @@ class TrainingWidget(qw.QMainWindow):
         self.displayCoco = True
         self.numCrops = 1  # number of random crops to generate if input image is bigger than training image size
         self.saved = True
-        self.validation_frac = 0.3
+        self.validationFrac = 0.3
         self.description = ''
         self.licenseName = ''
         self.licenseUrl = ''
@@ -387,7 +387,7 @@ class TrainingWidget(qw.QMainWindow):
         self.imageFiles = []
         self.imageIndex = -1
         self.trainingDir = 'training'
-        self.validation_dir = 'validation'
+        self.validationDir = 'validation'
         self.outputDir = settings.value('training/outdir', '.')
         self.baseconfigName = ''
         for name in dir(yconfig):
@@ -401,7 +401,7 @@ class TrainingWidget(qw.QMainWindow):
         self.segDict = {}  # dict containing segmentation info for each file
         self.segWidget = SegWidget()
         self.segWidget.setSegmentationMethod('Contour')
-        self.segWidget.outline_combo.setCurrentText('contour')
+        self.segWidget.outlineCombo.setCurrentText('contour')
         self.segWidget.setOutlineStyle('contour')
         self.limitsWidget = LimitsWidget()
         self.segDock = qw.QDockWidget('Segmentation settings')
@@ -452,39 +452,40 @@ class TrainingWidget(qw.QMainWindow):
         self.sigQuit.connect(self.segWidget.sigQuit)
         self.sigQuit.connect(self.limitsWidget.sigQuit)
         self._makeShortcuts()
+        self._makeConnections()
         self.openImageDir()
         self.statusBar().showMessage('Press `Next image` to start segmenting')
 
     def _makeFileDock(self):
-        self.file_dock = qw.QDockWidget('Files/Dirs')
+        self.fileDock = qw.QDockWidget('Files/Dirs')
 
         dirlayout = qw.QFormLayout()
-        self.out_dir_label = qw.QLabel('Output directory for training data')
-        self.out_dir_name = qw.QLabel(self.outputDir)
-        dirlayout.addRow(self.out_dir_label, self.out_dir_name)
+        self.outDirLabel = qw.QLabel('Output directory for training data')
+        self.outDirName = qw.QLabel(self.outputDir)
+        dirlayout.addRow(self.outDirLabel, self.outDirName)
         self.imageDirLabel = qw.QLabel('Input image directory')
         self.imageDirName = qw.QLabel(self.imageDir)
         dirlayout.addRow(self.imageDirLabel, self.imageDirName)
-        self.dir_widget = qw.QWidget()
-        self.dir_widget.setLayout(dirlayout)
+        self.dirWidget = qw.QWidget()
+        self.dirWidget.setLayout(dirlayout)
 
         self.fileView = qw.QListView()
         self.fileView.setSizeAdjustPolicy(qw.QListWidget.AdjustToContents)
-        self.file_model = qw.QFileSystemModel()
-        self.file_model.setFilter(qc.QDir.NoDotAndDotDot | qc.QDir.Files)
-        self.fileView.setModel(self.file_model)
-        self.fileView.setRootIndex(self.file_model.setRootPath(self.imageDir))
+        self.fileModel = qw.QFileSystemModel()
+        self.fileModel.setFilter(qc.QDir.NoDotAndDotDot | qc.QDir.Files)
+        self.fileView.setModel(self.fileModel)
+        self.fileView.setRootIndex(self.fileModel.setRootPath(self.imageDir))
         self.fileView.selectionModel().selectionChanged.connect(self.handleFileSelectionChanged)
 
         self.fwidget = qw.QWidget()
         layout = qw.QVBoxLayout()
-        layout.addWidget(self.dir_widget)
+        layout.addWidget(self.dirWidget)
         layout.addWidget(self.fileView)
         self.fwidget.setLayout(layout)
-        self.file_dock.setWidget(self.fwidget)
-        self.file_dock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
-                                       qc.Qt.RightDockWidgetArea)
-        self.addDockWidget(qc.Qt.RightDockWidgetArea, self.file_dock)
+        self.fileDock.setWidget(self.fwidget)
+        self.fileDock.setAllowedAreas(qc.Qt.LeftDockWidgetArea |
+                                      qc.Qt.RightDockWidgetArea)
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self.fileDock)
 
     def _makeSegDock(self):
         self.nextButton = qw.QToolButton()
@@ -504,14 +505,14 @@ class TrainingWidget(qw.QMainWindow):
         self.batchSegment_button.setDefaultAction(self.batchSegmentAction)
         self.batchSegment_button.setSizePolicy(qw.QSizePolicy.Minimum,
                                        qw.QSizePolicy.MinimumExpanding)
-        self.clear_cur_button = qw.QToolButton()
-        self.clear_cur_button.setSizePolicy(qw.QSizePolicy.Minimum,
-                                       qw.QSizePolicy.MinimumExpanding)
-        self.clear_cur_button.setDefaultAction(self.clearCurrentAction)
-        self.clear_all_button = qw.QToolButton()
-        self.clear_all_button.setSizePolicy(qw.QSizePolicy.Minimum,
-                                       qw.QSizePolicy.MinimumExpanding)
-        self.clear_all_button.setDefaultAction(self.clearAllAction)
+        self.clearCurButton = qw.QToolButton()
+        self.clearCurButton.setSizePolicy(qw.QSizePolicy.Minimum,
+                                          qw.QSizePolicy.MinimumExpanding)
+        self.clearCurButton.setDefaultAction(self.clearCurrentAction)
+        self.clearAllButton = qw.QToolButton()
+        self.clearAllButton.setSizePolicy(qw.QSizePolicy.Minimum,
+                                          qw.QSizePolicy.MinimumExpanding)
+        self.clearAllButton.setDefaultAction(self.clearAllAction)
         # self.export_button = qw.QToolButton()
         # self.export_button.setDefaultAction(self.exportSegmentationAction)
         # layout.addWidget(self.export_button)
@@ -534,8 +535,8 @@ class TrainingWidget(qw.QMainWindow):
         layout.addWidget(self.nextButton)
         layout.addWidget(self.prev_button)
         layout.addWidget(self.resegment_button)
-        layout.addWidget(self.clear_cur_button)
-        layout.addWidget(self.clear_all_button)
+        layout.addWidget(self.clearCurButton)
+        layout.addWidget(self.clearAllButton)
         widget = qw.QWidget()
         widget.setLayout(layout)
         self.segDock = qw.QDockWidget('Segmented objects')
@@ -569,6 +570,18 @@ class TrainingWidget(qw.QMainWindow):
         self.saveSegmentationAction.triggered.connect(self.saveSegmentation)
         self.loadSegmentationsAction = qw.QAction('&Open saved segmentations (Ctrl+O)')
         self.loadSegmentationsAction.triggered.connect(self.loadSegmentation)
+
+        # Views of the dock widgets
+        self.showFileDockAction = qw.QAction('Directory listing')
+        self.showFileDockAction.setCheckable(True)
+        self.showFileDockAction.setChecked(True)
+        self.showSegDockAction = qw.QAction('Segmentation settings')
+        self.showSegDockAction.setCheckable(True)
+        self.showSegDockAction.setChecked(True)
+        self.showActionsDockAction = qw.QAction('Segmentation actions')
+        self.showActionsDockAction.setCheckable(True)
+        self.showActionsDockAction.setChecked(True)
+
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
         v = settings.value('ytrainer/debug', logging.INFO)
@@ -615,6 +628,13 @@ class TrainingWidget(qw.QMainWindow):
         self.exportKey = qw.QShortcut(qg.QKeySequence('Ctrl+E'), self)
         self.exportKey.activated.connect(self.exportSegmentation)
 
+    def _makeConnections(self):
+        """separated from creating actions because they refer to objects that
+        are created after the actions."""
+        self.showFileDockAction.triggered.connect(self.fileDock.setVisible)
+        self.showSegDockAction.triggered.connect(self.segDock.setVisible)
+        self.showActionsDockAction.triggered.connect(self.fileDock.setVisible)
+
     def _makeMenuBar(self):
         self.fileMenu = self.menuBar().addMenu('&File')
         self.fileMenu.addActions([self.imagedirAction,
@@ -637,6 +657,10 @@ class TrainingWidget(qw.QMainWindow):
                                   self.displayWidget.lineWidthAction,
                                   self.displayWidget.fontSizeAction,
                                   self.displayWidget.relativeFontSizeAction])
+        self.docksMenu = self.viewMenu.addMenu('Dock widgets')
+        self.docksMenu.addActions([self.showFileDockAction,
+                                  self.showSegDockAction,
+                                  self.showActionsDockAction])
         self.advancedMenu = self.menuBar().addMenu('Advanced')
         self.advancedMenu.addAction(self.debugAction)
 
@@ -671,7 +695,7 @@ class TrainingWidget(qw.QMainWindow):
             qw.QMessageBox.critical(self, 'Could not open image directory',
                                     str(err))
             return
-        self.fileView.setRootIndex(self.file_model.setRootPath(self.imageDir))
+        self.fileView.setRootIndex(self.fileModel.setRootPath(self.imageDir))
 
     def setOutputDir(self):
         directory = settings.value('training/outdir', '.')
@@ -683,7 +707,7 @@ class TrainingWidget(qw.QMainWindow):
             return
         try:
             self.outputDir = directory
-            self.out_dir_name.setText(directory)
+            self.outDirName.setText(directory)
             settings.setValue('training/outdir', directory)
         except IOError as err:
             qw.QMessageBox.critical(self,
@@ -732,7 +756,7 @@ class TrainingWidget(qw.QMainWindow):
         indices = selection.indexes()
         if len(indices) == 0:
             return
-        fname = self.file_model.data(indices[0])
+        fname = self.fileModel.data(indices[0])
         index = self.imageFiles.index(os.path.join(self.imageDir, fname))
         self.gotoFrame(index)
 
@@ -909,10 +933,10 @@ class TrainingWidget(qw.QMainWindow):
         layout.addRow(baseConfigLabel, baseConfigCombo)
 
         valLabel = qw.QLabel('Use % of images for validation')
-        valText = qw.QLineEdit(str(int(self.validation_frac * 100)))
+        valText = qw.QLineEdit(str(int(self.validationFrac * 100)))
 
         def setValFrac():
-            self.validation_frac = float(valText.text()) / 100
+            self.validationFrac = float(valText.text()) / 100
 
         valText.editingFinished.connect(setValFrac)
         layout.addRow(valLabel, valText)
@@ -980,7 +1004,7 @@ class TrainingWidget(qw.QMainWindow):
         ts = datetime.now()
 
         accepted = self._makeCocoDialog()
-        validationCount = int(len(self.imageFiles) * self.validation_frac)
+        validationCount = int(len(self.imageFiles) * self.validationFrac)
         trainingCount = len(self.imageFiles) - validationCount
         trainingList = random.sample(self.imageFiles, trainingCount)
         self.dumpCocoJson(trainingList, trainDir, ts,

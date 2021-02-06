@@ -50,7 +50,8 @@ from argparse import ArgumentParser
 
 def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
                 bbox_alpha=(0.0, 1.0), plot_alpha=1.0, quiver=True,
-                qcmap='hot', vidfile=None, frame=-1, gray=False,
+                qcmap='hot', qwidth=-1, vidfile=None, frame=-1, gray=False,
+                randcolor=True,
                 axes=False):
     if trackfile.endswith('.csv'):
         tracks = pd.read_csv(trackfile)
@@ -85,6 +86,8 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
             ax.yaxis.set_visible(False)
             [ax.spines[s].set_visible(False)
              for s in ['left', 'bottom', 'top', 'right']]
+
+    print('Unique tracks:', len(tracks.trackid.unique()))
         
     for trackid, trackgrp in tracks.groupby('trackid'):
         pos = trackgrp.sort_values(by='frame')
@@ -115,10 +118,20 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
             u = np.diff(cx)
             v = np.diff(cy)
             c = np.linspace(0, 1, len(u))
-            ax.quiver(cx[:-1], cy[:-1], u, v, c, scale_units='xy', angles='xy',
-                      scale=1, cmap=qcmap)
-        else:
+            if qwidth <= 0:
+                ax.quiver(cx[:-1], cy[:-1], u, v, c,
+                          scale_units='xy', angles='xy',
+                          scale=1, cmap=qcmap)
+            else:
+                ax.quiver(cx[:-1], cy[:-1], u, v, c,
+                          units='xy',
+                          scale_units='xy', angles='xy',
+                          scale=1, width=qwidth, cmap=qcmap)
+        elif randcolor:
             plt.plot(cx, cy, '.-', color=color, ms=ms, alpha=plot_alpha,
+                     label=str(trackid))
+        else:
+            plt.plot(cx, cy, '.-', ms=ms, alpha=plot_alpha,
                      label=str(trackid))
     fig.tight_layout()
     return fig
@@ -243,6 +256,9 @@ def make_parser():
     parser.add_argument('--qcmap', default='hot',
                         help='Colormap used in quiver plot. This can be any'
                         ' colormap name defined in the matplotlib library')
+    parser.add_argument('--qwidth', type=float, default=-1.0,
+                        help='Whether to scale vectors by magnitude in quiver'
+                             ' plot.')
     parser.add_argument('-b', '--bbox', action='store_true',
                         help='Show bounding boxes of tracked objects')
     parser.add_argument('--af', default=0.0, type=float,
@@ -285,6 +301,9 @@ def make_parser():
                         help='Show axes in plot overlayed on image')
     parser.add_argument('--play', action='store_true',
                         help='Play video with bounding boxes')
+    parser.add_argument('--randcolor', action='store_true',
+                        help='Use random colors to plot individual tracks '
+                        '(when NOT doing quiver plot)')
     return parser
 
 
@@ -300,10 +319,11 @@ if __name__ == '__main__':
     fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms,
                       show_bbox=args.bbox, bbox_alpha=(args.af, args.al),
                       plot_alpha=args.ap,
-                      quiver=args.quiver, qcmap=args.qcmap,
+                      quiver=args.quiver, qcmap=args.qcmap, qwidth=args.qwidth,
                       frame=args.bgframe,
                       gray=args.gray,
-                      axes=args.axes)
+                      axes=args.axes,
+                      randcolor=args.randcolor)
     fig.set_size_inches(args.wp, args.hp)
     if args.fplot is not None:
         fig.savefig(args.fplot, transparent=True)
