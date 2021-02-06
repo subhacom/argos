@@ -38,6 +38,8 @@ def segment_by_dbscan(binary_img: np.ndarray, eps: float=5.0,
         positions of the pixels belonging to the n-th segmented object.
     """
     indices = np.nonzero(binary_img)
+    if len(indices[0]) == 0:
+        return []
     xy = np.vstack((indices[1], indices[0])).T
     core, labels = cluster.dbscan(xy, eps=eps, min_samples=min_samples,
                                   metric='euclidean', algorithm='auto')
@@ -71,6 +73,7 @@ def segment_by_contours(binary_img: np.ndarray) -> List[np.ndarray]:
                                            cv2.CHAIN_APPROX_SIMPLE)
     # logging.debug(f'Segmented {len(contours)} objects.')
     segmented = np.zeros(binary_img.shape, dtype=np.int32)
+    ii = 0
     for ii, contour in enumerate(contours):
         cv2.drawContours(segmented, [contour], -1, thickness=cv2.FILLED,
                          color=ii + 1)

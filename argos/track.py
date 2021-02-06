@@ -326,6 +326,8 @@ class ArgosMain(qw.QMainWindow):
         self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
         self._video_widget.openAction.triggered.connect(
             self._sort_widget.sigReset)
+        self._video_widget.openAction.triggered.connect(
+            self._csrt_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._video_widget.sigStatusMsg.connect(self.statusMsgSlot)
