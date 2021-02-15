@@ -1071,7 +1071,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot(qc.QPointF)
     def mousePosMessage(self, point:qc.QPointF) -> None:
-        self.sigMousePosMessage.emit(f'X:{point.x()},Y:{point.y()}')
+        self.sigMousePosMessage.emit(f'X:{point.x():.02f},Y:{point.y():.02f}')
 
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
@@ -2150,12 +2150,12 @@ class ReviewerMain(qw.QMainWindow):
         toolbar.addActions(action_menu.actions())
         self.reviewWidget.sigDataFile.connect(self.updateTitle)
         self.sigQuit.connect(self.reviewWidget.doQuit)
+        self.statusLabel = qw.QLabel()
+        self.reviewWidget.sigDiffMessage.connect(self.statusLabel.setText)
+        self.statusBar().addWidget(self.statusLabel)
         self.posLabel = qw.QLabel()
         self.statusBar().addPermanentWidget(self.posLabel)
         self.reviewWidget.sigMousePosMessage.connect(self.posLabel.setText)
-        self.statusLabel = qw.QLabel()
-        self.reviewWidget.sigDiffMessage.connect(self.statusLabel.setText)
-        self.statusBar().addPermanentWidget(self.statusLabel)
         self.setCentralWidget(self.reviewWidget)
 
     @qc.pyqtSlot(bool)
