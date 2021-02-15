@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-09 1:20 PM
-"""
-=========================
+"""=========================
 Review and correct tracks
 =========================
 Usage:
@@ -290,8 +289,57 @@ You can save the list of changes into a text file with comma separated
 values and load them later using entries in the ``File`` menu. The
 changes will become permanent once you save the data (``File->Save
 reviewed data``). However, the resulting HDF5 file will include the
-list of changes inside a time-stamped group, so you can refer back to
-past changes applied to the data
+list of changes in a time-stamped table
+:``changes/changelist_YYYYmmdd_HHMMSS``, so you can refer back to past
+changes applied to the data
+
+Tips 
+---- 
+Swapping and assigning on the same trackid within a single frame can
+be problematic.  Sometimes the tracking algorithm can temporarily
+mislabel tracks. For example, object `A` (ID=1) crosses over
+object `B` (ID=2) and after the crossover object `A` got new
+label as ID=3, and object `B` got mislabelled as ID=1. The
+best order of action here is to 
+
+(a) swap 3 and 1, and then 
+(b) assign 2 to 3. 
+
+This is because sometimes the label of `B` gets fixed automatically by
+the algorithm after a couple of frames. Since the swap is applied
+first, `B`'s 3 becomes 1, but there is no 1 to be switched to 3, thus
+there is no trackid 3 in the tracks list, and the assignment does not
+happen, and `A` remains 2. Had we first done the assignment and then
+the swap, `B` will get the label 2 from the assignment first, and as
+`A` also has label 2, both of them will become 1 after the swap.
+
+Sometimes this may not be obvious because the IDs may be lost for a
+few frames and later one of the objects re-identified with the old ID
+of the other one.
+
+For example this sequence of events may occur: 
+1. A(1) approaches B(2).
+2. B(2) Id is lost
+3. Both A and B get single bounding box with ID 1.
+4. A gets new ID 3. B is lost.
+5. A has new ID 3, B reappears with 1.
+
+Action sequence to fix this:
+1. Go back where A and B have single ID 1.
+2. Swap 2 and 1.
+3. Go forward when 3 appears on A.
+4. Assign 1 to B.
+
+Whenever there are multiple animals getting too close to each other, a
+good approach is to put a breakpoint when the algorithm confuses them
+for the first time, and slowly go forward several frames to figure out
+what the stable IDs become. Also check how long-lived these IDs are
+(if a new ID is lost after a few frames, it may be less work to just
+delete it, and interpolate the position in between). Then go back and
+make the appropriate changes. Remember that the path history uses the
+original data read from the track file and does not take into account
+any changes you made during a session. To show the updated path, you
+have to first save the data so that all your changes are consolidated.
 
 """
 
@@ -610,36 +658,45 @@ class ReviewScene(FrameScene):
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
         self.historic_track_ls = qc.Qt.DashLine
-        self.hist_gradient = 1
-        self.track_hist = []
-        self.path_cmap = 'viridis'
-        self.track_dia = 5
+        self.histGradient = 1
+        self.trackHist = []
+        self.pathCmap = settings.value('review/path_cmap', 'viridis')
+        self.markerThickness = settings.value('review/marker_thickness', 2.0)
+        self.pathDia = settings.value('review/path_diameter', 5)
 
     @qc.pyqtSlot(int)
     def setHistGradient(self, age: int) -> None:
-        self.hist_gradient = age
+        self.histGradient = age
 
     @qc.pyqtSlot(str)
-    def setPathCmap(self, color: str) -> None:
-        self.path_cmap = color
-    
+    def setPathCmap(self, cmap: str) -> None:
+        self.pathCmap = cmap
+        settings.setValue('review/path_cmap', cmap)
+
+    @qc.pyqtSlot(float)
+    def setTrackMarkerThickness(self, thickness: float) -> None:
+        """Set the thickness of the marker-edge for drawing paths"""
+        self.markerThickness = thickness
+        settings.setValue('review/marker_thickness', thickness)
+
     @qc.pyqtSlot(np.ndarray)
     def showTrackHist(self, track: np.ndarray) -> None:
-        for item in self.track_hist:
+        for item in self.trackHist:
             self.removeItem(item)
-        self.track_hist = []
+        self.trackHist = []
         for ii, t in enumerate(track):
-            color = qg.QColor(*get_cmap_color(ii, len(track), self.path_cmap))
-            self.track_hist.append(self.addEllipse(t[0] - 1,
-                                                   t[1] - 1,
-                                                   self.track_dia + 2,
-                                                   self.track_dia + 2,
-                                                   qg.QPen(color)))
-        # self.track_hist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+            color = qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
+            pen = qg.QPen(qg.QBrush(color), self.markerThickness)
+            self.trackHist.append(self.addEllipse(t[0],
+                                                  t[1],
+                                                  self.pathDia,
+                                                  self.pathDia,
+                                                  pen))
+        # self.trackHist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
 
-    @qc.pyqtSlot(int)
-    def setTrackDia(self, val):
-        self.track_dia = val
+    @qc.pyqtSlot(float)
+    def setPathDia(self, val):
+        self.pathDia = val
     
     @qc.pyqtSlot(dict)
     def setRectangles(self, rects: Dict[int, np.ndarray]) -> None:
@@ -654,7 +711,7 @@ class ReviewScene(FrameScene):
         logging.debug(f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
         logging.debug(f'{self.objectName()} Rectangles: {rects}')
         self.clearItems()
-        self.track_hist = []
+        self.trackHist = []
         logging.debug(f'{self.objectName()} cleared')
 
         for id_, tdata in rects.items():
@@ -669,16 +726,18 @@ class ReviewScene(FrameScene):
             else:
                 color = qg.QColor(self.color)
             # Use transparency to indicate age
-            color.setAlpha(int(255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]), self.hist_gradient) / self.hist_gradient)))
+            alpha = 255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]),
+                                         self.histGradient) / self.histGradient)
+            color.setAlpha(int(alpha))
             pen = qg.QPen(color, self.linewidth)
             if tdata[4] != self.frameno:
                 pen.setStyle(self.historic_track_ls)
                 logging.debug(f'{self.objectName()}: old track : {id_}')
             rect = tdata[:4].copy()
             item = self.addRect(*rect, pen)
-            self.item_dict[id_] = item
+            self.itemDict[id_] = item
             text = self.addText(str(id_), self.font)
-            self.label_dict[id_] = text
+            self.labelDict[id_] = text
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1] - text.boundingRect().height())
             self.polygons[id_] = rect
@@ -694,12 +753,15 @@ class TrackView(FrameView):
     """Visualization of bboxes of objects on video frame with facility to set
     visible area of scene"""
     sigSelected = qc.pyqtSignal(list)
-    sigTrackDia = qc.pyqtSignal(int)
+    sigTrackDia = qc.pyqtSignal(float)
+    sigTrackMarkerThickness = qc.pyqtSignal(float)
 
     def __init__(self, *args, **kwargs):
         super(TrackView, self).__init__(*args, **kwargs)
         self.sigSelected.connect(self.scene().setSelected)
-        self.sigTrackDia.connect(self.scene().setTrackDia)
+        self.sigTrackDia.connect(self.scene().setPathDia)
+        self.sigTrackMarkerThickness.connect(
+            self.scene().setTrackMarkerThickness)
 
     def setViewportRect(self, rect: qc.QRectF) -> None:
         self.fitInView(rect.x(), rect.y(),
@@ -708,17 +770,26 @@ class TrackView(FrameView):
                        qc.Qt.KeepAspectRatio)
 
     def _makeScene(self):
-        self.frame_scene = ReviewScene()
-        self.setScene(self.frame_scene)
+        self.frameScene = ReviewScene()
+        self.setScene(self.frameScene)
 
     @qc.pyqtSlot()
-    def setTrackDia(self):
-        input_, accept = qw.QInputDialog.getInt(
-            self, 'Diameter of track markers',
+    def setPathDia(self):
+        input_, accept = qw.QInputDialog.getDouble(
+            self, 'Diameter of path markers',
             'pixels',
-            self.frame_scene.track_dia, min=0, max=500)
+            self.frameScene.pathDia, min=0, max=500)
         if accept:
-            self.sigTrackDia.emit(input_)        
+            self.sigTrackDia.emit(input_)
+
+    @qc.pyqtSlot()
+    def setTrackMarkerThickness(self):
+        input_, accept = qw.QInputDialog.getDouble(
+            self, 'Thickness of path markers',
+            'pixels',
+            self.frameScene.markerThickness, min=0, max=500)
+        if accept:
+            self.sigTrackMarkerThickness.emit(input_)
 
 
 class TrackList(qw.QListWidget):
@@ -846,6 +917,7 @@ class ReviewWidget(qw.QWidget):
     sigChangeTrack = qc.pyqtSignal(int, int, int)
     sigSetColormap = qc.pyqtSignal(str, int)
     sigDiffMessage = qc.pyqtSignal(str)
+    sigMousePosMessage = qc.pyqtSignal(str)
     sigUndoCurrentChanges = qc.pyqtSignal(int)
     sigDataFile = qc.pyqtSignal(str)
     sigProjectTrackHist = qc.pyqtSignal(np.ndarray)
@@ -883,13 +955,13 @@ class ReviewWidget(qw.QWidget):
         self.save_indicator = None
         layout = qw.QVBoxLayout()
         panes_layout = qw.QHBoxLayout()
-        self.left_view = TrackView()
-        self.left_view.setObjectName('LeftView')
-        self.left_view.frame_scene.setObjectName('LeftScene')
-        # self.left_view.setSizePolicy(qw.QSizePolicy.MinimumExpanding, qw.QSizePolicy.MinimumExpanding)
-        self.left_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        self.left_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        panes_layout.addWidget(self.left_view, 1)
+        self.leftView = TrackView()
+        self.leftView.setObjectName('LeftView')
+        self.leftView.frameScene.setObjectName('LeftScene')
+        # self.leftView.setSizePolicy(qw.QSizePolicy.MinimumExpanding, qw.QSizePolicy.MinimumExpanding)
+        self.leftView.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        self.leftView.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        panes_layout.addWidget(self.leftView, 1)
 
         max_list_width = 100
         self.left_list = TrackList()
@@ -924,15 +996,15 @@ class ReviewWidget(qw.QWidget):
         list_layout.addWidget(self.right_list)
         panes_layout.addLayout(list_layout)
 
-        self.right_view = TrackView()
-        self.right_view.setObjectName('RightView')
-        self.right_view.frame_scene.setObjectName('RightScene')
-        self.right_view.frame_scene.setArenaMode()
-        # self.right_view.setSizePolicy(qw.QSizePolicy.Expanding,
+        self.rightView = TrackView()
+        self.rightView.setObjectName('RightView')
+        self.rightView.frameScene.setObjectName('RightScene')
+        self.rightView.frameScene.setArenaMode()
+        # self.rightView.setSizePolicy(qw.QSizePolicy.Expanding,
         #                              qw.QSizePolicy.Expanding)
-        self.right_view.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        self.right_view.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
-        panes_layout.addWidget(self.right_view, 1)
+        self.rightView.setHorizontalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        self.rightView.setVerticalScrollBarPolicy(qc.Qt.ScrollBarAlwaysOn)
+        panes_layout.addWidget(self.rightView, 1)
         layout.addLayout(panes_layout)
         self.play_button = qw.QPushButton('Play')
         self.slider = qw.QSlider(qc.Qt.Horizontal)
@@ -954,46 +1026,52 @@ class ReviewWidget(qw.QWidget):
         self.makeActions()
         self.makeShortcuts()
         self.timer.timeout.connect(self.nextFrame)
-        self.sigLeftFrame.connect(self.left_view.setFrame)
-        self.sigRightFrame.connect(self.right_view.setFrame)
-        self.right_view.sigArena.connect(self.setRoi)
-        self.right_view.sigArena.connect(self.left_view.frame_scene.setArena)
-        self.sigLeftTracks.connect(self.left_view.sigSetRectangles)
+        self.sigLeftFrame.connect(self.leftView.setFrame)
+        self.sigRightFrame.connect(self.rightView.setFrame)
+        self.rightView.sigArena.connect(self.setRoi)
+        self.rightView.sigArena.connect(self.leftView.frameScene.setArena)
+        self.sigLeftTracks.connect(self.leftView.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
-        self.sigRightTracks.connect(self.right_view.sigSetRectangles)
+        self.sigRightTracks.connect(self.rightView.sigSetRectangles)
         self.sigRightTrackList.connect(self.right_list.replaceAll)
         self.sigAllTracksList.connect(self.all_list.replaceAll)
-        self.left_list.sigSelected.connect(self.left_view.sigSelected)
+        self.left_list.sigSelected.connect(self.leftView.sigSelected)
         self.all_list.sigSelected.connect(self.projectTrackHist)
-        self.all_list.sigSelected.connect(self.left_view.sigSelected)
-        self.right_list.sigSelected.connect(self.right_view.sigSelected)
+        self.all_list.sigSelected.connect(self.leftView.sigSelected)
+        self.right_list.sigSelected.connect(self.rightView.sigSelected)
         self.right_list.sigSelected.connect(self.projectTrackHist)
         self.left_list.sigSelected.connect(self.projectTrackHist)
-        self.right_view.showBboxAction.triggered.connect(
-            self.left_view.showBboxAction.trigger)
+        self.rightView.showBboxAction.triggered.connect(
+            self.leftView.showBboxAction.trigger)
         
-        self.right_view.sigTrackDia.connect(
-            self.left_view.frame_scene.setTrackDia)
-        self.showBboxAction = self.right_view.showBboxAction
-        self.right_view.showIdAction.triggered.connect(
-            self.left_view.showIdAction.trigger)
-        self.showIdAction = self.right_view.showIdAction
+        self.rightView.sigTrackDia.connect(
+            self.leftView.frameScene.setPathDia)
+        self.showBboxAction = self.rightView.showBboxAction
+        self.rightView.showIdAction.triggered.connect(
+            self.leftView.showIdAction.trigger)
+        self.showIdAction = self.rightView.showIdAction
         self.sigProjectTrackHist.connect(
-            self.right_view.frame_scene.showTrackHist)
+            self.rightView.frameScene.showTrackHist)
         self.sigProjectTrackHistAll.connect(
-            self.left_view.frame_scene.showTrackHist)
+            self.leftView.frameScene.showTrackHist)
         self.right_list.sigMapTracks.connect(self.mapTracks)
         self.play_button.clicked.connect(self.playVideo)
         self.play_button.setCheckable(True)
         self.slider.valueChanged.connect(self.gotoFrame)
         self.pos_spin.valueChanged.connect(self.gotoFrame)
         self.pos_spin.lineEdit().setEnabled(False)
-        self.right_view.sigSetColormap.connect(
-            self.left_view.frame_scene.setColormap)
-        self.right_view.sigSetColor.connect(
-            self.left_view.frame_scene.setColor)
-        # self.sigSetColormap.connect(self.left_view.frame_scene.setColormap)
-        # self.sigSetColormap.connect(self.right_view.frame_scene.setColormap)
+        self.rightView.sigSetColormap.connect(
+            self.leftView.frameScene.setColormap)
+        self.rightView.sigSetColor.connect(
+            self.leftView.frameScene.setColor)
+        # self.sigSetColormap.connect(self.leftView.frameScene.setColormap)
+        # self.sigSetColormap.connect(self.rightView.frameScene.setColormap)
+        self.leftView.frameScene.sigMousePos.connect(self.mousePosMessage)
+        self.rightView.frameScene.sigMousePos.connect(self.mousePosMessage)
+
+    @qc.pyqtSlot(qc.QPointF)
+    def mousePosMessage(self, point:qc.QPointF) -> None:
+        self.sigMousePosMessage.emit(f'X:{point.x()},Y:{point.y()}')
 
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
@@ -1106,11 +1184,11 @@ class ReviewWidget(qw.QWidget):
         val, ok = qw.QInputDialog.getInt(
             self, 'Color-gradient for  old tracks',
             'Faintest of old tracks (# of frames)',
-            value=self.right_view.frame_scene.hist_gradient,
+            value=self.rightView.frameScene.histGradient,
             min=1)
         if ok:
-            self.left_view.frame_scene.setHistGradient(val)
-            self.right_view.frame_scene.setHistGradient(val)
+            self.leftView.frameScene.setHistGradient(val)
+            self.rightView.frameScene.setHistGradient(val)
 
     @qc.pyqtSlot()
     def speedUp(self):
@@ -1125,33 +1203,33 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot(bool)
     def tieViews(self, tie: bool) -> None:
         if tie:
-            logging.debug(f'Before {self.left_view.viewport().size()}')
-            logging.debug(f'After {self.right_view.viewport().size()}')
-            self.left_view.sigViewportAreaChanged.connect(
-                self.right_view.setViewportRect)
-            self.right_view.sigViewportAreaChanged.connect(
-                self.left_view.setViewportRect)
-            self.right_view.horizontalScrollBar().valueChanged.connect(
-                self.left_view.horizontalScrollBar().setValue)
-            self.right_view.verticalScrollBar().valueChanged.connect(
-                self.left_view.verticalScrollBar().setValue)
+            logging.debug(f'Before {self.leftView.viewport().size()}')
+            logging.debug(f'After {self.rightView.viewport().size()}')
+            self.leftView.sigViewportAreaChanged.connect(
+                self.rightView.setViewportRect)
+            self.rightView.sigViewportAreaChanged.connect(
+                self.leftView.setViewportRect)
+            self.rightView.horizontalScrollBar().valueChanged.connect(
+                self.leftView.horizontalScrollBar().setValue)
+            self.rightView.verticalScrollBar().valueChanged.connect(
+                self.leftView.verticalScrollBar().setValue)
         else:
             try:
-                self.left_view.sigViewportAreaChanged.disconnect()
+                self.leftView.sigViewportAreaChanged.disconnect()
             except TypeError:
                 pass
             try:
-                self.right_view.sigViewportAreaChanged.disconnect()
+                self.rightView.sigViewportAreaChanged.disconnect()
             except TypeError:
                 pass
             try:
-                self.right_view.horizontalScrollBar().valueChanged.disconnect(
-                  self.left_view.horizontalScrollBar().setValue)
+                self.rightView.horizontalScrollBar().valueChanged.disconnect(
+                  self.leftView.horizontalScrollBar().setValue)
             except TypeError:
                 pass
             try:
-                self.right_view.verticalScrollBar().valueChanged.disconnect(
-                    self.left_view.verticalScrollBar().setValue)
+                self.rightView.verticalScrollBar().valueChanged.disconnect(
+                    self.leftView.verticalScrollBar().setValue)
             except TypeError:
                 pass
 
@@ -1167,38 +1245,38 @@ class ReviewWidget(qw.QWidget):
         self.tieViewsAction.triggered.connect(self.tieViews)
         self.tieViewsAction.setChecked(True)
         self.tieViews(True)
-        self.showGrayscaleAction = self.right_view.showGrayscaleAction
-        self.showGrayscaleAction.triggered.connect(self.left_view.showGrayscaleAction.trigger)
+        self.showGrayscaleAction = self.rightView.showGrayscaleAction
+        self.showGrayscaleAction.triggered.connect(self.leftView.showGrayscaleAction.trigger)
         self.overlayAction = qw.QAction('Overlay previous frame')
         self.overlayAction.setCheckable(True)
         self.overlayAction.setChecked(False)
         self.invertOverlayColorAction = qw.QAction('Invert overlay color')
         self.invertOverlayColorAction.setCheckable(True)
         self.invertOverlayColorAction.setChecked(False)
-        self.setColorAction = self.right_view.setColorAction
-        self.autoColorAction = self.right_view.autoColorAction
+        self.setColorAction = self.rightView.setColorAction
+        self.autoColorAction = self.rightView.autoColorAction
         self.autoColorAction.triggered.connect(
-            self.left_view.autoColorAction.trigger)
-        # self.autoColorAction.triggered.connect(self.left_view.autoColorAction)
-        self.colormapAction = self.right_view.colormapAction
+            self.leftView.autoColorAction.trigger)
+        # self.autoColorAction.triggered.connect(self.leftView.autoColorAction)
+        self.colormapAction = self.rightView.colormapAction
         self.pathCmapAction = qw.QAction('Set colormap for path')
         self.pathCmapAction.triggered.connect(self.setPathColormap)
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
-        self.lineWidthAction = self.right_view.lineWidthAction
-        self.right_view.sigLineWidth.connect(self.left_view.frame_scene.setLineWidth)
-        self.fontSizeAction = self.right_view.fontSizeAction
-        self.right_view.sigFontSize.connect(self.left_view.frame_scene.setFontSize)
-        self.relativeFontSizeAction = self.right_view.relativeFontSizeAction
-        self.right_view.frame_scene.sigFontSizePixels.connect(
-            self.left_view.frame_scene.setFontSizePixels)
-        self.setTrackDiaAction = qw.QAction('Set track marker diameter')
-        self.setTrackDiaAction.triggered.connect(self.right_view.setTrackDia)
+        self.lineWidthAction = self.rightView.lineWidthAction
+        self.rightView.sigLineWidth.connect(self.leftView.frameScene.setLineWidth)
+        self.fontSizeAction = self.rightView.fontSizeAction
+        self.rightView.sigFontSize.connect(self.leftView.frameScene.setFontSize)
+        self.relativeFontSizeAction = self.rightView.relativeFontSizeAction
+        self.rightView.frameScene.sigFontSizePixels.connect(
+            self.leftView.frameScene.setFontSizePixels)
+        self.setPathDiaAction = qw.QAction('Set path marker diameter')
+        self.setPathDiaAction.triggered.connect(self.rightView.setPathDia)
         self.setRoiAction = qw.QAction('Set polygon ROI')
-        self.setRoiAction.triggered.connect(self.right_view.setArenaMode)
-        self.right_view.resetArenaAction.triggered.connect(self.resetRoi)
-        self.right_view.resetArenaAction.triggered.connect(
-            self.left_view.resetArenaAction.trigger)
+        self.setRoiAction.triggered.connect(self.rightView.setArenaMode)
+        self.rightView.resetArenaAction.triggered.connect(self.resetRoi)
+        self.rightView.resetArenaAction.triggered.connect(
+            self.leftView.resetArenaAction.trigger)
         self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
@@ -1208,19 +1286,21 @@ class ReviewWidget(qw.QWidget):
         self.slowDownAction = qw.QAction('Half speed (Ctrl+Down arrow)')
         self.slowDownAction.triggered.connect(self.slowDown)
         self.zoomInLeftAction = qw.QAction('Zoom-in left (+)')
-        self.zoomInLeftAction.triggered.connect(self.left_view.zoomIn)
+        self.zoomInLeftAction.triggered.connect(self.leftView.zoomIn)
         self.zoomInRightAction = qw.QAction('Zoom-in right (=)')
-        self.zoomInRightAction.triggered.connect(self.right_view.zoomIn)
+        self.zoomInRightAction.triggered.connect(self.rightView.zoomIn)
         self.zoomOutLeftAction = qw.QAction('Zoom-out left (Underscore)')
-        self.zoomOutLeftAction.triggered.connect(self.left_view.zoomOut)
+        self.zoomOutLeftAction.triggered.connect(self.leftView.zoomOut)
         self.zoomOutRightAction = qw.QAction('Zoom-out right (-)')
-        self.zoomOutRightAction.triggered.connect(self.right_view.zoomOut)
+        self.zoomOutRightAction.triggered.connect(self.rightView.zoomOut)
         self.showOldTracksAction = qw.QAction('Show old tracks (o)')
         self.showOldTracksAction.setCheckable(True)
         # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
         self.playAction = qw.QAction('Play (Space)')
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
+        self.resetAction.setToolTip('Reset to initial state.'
+                                    ' Lose all unsaved changes.')
         self.gotoFrameAction = qw.QAction('Jump to frame (g)')
         self.gotoFrameAction.triggered.connect(self.gotoFrameDialog)
         self.jumpForwardAction = qw.QAction('Jump forward (Ctrl+Page down)')
@@ -1334,13 +1414,13 @@ class ReviewWidget(qw.QWidget):
         self.sc_jump_prevchange.activated.connect(self.gotoPrevChange)
 
         self.sc_zoom_in_left = qw.QShortcut(qg.QKeySequence('+'), self)
-        self.sc_zoom_in_left.activated.connect(self.left_view.zoomIn)
+        self.sc_zoom_in_left.activated.connect(self.leftView.zoomIn)
         self.sc_zoom_in_right = qw.QShortcut(qg.QKeySequence('='), self)
-        self.sc_zoom_in_right.activated.connect(self.right_view.zoomIn)
+        self.sc_zoom_in_right.activated.connect(self.rightView.zoomIn)
         self.sc_zoom_out_right = qw.QShortcut(qg.QKeySequence('-'), self)
-        self.sc_zoom_out_right.activated.connect(self.right_view.zoomOut)
+        self.sc_zoom_out_right.activated.connect(self.rightView.zoomOut)
         self.sc_zoom_out_left = qw.QShortcut(qg.QKeySequence('_'), self)
-        self.sc_zoom_out_left.activated.connect(self.left_view.zoomOut)
+        self.sc_zoom_out_left.activated.connect(self.leftView.zoomOut)
         self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('O'), self)
         self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
         self.sc_hist = qw.QShortcut(qg.QKeySequence('T'), self)
@@ -1401,8 +1481,8 @@ class ReviewWidget(qw.QWidget):
         else:
             return
         selected = [int(item.text()) for item in items]
-        self.right_view.scene().setSelected(selected)
-        self.right_view.scene().removeSelected()
+        self.rightView.scene().setSelected(selected)
+        self.rightView.scene().removeSelected()
         for sel in selected:
             self.track_reader.deleteTrack(self.frame_no, sel, cur)
             if sel not in self.right_tracks:
@@ -1758,8 +1838,8 @@ class ReviewWidget(qw.QWidget):
         logging.debug(f'Setting colormap to {input}')
         if not accept:
             return
-        self.left_view.frame_scene.setPathCmap(input)
-        self.right_view.frame_scene.setPathCmap(input)
+        self.leftView.frameScene.setPathCmap(input)
+        self.rightView.frameScene.setPathCmap(input)
 
     @qc.pyqtSlot()
     def openTrackedData(self):
@@ -1799,8 +1879,8 @@ class ReviewWidget(qw.QWidget):
         self.vid_info.fps.setText(f'{self.video_reader.fps}')
         self.vid_info.frame_width.setText(f'{self.video_reader.frame_width}')
         self.vid_info.frame_height.setText(f'{self.video_reader.frame_height}')
-        self.left_view.clearAll()
-        self.left_view.update()
+        self.leftView.clearAll()
+        self.leftView.update()
         self.all_tracks.clear()
         self.left_list.clear()
         self.right_list.clear()
@@ -1809,9 +1889,9 @@ class ReviewWidget(qw.QWidget):
         self.left_frame = None
         self.right_frame = None
         self.history_length = self.track_reader.last_frame
-        self.left_view.frame_scene.setHistGradient(self.history_length)
-        self.right_view.frame_scene.setHistGradient(self.history_length)
-        self.right_view.resetArenaAction.trigger()
+        self.leftView.frameScene.setHistGradient(self.history_length)
+        self.rightView.frameScene.setHistGradient(self.history_length)
+        self.rightView.resetArenaAction.trigger()
         self.lim_widget.sigWmin.connect(self.track_reader.setWmin)
         self.lim_widget.sigWmax.connect(self.track_reader.setWmax)
         self.lim_widget.sigHmin.connect(self.track_reader.setHmin)
@@ -1935,8 +2015,8 @@ class ReviewWidget(qw.QWidget):
         self._wait_cond.set()
         self.playVideo(False)
         self.play_button.setChecked(False)
-        self.left_view.clearAll()
-        self.right_view.clearAll()
+        self.leftView.clearAll()
+        self.rightView.clearAll()
         self.setupReading(self.video_filename, self.track_filename)
 
     @qc.pyqtSlot(int, int, bool, bool)
@@ -1968,12 +2048,12 @@ class ReviewerMain(qw.QMainWindow):
 
     def __init__(self):
         super(ReviewerMain, self).__init__()
-        self.review_widget = ReviewWidget()
+        self.reviewWidget = ReviewWidget()
         file_menu = self.menuBar().addMenu('&File')
-        file_menu.addAction(self.review_widget.openAction)
-        file_menu.addAction(self.review_widget.saveAction)
-        file_menu.addAction(self.review_widget.loadChangeListAction)
-        file_menu.addAction(self.review_widget.saveChangeListAction)
+        file_menu.addAction(self.reviewWidget.openAction)
+        file_menu.addAction(self.reviewWidget.saveAction)
+        file_menu.addAction(self.reviewWidget.loadChangeListAction)
+        file_menu.addAction(self.reviewWidget.saveChangeListAction)
 
         self.sc_quit = qw.QShortcut(qg.QKeySequence('Ctrl+Q'), self)
         self.sc_quit.activated.connect(self.close)
@@ -1982,74 +2062,74 @@ class ReviewerMain(qw.QMainWindow):
         file_menu.addAction(self.quitAction)
 
         diff_menu = self.menuBar().addMenu('&Diff settings')
-        diff_menu.addAction(self.review_widget.overlayAction)
-        diff_menu.addAction(self.review_widget.invertOverlayColorAction)
+        diff_menu.addAction(self.reviewWidget.overlayAction)
+        diff_menu.addAction(self.reviewWidget.invertOverlayColorAction)
         diffgrp = qw.QActionGroup(self)
-        diffgrp.addAction(self.review_widget.showDifferenceAction)
-        diffgrp.addAction(self.review_widget.showNewAction)
-        diffgrp.addAction(self.review_widget.showNoneAction)
+        diffgrp.addAction(self.reviewWidget.showDifferenceAction)
+        diffgrp.addAction(self.reviewWidget.showNewAction)
+        diffgrp.addAction(self.reviewWidget.showNoneAction)
         diffgrp.setExclusive(True)
         diff_menu.addActions(diffgrp.actions())
         
         view_menu = self.menuBar().addMenu('&View')
-        view_menu.addAction(self.review_widget.tieViewsAction)
-        view_menu.addAction(self.review_widget.showGrayscaleAction)
-        view_menu.addAction(self.review_widget.setColorAction)
-        view_menu.addAction(self.review_widget.autoColorAction)
-        view_menu.addAction(self.review_widget.colormapAction)
-        view_menu.addAction(self.review_widget.pathCmapAction)
-        view_menu.addAction(self.review_widget.fontSizeAction)
-        view_menu.addAction(self.review_widget.relativeFontSizeAction)
-        view_menu.addAction(self.review_widget.lineWidthAction)
-        view_menu.addAction(self.review_widget.setTrackDiaAction)
-        view_menu.addAction(self.review_widget.showBboxAction)
-        view_menu.addAction(self.review_widget.showIdAction)
-        view_menu.addAction(self.review_widget.showOldTracksAction)
-        view_menu.addAction(self.review_widget.showHistoryAction)
-        view_menu.addAction(self.review_widget.showLimitsAction)
-        view_menu.addAction(self.review_widget.histlenAction)
-        view_menu.addAction(self.review_widget.histGradientAction)
+        view_menu.addAction(self.reviewWidget.tieViewsAction)
+        view_menu.addAction(self.reviewWidget.showGrayscaleAction)
+        view_menu.addAction(self.reviewWidget.setColorAction)
+        view_menu.addAction(self.reviewWidget.autoColorAction)
+        view_menu.addAction(self.reviewWidget.colormapAction)
+        view_menu.addAction(self.reviewWidget.pathCmapAction)
+        view_menu.addAction(self.reviewWidget.fontSizeAction)
+        view_menu.addAction(self.reviewWidget.relativeFontSizeAction)
+        view_menu.addAction(self.reviewWidget.lineWidthAction)
+        view_menu.addAction(self.reviewWidget.setPathDiaAction)
+        view_menu.addAction(self.reviewWidget.showBboxAction)
+        view_menu.addAction(self.reviewWidget.showIdAction)
+        view_menu.addAction(self.reviewWidget.showOldTracksAction)
+        view_menu.addAction(self.reviewWidget.showHistoryAction)
+        view_menu.addAction(self.reviewWidget.showLimitsAction)
+        view_menu.addAction(self.reviewWidget.histlenAction)
+        view_menu.addAction(self.reviewWidget.histGradientAction)
 
-        view_menu.addAction(self.review_widget.showChangeListAction)
-        view_menu.addAction(self.review_widget.vidinfoAction)
+        view_menu.addAction(self.reviewWidget.showChangeListAction)
+        view_menu.addAction(self.reviewWidget.vidinfoAction)
 
         zoom_menu = self.menuBar().addMenu('&Zoom')        
-        zoom_menu.addAction(self.review_widget.zoomInLeftAction)
-        zoom_menu.addAction(self.review_widget.zoomInRightAction)
-        zoom_menu.addAction(self.review_widget.zoomOutLeftAction)
-        zoom_menu.addAction(self.review_widget.zoomOutRightAction)
+        zoom_menu.addAction(self.reviewWidget.zoomInLeftAction)
+        zoom_menu.addAction(self.reviewWidget.zoomInRightAction)
+        zoom_menu.addAction(self.reviewWidget.zoomOutLeftAction)
+        zoom_menu.addAction(self.reviewWidget.zoomOutRightAction)
         
         play_menu = self.menuBar().addMenu('Play')
-        play_menu.addAction(self.review_widget.disableSeekAction)
-        play_menu.addAction(self.review_widget.playAction)
-        play_menu.addAction(self.review_widget.speedUpAction)
-        play_menu.addAction(self.review_widget.slowDownAction)
-        play_menu.addAction(self.review_widget.resetAction)
+        play_menu.addAction(self.reviewWidget.disableSeekAction)
+        play_menu.addAction(self.reviewWidget.playAction)
+        play_menu.addAction(self.reviewWidget.speedUpAction)
+        play_menu.addAction(self.reviewWidget.slowDownAction)
+        play_menu.addAction(self.reviewWidget.resetAction)
 
-        play_menu.addAction(self.review_widget.gotoFrameAction)
-        play_menu.addAction(self.review_widget.jumpForwardAction)
-        play_menu.addAction(self.review_widget.jumpBackwardAction)
-        play_menu.addAction(self.review_widget.frameBreakpointAction)
-        play_menu.addAction(self.review_widget.curBreakpointAction)
-        play_menu.addAction(self.review_widget.entryBreakpointAction)
-        play_menu.addAction(self.review_widget.exitBreakpointAction)
+        play_menu.addAction(self.reviewWidget.gotoFrameAction)
+        play_menu.addAction(self.reviewWidget.jumpForwardAction)
+        play_menu.addAction(self.reviewWidget.jumpBackwardAction)
+        play_menu.addAction(self.reviewWidget.frameBreakpointAction)
+        play_menu.addAction(self.reviewWidget.curBreakpointAction)
+        play_menu.addAction(self.reviewWidget.entryBreakpointAction)
+        play_menu.addAction(self.reviewWidget.exitBreakpointAction)
         
-        play_menu.addAction(self.review_widget.clearBreakpointAction)
-        play_menu.addAction(self.review_widget.clearEntryBreakpointAction)
-        play_menu.addAction(self.review_widget.clearExitBreakpointAction)
+        play_menu.addAction(self.reviewWidget.clearBreakpointAction)
+        play_menu.addAction(self.reviewWidget.clearEntryBreakpointAction)
+        play_menu.addAction(self.reviewWidget.clearExitBreakpointAction)
 
-        play_menu.addAction(self.review_widget.jumpToBreakpointAction)
-        play_menu.addAction(self.review_widget.jumpNextNewAction)
-        play_menu.addAction(self.review_widget.jumpNextChangeAction)
-        play_menu.addAction(self.review_widget.jumpPrevChangeAction)
+        play_menu.addAction(self.reviewWidget.jumpToBreakpointAction)
+        play_menu.addAction(self.reviewWidget.jumpNextNewAction)
+        play_menu.addAction(self.reviewWidget.jumpNextChangeAction)
+        play_menu.addAction(self.reviewWidget.jumpPrevChangeAction)
 
         action_menu = self.menuBar().addMenu('Action')
-        action_menu.addActions([self.review_widget.swapTracksAction,
-                                self.review_widget.replaceTrackAction,
-                                self.review_widget.renameTrackAction,
-                                self.review_widget.deleteTrackAction,
-                                self.review_widget.undoCurrentChangesAction,
-                                self.review_widget.right_view.resetArenaAction])
+        action_menu.addActions([self.reviewWidget.swapTracksAction,
+                                self.reviewWidget.replaceTrackAction,
+                                self.reviewWidget.renameTrackAction,
+                                self.reviewWidget.deleteTrackAction,
+                                self.reviewWidget.undoCurrentChangesAction,
+                                self.reviewWidget.rightView.resetArenaAction])
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
         v = settings.value('review/debug', logging.INFO)
@@ -2059,21 +2139,24 @@ class ReviewerMain(qw.QMainWindow):
         action_menu.addAction(self.debugAction)
         toolbar = self.addToolBar('View')
         toolbar.addActions([
-            self.review_widget.zoomInLeftAction,
-            self.review_widget.zoomInRightAction,
-            self.review_widget.zoomOutLeftAction,
-            self.review_widget.zoomOutRightAction,
-            self.review_widget.tieViewsAction,
-            self.review_widget.showOldTracksAction,
-            self.review_widget.showHistoryAction])
+            self.reviewWidget.zoomInLeftAction,
+            self.reviewWidget.zoomInRightAction,
+            self.reviewWidget.zoomOutLeftAction,
+            self.reviewWidget.zoomOutRightAction,
+            self.reviewWidget.tieViewsAction,
+            self.reviewWidget.showOldTracksAction,
+            self.reviewWidget.showHistoryAction])
 
         toolbar.addActions(action_menu.actions())
-        self.review_widget.sigDataFile.connect(self.updateTitle)
-        self.sigQuit.connect(self.review_widget.doQuit)
-        self.status_label = qw.QLabel()
-        self.review_widget.sigDiffMessage.connect(self.status_label.setText)
-        self.statusBar().addWidget(self.status_label)
-        self.setCentralWidget(self.review_widget)
+        self.reviewWidget.sigDataFile.connect(self.updateTitle)
+        self.sigQuit.connect(self.reviewWidget.doQuit)
+        self.posLabel = qw.QLabel()
+        self.statusBar().addPermanentWidget(self.posLabel)
+        self.reviewWidget.sigMousePosMessage.connect(self.posLabel.setText)
+        self.statusLabel = qw.QLabel()
+        self.reviewWidget.sigDiffMessage.connect(self.statusLabel.setText)
+        self.statusBar().addPermanentWidget(self.statusLabel)
+        self.setCentralWidget(self.reviewWidget)
 
     @qc.pyqtSlot(bool)
     def setDebug(self, val: bool):
@@ -2103,8 +2186,8 @@ def test_reviewwidget():
     #     'prefix_1500.png')
     image = cv2.imread('C:/Users/raysu/Documents/src/argos/test_grid.png')
     logging.debug(f'Image shape: {image.shape}')
-    reviewer.left_view.setFrame(image, 0)
-    reviewer.right_view.setFrame(image, 0)
+    reviewer.leftView.setFrame(image, 0)
+    reviewer.rightView.setFrame(image, 0)
     win = qw.QMainWindow()
     win.setCentralWidget(reviewer)
     win.show()
@@ -2127,17 +2210,17 @@ def test_review():
     win = qw.QMainWindow()
     toolbar = win.addToolBar('Zoom')
     zi = qw.QAction('Zoom in (+)')
-    zi.triggered.connect(reviewer.left_view.zoomIn)
+    zi.triggered.connect(reviewer.leftView.zoomIn)
     zo = qw.QAction('Zoom out (-)')
-    zo.triggered.connect(reviewer.right_view.zoomOut)
+    zo.triggered.connect(reviewer.rightView.zoomOut)
     arena = qw.QAction('Select arena')
-    arena.triggered.connect(reviewer.left_view.scene().setArenaMode)
+    arena.triggered.connect(reviewer.leftView.scene().setArenaMode)
     arena_reset = qw.QAction('Reset arena')
-    arena_reset.triggered.connect(reviewer.right_view.scene().resetArena)
+    arena_reset.triggered.connect(reviewer.rightView.scene().resetArena)
     roi = qw.QAction('Select rectangular ROIs')
-    roi.triggered.connect(reviewer.left_view.scene().setRoiRectMode)
+    roi.triggered.connect(reviewer.leftView.scene().setRoiRectMode)
     poly = qw.QAction('Select polygon ROIs')
-    poly.triggered.connect(reviewer.left_view.scene().setRoiPolygonMode)
+    poly.triggered.connect(reviewer.leftView.scene().setRoiPolygonMode)
     toolbar.addAction(zi)
     toolbar.addAction(zo)
     toolbar.addAction(arena)

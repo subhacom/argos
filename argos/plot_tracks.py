@@ -50,7 +50,9 @@ from argparse import ArgumentParser
 
 def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
                 bbox_alpha=(0.0, 1.0), plot_alpha=1.0, quiver=True,
-                qcmap='hot', qwidth=-1, vidfile=None, frame=-1, gray=False,
+                qcmap='hot', qwidth=-1, vidfile=None,
+                frame=-1, fstart=0, fend=-1,
+                gray=False,
                 randcolor=True,
                 axes=False):
     if trackfile.endswith('.csv'):
@@ -88,7 +90,9 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
              for s in ['left', 'bottom', 'top', 'right']]
 
     print('Unique tracks:', len(tracks.trackid.unique()))
-        
+    if fend < 0:
+        fend = tracks.frame.max()
+    tracks = tracks[(tracks.frame >= fstart) & (tracks.frame <= fend)].copy()
     for trackid, trackgrp in tracks.groupby('trackid'):
         pos = trackgrp.sort_values(by='frame')
         cx = pos.x + pos.w / 2.0
@@ -139,6 +143,7 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
 
 def play_tracks(vidfile, trackfile, lw=2, color='auto',
                 fontscale=1, fthickness=1,
+                fstart=0, fend=-1,
                 torigfile=None, tmtfile=None,
                 vout=None, outfmt='MJPG', fps=None,
                 timestamp=False, skipempty=False):
@@ -202,7 +207,12 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
                               (width, height))
         print(f'Saving video with tracks in {vout}. Video format {outfmt}')
     frame_no = -1
-    while True:
+    if fstart > 0:
+        frame_no = fstart - 1
+        cap.set(cv2.CAP_PROP_POS_FRAMES, fstart)
+    if fend < 0:
+        fend = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    while frame_no < fend:
         ret, frame = cap.read()
         if frame is None:
             print('End at frame', frame_no)
@@ -304,6 +314,10 @@ def make_parser():
     parser.add_argument('--randcolor', action='store_true',
                         help='Use random colors to plot individual tracks '
                         '(when NOT doing quiver plot)')
+    parser.add_argument('--fstart', default=0, type=int,
+                        help='Start frame to plot/display from')
+    parser.add_argument('--fend', default=-1, type=int,
+                        help='Last frame to display')
     return parser
 
 
@@ -312,6 +326,8 @@ if __name__ == '__main__':
     if (args.video is not None) and args.play:
         play_tracks(args.video, args.data, lw=args.vlw, fontscale=args.fs,
                     fthickness=args.ft,
+                    fstart=args.fstart,
+                    fend=args.fend,
                     torigfile=args.torig,
                     tmtfile=args.tmt,
                     vout=args.vout,
@@ -321,6 +337,8 @@ if __name__ == '__main__':
                       plot_alpha=args.ap,
                       quiver=args.quiver, qcmap=args.qcmap, qwidth=args.qwidth,
                       frame=args.bgframe,
+                      fstart=args.fstart,
+                      fend=args.fend,
                       gray=args.gray,
                       axes=args.axes,
                       randcolor=args.randcolor)

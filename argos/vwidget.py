@@ -276,7 +276,7 @@ class VideoWidget(qw.QWidget):
 
         if self.display_widget is None:
             self.display_widget = FrameView()
-            self.display_widget.frame_scene.setArenaMode()
+            self.display_widget.frameScene.setArenaMode()
             self.showGrayscaleAction.triggered.connect(
                 self.display_widget.showGrayscaleAction.trigger)
             self.setColorAction.triggered.connect(
@@ -284,7 +284,7 @@ class VideoWidget(qw.QWidget):
             self.autoColorAction.triggered.connect(
                 self.display_widget.autoColorAction.trigger)
             self.sigSetColormap.connect(
-                self.display_widget.frame_scene.setColormap)
+                self.display_widget.frameScene.setColormap)
             self.fontSizeAction.triggered.connect(
                 self.display_widget.fontSizeAction.trigger)
             self.relativeFontSizeAction.triggered.connect(

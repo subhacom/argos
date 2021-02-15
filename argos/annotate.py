@@ -418,7 +418,7 @@ class TrainingWidget(qw.QMainWindow):
         self.segDock.setWidget(scroll)
         self.displayWidget = SegDisplay()
         self.displayWidget.setRoiMode()
-        self.displayWidget.frame_scene.linewidth = 0
+        self.displayWidget.frameScene.linewidth = 0
         self.setCentralWidget(self.displayWidget)
         self._makeActions()
         self._makeFileDock()
