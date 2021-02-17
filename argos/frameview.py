@@ -21,6 +21,9 @@ from argos.constants import DrawingGeom, ColorMode
 from argos.utility import cv2qimage, make_color, get_cmap_color
 
 
+settings = util.init()
+
+
 class FrameScene(qw.QGraphicsScene):
     sigPolygons = qc.pyqtSignal(dict)
     sigPolygonsSet = qc.pyqtSignal()
@@ -46,7 +49,7 @@ class FrameScene(qw.QGraphicsScene):
         self.color = qg.QColor(qc.Qt.green)
         self.selected_color = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
-        self.linewidth = 2
+        self.linewidth = settings.value('argos/linewidth', 2.0, type=float)
         self.linestyle_selected = qc.Qt.DotLine
         self.showBbox = True
         self.showId = True
@@ -229,9 +232,10 @@ class FrameScene(qw.QGraphicsScene):
         self.clearItems()
         self.invalidate(self.sceneRect())
 
-    @qc.pyqtSlot(int)
+    @qc.pyqtSlot(float)
     def setLineWidth(self, width):
-        self.linewidth = width        
+        self.linewidth = width
+        settings.setValue('argos/linewidth', width)
         for item in self.itemDict.values():
             pen = item.pen()
             pen.setWidth(width)
@@ -563,7 +567,7 @@ class FrameView(qw.QGraphicsView):
     setArenaMode = qc.pyqtSignal()
     setRoiRectMode = qc.pyqtSignal()
     setRoiPolygonMode = qc.pyqtSignal()
-    sigLineWidth = qc.pyqtSignal(int)
+    sigLineWidth = qc.pyqtSignal(float)
     sigFontSize = qc.pyqtSignal(int)
     sigRelativeFontSize = qc.pyqtSignal(float)
 
@@ -637,7 +641,7 @@ class FrameView(qw.QGraphicsView):
 
     @qc.pyqtSlot()
     def setLW(self) -> None:
-        input_, accept = qw.QInputDialog.getInt(
+        input_, accept = qw.QInputDialog.getDouble(
             self, 'Line-width of outline',
             'pixels',
             self.frameScene.linewidth, min=0, max=10)
