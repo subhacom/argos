@@ -330,6 +330,13 @@ Action sequence to fix this:
 3. Go forward when 3 appears on A.
 4. Assign 1 to B.
 
+Swapping IDs multiple times can build-up into-hard-to-fix switches
+between IDs, as all the changes in the change list buffer are applied
+to all future frames. You may notice this in the form of and ID
+jumping between two animals. This can be avoided by saving the data
+between swaps. This will consolidate all suggested changes in the
+buffer and clear the change list.
+
 Whenever there are multiple animals getting too close to each other, a
 good approach is to put a breakpoint when the algorithm confuses them
 for the first time, and slowly go forward several frames to figure out
