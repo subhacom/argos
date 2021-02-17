@@ -279,8 +279,10 @@ def segment_yolact(frame, score_threshold, top_k, overlap_thresh, cfgfile,
         # logging.debug('Bounding boxes: %r', boxes)
         # Convert from top-left bottom-right format to
         # top-left, width, height format
-        if len(boxes) > 0:
-            boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
+        if len(boxes) == 0:
+            return np.empty(0)
+        
+        boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
         boxes = np.asanyarray(np.rint(boxes), dtype=np.int_)
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(new_bboxes=boxes, bboxes=boxes,
@@ -470,11 +472,12 @@ def batch_segment(args):
                     frame_no = futures.pop(fut)
                     result = fut.result()
                     for ii, bbox in enumerate(result):
-                        data.append({'frame': frame_no,
-                                     'x': bbox[0],
-                                     'y': bbox[1],
-                                     'w': bbox[2],
-                                     'h': bbox[3]})
+                        if len(bbox) > 0:
+                            data.append({'frame': frame_no,
+                                         'x': bbox[0],
+                                         'y': bbox[1],
+                                         'w': bbox[2],
+                                         'h': bbox[3]})
     if len(data) == 0:
         raise RuntimeError('Data list empty')
     data = pd.DataFrame(data)
