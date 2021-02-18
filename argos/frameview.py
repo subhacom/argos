@@ -58,7 +58,8 @@ class FrameScene(qw.QGraphicsScene):
         self.points = []
         self.selected = []
         self.font = qw.QApplication.font()
-        self.font.setBold(True)
+        self.textIgnoresTransformation = True
+        # self.font.setBold(True)
 
     def _clearIncomplete(self):
         if self.incomplete_item is not None:
@@ -83,6 +84,8 @@ class FrameScene(qw.QGraphicsScene):
     def setSelected(self, selected: List[int]) -> None:
         """Set list of selected items"""
         self.selected = selected
+        boldFont = qg.QFont(self.font)
+        boldFont.setWeight(qg.QFont.Bold)
         for key in self.itemDict:
             if key in selected:
                 if self.color_mode == ColorMode.auto:
@@ -98,6 +101,7 @@ class FrameScene(qw.QGraphicsScene):
                 self.itemDict[key].setPen(pen)
                 self.itemDict[key].setZValue(1)
                 self.labelDict[key].setDefaultTextColor(color)
+                self.labelDict[key].setFont(boldFont)
                 self.labelDict[key].setZValue(1)
             else:
                 if self.color_mode == ColorMode.auto:
@@ -108,11 +112,12 @@ class FrameScene(qw.QGraphicsScene):
                                         self.colormap))
                 else:
                     color = self.color
-                color.setAlpha(64)  # make the non-selected items transparent
+                # color.setAlpha(64)  # make the non-selected items transparent
                 pen = qg.QPen(color, self.linewidth)
                 self.itemDict[key].setPen(pen)
                 self.itemDict[key].setZValue(0)
                 self.labelDict[key].setDefaultTextColor(color)
+                self.labelDict[key].setFont(self.font)
                 self.labelDict[key].setZValue(0)
 
     @qc.pyqtSlot()
@@ -197,8 +202,11 @@ class FrameScene(qw.QGraphicsScene):
         text = self.addText(str(index), self.font)
         self.labelDict[index] = text
         text.setDefaultTextColor(self.color)
-        logging.debug(f'Scene bounding rect of {index}={bbox}')
+        # logging.debug(f'Scene bounding rect of {index}={bbox}')
         text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
+        text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
+                     self.textIgnoresTransformation)
+        # print('Iciiiiiiiiiiiiiiiiii')
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -411,10 +419,12 @@ class FrameScene(qw.QGraphicsScene):
             text = self.addText(str(id_), self.font)
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1])
+            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
+                         self.textIgnoresTransformation)
             self.labelDict[id_] = text
             if not self.showId:
                 text.setOpacity(0)
-            logging.debug(f'Set {id_}: {rect}')
+            # logging.debug(f'Set {id_}: {rect}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
@@ -447,6 +457,9 @@ class FrameScene(qw.QGraphicsScene):
             text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
             text.setPos(pos[0], pos[1])
+            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
+                         self.textIgnoresTransformation)
+            # print('Herererere')
             if not self.showId:
                 text.setOpacity(0)
             # logging.debug(f'Set {id_}: {poly}')

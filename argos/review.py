@@ -230,6 +230,9 @@ Correcting tracks
   on the ``Right tracks`` list and delete it with ``x`` or ``Delete``
   key.
 
+  To delete a track only in the current frame, but to keep future occurrences
+  intact, press ``Ctrl+X`` instead.
+
 - Replacing/Assigning
 
   Now for example, you can see at frame 111, what has been marked as
@@ -246,6 +249,9 @@ Correcting tracks
   ``12`` in the right list and then select ``Replace track`` from the
   ``Action`` menu.
 
+  To apply this only in the current frame keep the ``Shift`` key pressed while
+  drag-n-dropping.
+
 - Swapping
 
   In some cases, especially when one object crosses over another, the
@@ -258,6 +264,9 @@ Correcting tracks
   lists and then click the ``Swap tracks`` entry in the ``Action``
   menu.
 
+  To apply this only in the current frame keep the ``Shift`` key pressed while
+  drag-n-dropping.
+
 - Renaming
 
   To rename a track with a different, nonexistent Id, select the track
@@ -266,6 +275,9 @@ Correcting tracks
   that normally Argos does not use negative track Id numbers, so for
   temporary use it is safe to use negative numbers and it will not
   conflict with any existing track numbers.
+
+  To apply this only in the current frame keep the ``Shift`` key pressed while
+  drag-n-dropping.
 
 All these actions, however, are not immediately made prmanent. This
 allows you to undo changes that have been made by mistake. You can see
@@ -332,10 +344,14 @@ Action sequence to fix this:
 
 Swapping IDs multiple times can build-up into-hard-to-fix switches
 between IDs, as all the changes in the change list buffer are applied
-to all future frames. You may notice this in the form of and ID
-jumping between two animals. This can be avoided by saving the data
+to all future frames. This can be avoided by saving the data
 between swaps. This will consolidate all suggested changes in the
 buffer and clear the change list.
+
+After swapping two IDs you may notice that one ID keeps jumping between the two
+animals. Even if you do the swap again when this happens in later frame, the IDs
+keep switching back and forth. In such a case try doing a temporary swap, i.e.,
+a swap that applies to the current frame only.
 
 Whenever there are multiple animals getting too close to each other, a
 good approach is to put a breakpoint when the algorithm confuses them
@@ -759,10 +775,13 @@ class ReviewScene(FrameScene):
             self.itemDict[id_] = item
             text = self.addText(str(id_), self.font)
             self.labelDict[id_] = text
+            text.setFont(self.font)
             text.setDefaultTextColor(color)
             text.setPos(rect[0], rect[1] - text.boundingRect().height())
+            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
+                         self.textIgnoresTransformation)
             self.polygons[id_] = rect
-            logging.debug(f'Set {id_}: {rect}')
+            # logging.debug(f'Set {id_}: {rect}')
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
@@ -1380,22 +1399,29 @@ class ReviewWidget(qw.QWidget):
         self.showHistoryAction.setChecked(True)
         self.swapTracksAction = qw.QAction(
             'Swap tracks (drag n drop with right mouse button)')
-        self.swapTracksAction.setToolTip(
-            'Keep Shift key pressed to swap only for current frame')
         self.swapTracksAction.triggered.connect(self.swapTracks)
+        self.swapTracksCurAction = qw.QAction(
+            'Swap tracks in current frame only (drag n drop with right mouse '
+            'button with Shift-key pressed)')
+        self.swapTracksCurAction.triggered.connect(self.swapTracksCur)
         self.replaceTrackAction = qw.QAction(
             'Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
-        self.replaceTrackAction.setToolTip(
-            'Keep Shift key pressed to assign only for current frame')
+        self.replaceTrackCurAction = qw.QAction(
+            'Replace track in current frame only (drag n drop with left mouse '
+            'button with Shift-key pressed)')
+        self.replaceTrackCurAction.triggered.connect(self.replaceTrackCur)
         self.renameTrackAction = qw.QAction('Rename track (r)')
         self.renameTrackAction.triggered.connect(self.renameTrack)
+        self.renameTrackCurAction = qw.QAction(
+            'Rename track in current frame (Ctrl+r)')
+        self.renameTrackCurAction.triggered.connect(self.renameTrackCur)
         self.deleteTrackAction = qw.QAction('Delete track (Delete/x)')
         self.deleteTrackAction.setToolTip(
             'Keep Ctrl key pressed for only current frame')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.deleteTrackCurAction = qw.QAction(
-            'Delete track only in current frame (Ctrl+Delete/Ctrl+X')
+            'Delete track only in current frame (Ctrl+Delete/Ctrl+x')
         self.deleteTrackCurAction.triggered.connect(self.deleteSelectedCur)
         self.undoCurrentChangesAction = qw.QAction(
             'Undo changes in current frame (Ctrl+z)')
@@ -1410,7 +1436,7 @@ class ReviewWidget(qw.QWidget):
         self.histlenAction.triggered.connect(self.setHistLen)
         self.histGradientAction = qw.QAction('Set oldest tracks to display')
         self.histGradientAction.triggered.connect(self.setHistGradient)
-        self.showChangeListAction = qw.QAction('Show list of changes (Alt+C)')
+        self.showChangeListAction = qw.QAction('Show list of changes (Alt+c)')
         self.showChangeListAction.setCheckable(True)
         self.showChangeListAction.triggered.connect(self.showChangeList)
         self.loadChangeListAction = qw.QAction('Load list of changes')
@@ -1489,6 +1515,8 @@ class ReviewWidget(qw.QWidget):
 
         self.sc_rename = qw.QShortcut(qg.QKeySequence('R'), self)
         self.sc_rename.activated.connect(self.renameTrack)
+        self.sc_rename_cur = qw.QShortcut(qg.QKeySequence('Ctrl+R'), self)
+        self.sc_rename_cur.activated.connect(self.renameTrackCur)
         self.sc_speedup = qw.QShortcut(
             qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
         self.sc_speedup.activated.connect(self.speedUp)
@@ -1559,6 +1587,19 @@ class ReviewWidget(qw.QWidget):
         if ok:
             print(f'Renaming track {tid} to {val}')
             self.mapTracks(val, tid, False, False)
+
+    @qc.pyqtSlot()
+    def renameTrackCur(self):
+        target = self.right_list.selectedItems()
+        if len(target) == 0:
+            return
+        tid = int(target[0].text())
+        val, ok = qw.QInputDialog.getInt(self, 'Rename track',
+                                         'New track id:',
+                                         value=tid)
+        if ok:
+            print(f'Renaming track {tid} to {val}')
+            self.mapTracks(val, tid, False, True)
 
     @qc.pyqtSlot()
     def swapTracks(self):
@@ -2180,6 +2221,7 @@ class ReviewerMain(qw.QMainWindow):
         action_menu.addActions([self.reviewWidget.swapTracksAction,
                                 self.reviewWidget.replaceTrackAction,
                                 self.reviewWidget.renameTrackAction,
+                                self.reviewWidget.renameTrackCurAction,
                                 self.reviewWidget.deleteTrackAction,
                                 self.reviewWidget.deleteTrackCurAction,
                                 self.reviewWidget.undoCurrentChangesAction,
