@@ -203,10 +203,10 @@ class FrameScene(qw.QGraphicsScene):
         self.labelDict[index] = text
         text.setDefaultTextColor(self.color)
         # logging.debug(f'Scene bounding rect of {index}={bbox}')
-        text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
+        # text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
+        text.setPos(bbox.x(), bbox.y())
         text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                      self.textIgnoresTransformation)
-        # print('Iciiiiiiiiiiiiiiiiii')
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 

@@ -223,6 +223,10 @@ current frame) by pressing ``Shift + C`` on the keyboard.
 
 Correcting tracks
 -----------------
+Corrections made in a frame apply to all future frames, unless an operation
+is for current-frame only. The past frames are not affected by the changes.
+You can undo all changes made in a frame by pressing ``Ctrl+z`` when visiting
+that frame.
 
 - Deleting
 
@@ -279,7 +283,7 @@ Correcting tracks
   To apply this only in the current frame keep the ``Shift`` key pressed while
   drag-n-dropping.
 
-All these actions, however, are not immediately made prmanent. This
+All these actions, however, are not immediately made permanent. This
 allows you to undo changes that have been made by mistake. You can see
 the list of changes you suggested by selecting ``Show list of
 changes`` in the view menu, or by using the ``Alt+C`` keyboard
@@ -777,7 +781,8 @@ class ReviewScene(FrameScene):
             self.labelDict[id_] = text
             text.setFont(self.font)
             text.setDefaultTextColor(color)
-            text.setPos(rect[0], rect[1] - text.boundingRect().height())
+            # text.setPos(rect[0], rect[1] - text.boundingRect().height())
+            text.setPos(rect[0], rect[1])
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
             self.polygons[id_] = rect
