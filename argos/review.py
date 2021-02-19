@@ -2225,6 +2225,7 @@ class ReviewerMain(qw.QMainWindow):
         action_menu = self.menuBar().addMenu('Action')
         action_menu.addActions([self.reviewWidget.swapTracksAction,
                                 self.reviewWidget.replaceTrackAction,
+                                self.reviewWidget.replaceTrackCurAction,
                                 self.reviewWidget.renameTrackAction,
                                 self.reviewWidget.renameTrackCurAction,
                                 self.reviewWidget.deleteTrackAction,

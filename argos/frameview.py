@@ -364,6 +364,7 @@ class FrameScene(qw.QGraphicsScene):
             pen = item.pen()
             pen.setColor(color)
             item.setPen(pen)
+            self.labelDict[key].setDefaultTextColor(color)
         self.update()
 
 
