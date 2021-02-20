@@ -198,7 +198,7 @@ next new track``).
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
 backward by pressing ``Ctrl + PgUp`` on the keyboard.
 
-To jump to a specific frame number, press ``G`` (``Jump to frame``)
+To jump to a specific frame number, press ``G`` (``Go to frame``)
 and enter the frame number in the dialog box that pops up.
 
 To remember the current location (frame number) in the video, you can
@@ -397,7 +397,6 @@ from argos.vreader import VideoReader
 from argos.limitswidget import LimitsWidget
 from argos.vwidget import VidInfo
 
-
 settings = ut.init()
 
 
@@ -488,7 +487,25 @@ class TrackReader(qc.QObject):
         post = min(len(track), pos + hist)
         return track.iloc[pre: post].copy()
 
+    def getFramePrevNew(self, frame_no):
+        """Return the previous frame where a new object ID was detected"""
+        if frame_no <= 0:
+            return 0
+        entry_frame = []
+        cur_tracks = self.track_data[
+            self.track_data.frame < frame_no][['trackid', 'frame']]
+        for trackid, fgrp in cur_tracks.groupby('trackid'):
+            entry_frame.append((fgrp['frame'].min(), trackid))
+        if len(entry_frame) == 0:
+            return frame_no
+        entry_frame = pd.DataFrame(data=entry_frame,
+                                   columns=['frame', 'trackid'])
+        entry_frame.sort_values(by='frame', ascending=False, inplace=True)
+        fno = entry_frame.iloc[0]['frame']
+        return fno
+
     def getFrameNextNew(self, frame_no):
+        """Return the next frame where a new object ID was detected"""
         if frame_no > self.last_frame:
             return self.last_frame + 1
         cur_tracks = set(self.track_data[self.track_data.frame <=
@@ -616,7 +633,8 @@ class TrackReader(qc.QObject):
                 delete_idx.add(orig_idx)
             elif orig_idx is not None:  # push the orig index back
                 idx_dict[change.orig] = orig_idx
-        tracks = {t[0]: t[1:] for ii, t in enumerate(tracks) if ii not in delete_idx}
+        tracks = {t[0]: t[1:] for ii, t in enumerate(tracks) if
+                  ii not in delete_idx}
         return tracks
 
     def saveChanges(self, filepath):
@@ -715,24 +733,22 @@ class ReviewScene(FrameScene):
         for item in self.trackHist:
             self.removeItem(item)
         self.trackHist = []
+        colors = [qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
+            for ii in range(len(track))]
+        pens = [qg.QPen(qg.QBrush(color), self.markerThickness)
+                for color in colors]
         if self.trackStyle == '-':
-            for ii in range(2, len(track)):
-                color = qg.QColor(
-                    *get_cmap_color(ii, len(track), self.pathCmap))
-                pen = qg.QPen(qg.QBrush(color), self.markerThickness)
-                x1, y1 = track[ii - 1]
-                x2, y2 = track[ii]
-                self.trackHist.append(self.addLine(x1, y1, x2, y2, pen))
+            self.trackHist = [self.addLine(track[ii - 1][0],
+                                           track[ii - 1][1],
+                                           track[ii][0],
+                                           track[ii][1], pens[ii])
+                              for ii in range(1, len(track))]
         elif self.trackStyle == 'o':
-            for ii, t in enumerate(track):
-                color = qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
-                pen = qg.QPen(qg.QBrush(color), self.markerThickness)
-                self.trackHist.append(self.addEllipse(t[0],
-                                                      t[1],
-                                                      self.pathDia,
-                                                      self.pathDia,
-                                                      pen))
-                # self.trackHist = [self.addEllipse(t[0] - 1, t[1] - 1, 2, 2, qg.QPen(self.selected_color)) for t in track]
+            self.trackHist = [self.addEllipse(track[ii][0], track[ii][1],
+                                              self.pathDia,
+                                              self.pathDia,
+                                              pens[ii])
+                              for ii in range(len(track))]
 
     @qc.pyqtSlot(float)
     def setPathDia(self, val):
@@ -781,8 +797,10 @@ class ReviewScene(FrameScene):
             self.labelDict[id_] = text
             text.setFont(self.font)
             text.setDefaultTextColor(color)
-            # text.setPos(rect[0], rect[1] - text.boundingRect().height())
-            text.setPos(rect[0], rect[1])
+            if self.labelInside:
+                text.setPos(rect[0], rect[1])
+            else:
+                text.setPos(rect[0], rect[1] - text.boundingRect().height())
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
             self.polygons[id_] = rect
@@ -805,7 +823,7 @@ class TrackView(FrameView):
         self.sigSelected.connect(self.scene().setSelected)
         self.sigTrackDia.connect(self.scene().setPathDia)
         self.sigTrackMarkerThickness.connect(
-            self.scene().setTrackMarkerThickness)
+            self.frameScene.setTrackMarkerThickness)
 
     def setViewportRect(self, rect: qc.QRectF) -> None:
         self.fitInView(rect.x(), rect.y(),
@@ -837,6 +855,13 @@ class TrackView(FrameView):
 
 
 class TrackList(qw.QListWidget):
+    """
+    Attributes
+    ----------
+    keepSelection: bool
+        Whether to maintain selection of list item across frames. When the path
+        of the selected item is drawn, this makes things VERY SLOW.
+    """
     sigMapTracks = qc.pyqtSignal(int, int, bool, bool)
     sigSelected = qc.pyqtSignal(list)
 
@@ -845,6 +870,13 @@ class TrackList(qw.QListWidget):
         self._drag_button = qc.Qt.NoButton
         self.setSelectionMode(qw.QAbstractItemView.SingleSelection)
         self.itemSelectionChanged.connect(self.sendSelected)
+        self.keepSelection = settings.value('review/keepselection', type=bool)
+        self.selected = []
+
+    @qc.pyqtSlot(bool)
+    def setKeepSelection(self, val):
+        self.keepSelection = val
+        settings.setValue('review/keepselection', val)
 
     def decode_item_data(self, mime_data: qc.QMimeData) -> List[
         Dict[qc.Qt.ItemDataRole, qc.QVariant]]:
@@ -901,14 +933,27 @@ class TrackList(qw.QListWidget):
     @qc.pyqtSlot(list)
     def replaceAll(self, track_list: List[int]):
         """Replace all items with keys from new tracks dictionary"""
+        self.blockSignals(True)
         self.clear()
-        self.addItems([str(x) for x in sorted(track_list)])
+        sorted_tracks = sorted(track_list)
+        self.addItems([str(x) for x in sorted_tracks])
+        if self.keepSelection and len(self.selected) > 0:
+            try:
+                idx = sorted_tracks.index(self.selected[0])
+                self.setCurrentRow(idx)
+                print('BBBB. Selected items', self.selected, 'current row', idx)
+            except ValueError:
+                pass
+            self.blockSignals(False)
+            self.sendSelected()
+        self.blockSignals(False)
 
     @qc.pyqtSlot()
     def sendSelected(self):
         """Intermediate slot to convert text labels into integer track ids"""
-        items = [int(item.text()) for item in self.selectedItems()]
-        self.sigSelected.emit(items)
+        self.selected = [int(item.text()) for item in self.selectedItems()]
+        print('AAAAA. Selected items', self.selected)
+        self.sigSelected.emit(self.selected)
 
 
 class LimitWin(qw.QMainWindow):
@@ -955,7 +1000,8 @@ class ReviewWidget(qw.QWidget):
     sigLeftFrame = qc.pyqtSignal(np.ndarray, int)
     sigRightFrame = qc.pyqtSignal(np.ndarray, int)
     sigLeftTracks = qc.pyqtSignal(dict)
-    sigLeftTrackList = qc.pyqtSignal(list)  # to separate tracks displayed on frame from those in list widget
+    sigLeftTrackList = qc.pyqtSignal(
+        list)  # to separate tracks displayed on frame from those in list widget
     sigRightTracks = qc.pyqtSignal(dict)
     sigRightTrackList = qc.pyqtSignal(list)
     sigAllTracksList = qc.pyqtSignal(list)
@@ -1109,6 +1155,8 @@ class ReviewWidget(qw.QWidget):
             self.leftView.frameScene.setColormap)
         self.rightView.sigSetColor.connect(
             self.leftView.frameScene.setColor)
+        self.rightView.sigSetSelectedColor.connect(
+            self.leftView.frameScene.setSelectedColor)
         # self.sigSetColormap.connect(self.leftView.frameScene.setColormap)
         # self.sigSetColormap.connect(self.rightView.frameScene.setColormap)
         self.leftView.frameScene.sigMousePos.connect(self.mousePosMessage)
@@ -1299,7 +1347,21 @@ class ReviewWidget(qw.QWidget):
         self.invertOverlayColorAction = qw.QAction('Invert overlay color')
         self.invertOverlayColorAction.setCheckable(True)
         self.invertOverlayColorAction.setChecked(False)
+        self.keepSelectionAction = qw.QAction('Retain selection across frames')
+        self.keepSelectionAction.setToolTip('If unchecked, item selection is '
+                                            'lost when frame changes. If '
+                                            'checked and path display is on,'
+                                            'this can make things very slow.')
+        self.keepSelectionAction.setCheckable(True)
+        self.keepSelectionAction.setChecked(self.right_list.keepSelection)
+        self.keepSelectionAction.triggered.connect(
+            self.right_list.setKeepSelection)
+        self.keepSelectionAction.triggered.connect(
+            self.left_list.setKeepSelection)
+        self.keepSelectionAction.triggered.connect(
+            self.all_list.setKeepSelection)
         self.setColorAction = self.rightView.setColorAction
+        self.setSelectedColorAction = self.rightView.setSelectedColorAction
         self.autoColorAction = self.rightView.autoColorAction
         self.autoColorAction.triggered.connect(
             self.leftView.autoColorAction.trigger)
@@ -1309,6 +1371,9 @@ class ReviewWidget(qw.QWidget):
         self.pathCmapAction.triggered.connect(self.setPathColormap)
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
+        self.labelInsideAction = self.rightView.setLabelInsideAction
+        self.rightView.sigSetLabelInside.connect(
+            self.leftView.frameScene.setLabelInside)
         self.lineWidthAction = self.rightView.lineWidthAction
         self.rightView.sigLineWidth.connect(
             self.leftView.frameScene.setLineWidth)
@@ -1319,6 +1384,9 @@ class ReviewWidget(qw.QWidget):
             self.leftView.frameScene.setFontSizePixels)
         self.setPathDiaAction = qw.QAction('Set path marker diameter')
         self.setPathDiaAction.triggered.connect(self.rightView.setPathDia)
+        self.setMarkerThicknessAction = qw.QAction('Set path linewidth')
+        self.setMarkerThicknessAction.triggered.connect(
+            self.rightView.setTrackMarkerThickness)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.rightView.setArenaMode)
         self.rightView.resetArenaAction.triggered.connect(self.resetRoi)
@@ -1348,14 +1416,23 @@ class ReviewWidget(qw.QWidget):
         self.resetAction = qw.QAction('Reset')
         self.resetAction.setToolTip('Reset to initial state.'
                                     ' Lose all unsaved changes.')
-        self.gotoFrameAction = qw.QAction('Jump to frame (g)')
+
+        self.nextFrameAction = qw.QAction('Next frame (Page down)')
+        self.nextFrameAction.triggered.connect(self.nextFrame)
+        self.prevFrameAction = qw.QAction('Previous frame (Page up)')
+        self.prevFrameAction.triggered.connect(self.prevFrame)
+        self.gotoFrameAction = qw.QAction('Go to frame (g)')
         self.gotoFrameAction.triggered.connect(self.gotoFrameDialog)
         self.jumpForwardAction = qw.QAction('Jump forward (Ctrl+Page down)')
         self.jumpForwardAction.triggered.connect(self.jumpForward)
         self.jumpBackwardAction = qw.QAction('Jump backward (Ctrl+Page up)')
         self.jumpBackwardAction.triggered.connect(self.jumpBackward)
+
         self.jumpNextNewAction = qw.QAction('Jump to next new track (n)')
         self.jumpNextNewAction.triggered.connect(self.jumpNextNew)
+        self.jumpPrevNewAction = qw.QAction('Jump to previous new track (p)')
+        self.jumpPrevNewAction.triggered.connect(self.jumpPrevNew)
+
         self.jumpNextChangeAction = qw.QAction('Jump to next change (c)')
         self.jumpNextChangeAction.triggered.connect(self.gotoNextChange)
         self.jumpPrevChangeAction = qw.QAction(
@@ -1483,6 +1560,8 @@ class ReviewWidget(qw.QWidget):
         self.sc_jump_back.activated.connect(self.jumpBackward)
         self.sc_jump_nextnew = qw.QShortcut(qg.QKeySequence('N'), self)
         self.sc_jump_nextnew.activated.connect(self.jumpNextNew)
+        self.sc_jump_prevnew = qw.QShortcut(qg.QKeySequence('P'), self)
+        self.sc_jump_prevnew.activated.connect(self.jumpPrevNew)
         self.sc_jump_nextchange = qw.QShortcut(qg.QKeySequence('C'), self)
         self.sc_jump_nextchange.activated.connect(self.gotoNextChange)
         self.sc_jump_prevchange = qw.QShortcut(qg.QKeySequence('Shift+C'), self)
@@ -1500,6 +1579,8 @@ class ReviewWidget(qw.QWidget):
         self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
         self.sc_hist = qw.QShortcut(qg.QKeySequence('T'), self)
         self.sc_hist.activated.connect(self.showHistoryAction.toggle)
+        self.sc_keepsel = qw.QShortcut(qg.QKeySequence('S'), self)
+        self.sc_keepsel.activated.connect(self.keepSelectionAction.toggle)
         self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)
         self.sc_next.activated.connect(self.nextFrame)
         self.sc_prev = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageUp), self)
@@ -1689,6 +1770,13 @@ class ReviewWidget(qw.QWidget):
         self.gotoFrame(frame)
 
     @qc.pyqtSlot()
+    def jumpPrevNew(self):
+        if self.track_reader is None:
+            return
+        frame = self.track_reader.getFramePrevNew(self.frame_no)
+        self.gotoFrame(frame)
+
+    @qc.pyqtSlot()
     def gotoNextChange(self):
         if self.track_reader is None:
             return
@@ -1801,9 +1889,11 @@ class ReviewWidget(qw.QWidget):
             include = {}
             track_ids = list(tracks.keys())
             for tid in track_ids:
-                vertices = rect2points(np.array(tracks[tid][:4]))  # In reviewer we also pass the frame no. in 5 th element
-                contained = [self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
-                             for vtx in vertices]
+                vertices = rect2points(np.array(tracks[tid][
+                                                :4]))  # In reviewer we also pass the frame no. in 5 th element
+                contained = [
+                    self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
+                    for vtx in vertices]
                 if not np.any(contained):
                     self.track_reader.deleteTrack(self.frame_no, tid)
                     tracks.pop(tid)
@@ -2174,13 +2264,18 @@ class ReviewerMain(qw.QMainWindow):
         view_menu.addAction(self.reviewWidget.tieViewsAction)
         view_menu.addAction(self.reviewWidget.showGrayscaleAction)
         view_menu.addAction(self.reviewWidget.setColorAction)
+        view_menu.addAction(self.reviewWidget.setSelectedColorAction)
         view_menu.addAction(self.reviewWidget.autoColorAction)
         view_menu.addAction(self.reviewWidget.colormapAction)
         view_menu.addAction(self.reviewWidget.pathCmapAction)
+        view_menu.addAction(self.reviewWidget.keepSelectionAction)
+        view_menu.addSeparator()
+        view_menu.addAction(self.reviewWidget.labelInsideAction)
         view_menu.addAction(self.reviewWidget.fontSizeAction)
         view_menu.addAction(self.reviewWidget.relativeFontSizeAction)
         view_menu.addAction(self.reviewWidget.lineWidthAction)
         view_menu.addAction(self.reviewWidget.setPathDiaAction)
+        view_menu.addAction(self.reviewWidget.setMarkerThicknessAction)
         view_menu.addAction(self.reviewWidget.showBboxAction)
         view_menu.addAction(self.reviewWidget.showIdAction)
         view_menu.addAction(self.reviewWidget.showOldTracksAction)
@@ -2205,9 +2300,13 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.reviewWidget.slowDownAction)
         play_menu.addAction(self.reviewWidget.resetAction)
 
+        play_menu.addSeparator()
+        play_menu.addAction(self.reviewWidget.nextFrameAction)
+        play_menu.addAction(self.reviewWidget.prevFrameAction)
         play_menu.addAction(self.reviewWidget.gotoFrameAction)
         play_menu.addAction(self.reviewWidget.jumpForwardAction)
         play_menu.addAction(self.reviewWidget.jumpBackwardAction)
+        play_menu.addSeparator()
         play_menu.addAction(self.reviewWidget.frameBreakpointAction)
         play_menu.addAction(self.reviewWidget.curBreakpointAction)
         play_menu.addAction(self.reviewWidget.entryBreakpointAction)
@@ -2216,9 +2315,10 @@ class ReviewerMain(qw.QMainWindow):
         play_menu.addAction(self.reviewWidget.clearBreakpointAction)
         play_menu.addAction(self.reviewWidget.clearEntryBreakpointAction)
         play_menu.addAction(self.reviewWidget.clearExitBreakpointAction)
-
+        play_menu.addSeparator()
         play_menu.addAction(self.reviewWidget.jumpToBreakpointAction)
         play_menu.addAction(self.reviewWidget.jumpNextNewAction)
+        play_menu.addAction(self.reviewWidget.jumpPrevNewAction)
         play_menu.addAction(self.reviewWidget.jumpNextChangeAction)
         play_menu.addAction(self.reviewWidget.jumpPrevChangeAction)
 

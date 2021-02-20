@@ -47,10 +47,11 @@ class FrameScene(qw.QGraphicsScene):
         self.colormap = 'viridis'
         self.max_colors = 100
         self.color = qg.QColor(qc.Qt.green)
-        self.selected_color = qg.QColor(qc.Qt.blue)
+        self.selectedColor = qg.QColor(qc.Qt.blue)
         self.incomplete_color = qg.QColor(qc.Qt.magenta)
         self.linewidth = settings.value('argos/linewidth', 2.0, type=float)
-        self.linestyle_selected = qc.Qt.DotLine
+        self.labelInside = settings.value('argos/labelinside', True, type=bool)
+        # self.linestyle_selected = qc.Qt.DotLine
         self.showBbox = True
         self.showId = True
         self.snap_dist = 5
@@ -69,7 +70,7 @@ class FrameScene(qw.QGraphicsScene):
 
     def clearItems(self):
         self.points = []
-        self.selected = []
+        # self.selected = []
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
@@ -95,9 +96,8 @@ class FrameScene(qw.QGraphicsScene):
                         *get_cmap_color(key % self.max_colors, self.max_colors,
                                         self.colormap))
                 else:
-                    color = self.selected_color
-                pen = qg.QPen(color, self.linewidth,
-                              style=self.linestyle_selected)
+                    color = self.selectedColor
+                pen = qg.QPen(color, self.linewidth + 2)
                 self.itemDict[key].setPen(pen)
                 self.itemDict[key].setZValue(1)
                 self.labelDict[key].setDefaultTextColor(color)
@@ -203,8 +203,10 @@ class FrameScene(qw.QGraphicsScene):
         self.labelDict[index] = text
         text.setDefaultTextColor(self.color)
         # logging.debug(f'Scene bounding rect of {index}={bbox}')
-        # text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
-        text.setPos(bbox.x(), bbox.y())
+        if self.labelInside:
+            text.setPos(bbox.x(), bbox.y())
+        else:
+            text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
         text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                      self.textIgnoresTransformation)
         self.sigPolygons.emit(self.polygons)
@@ -239,6 +241,12 @@ class FrameScene(qw.QGraphicsScene):
         self.arena = None
         self.clearItems()
         self.invalidate(self.sceneRect())
+
+    @qc.pyqtSlot(bool)
+    def setLabelInside(self, val):
+        """If True, draw the label inside bbox, otherwise, above it"""
+        self.labelInside = val
+        settings.setValue('argos/labelinside', val)
 
     @qc.pyqtSlot(float)
     def setLineWidth(self, width):
@@ -301,19 +309,19 @@ class FrameScene(qw.QGraphicsScene):
     @qc.pyqtSlot(qg.QColor)
     def setSelectedColor(self, color: qg.QColor) -> None:
         """Color of selected rectangle"""
-        self.selected_color = color
+        self.selectedColor = color
         for key in self.selected:
             item = self.itemDict[key]
             pen = item.pen()
-            pen.setColor(self.selected_color)
+            pen.setColor(self.selectedColor)
             item.setPen(pen)
-            self.labelDict[key].setDefaultTextColor(self.selected_color)
+            self.labelDict[key].setDefaultTextColor(self.selectedColor)
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
         if auto:
             self.color_mode = ColorMode.auto
-            self.linestyle_selected = qc.Qt.DotLine
+            # self.linestyle_selected = qc.Qt.DotLine
             for key, item in self.itemDict.items():
                 color = qg.QColor(*make_color(key))
                 pen = item.pen()
@@ -322,7 +330,7 @@ class FrameScene(qw.QGraphicsScene):
                 self.labelDict[key].setDefaultTextColor(color)
         else:
             self.color_mode = ColorMode.single
-            self.linestyle_selected = qc.Qt.SolidLine
+            # self.linestyle_selected = qc.Qt.SolidLine
             for key, item in self.itemDict.items():
                 pen = item.pen()
                 pen.setColor(self.color)
@@ -331,9 +339,9 @@ class FrameScene(qw.QGraphicsScene):
             for key in self.selected:
                 item = self.itemDict[key]
                 pen = item.pen()
-                pen.setColor(self.selected_color)
+                pen.setColor(self.selectedColor)
                 item.setPen(pen)
-                self.labelDict[key].setDefaultTextColor(self.selected_color)
+                self.labelDict[key].setDefaultTextColor(self.selectedColor)
         self.update()
 
     @qc.pyqtSlot(str, int)
@@ -350,12 +358,12 @@ class FrameScene(qw.QGraphicsScene):
             get_cmap_color(0, max_items, cmap)
             self.colormap = cmap
             self.max_colors = max_items
-            self.linestyle_selected = qc.Qt.DotLine
+            # self.linestyle_selected = qc.Qt.DotLine
             self.color_mode = ColorMode.cmap
         except ValueError:
             self.max_colors = 10
             self.color_mode = ColorMode.single
-            self.linestyle_selected = qc.Qt.SolidLine
+            # self.linestyle_selected = qc.Qt.SolidLine
             return
         for key, item in self.itemDict.items():
             color = qg.QColor(
@@ -419,7 +427,10 @@ class FrameScene(qw.QGraphicsScene):
             self.itemDict[id_] = item
             text = self.addText(str(id_), self.font)
             text.setDefaultTextColor(color)
-            text.setPos(rect[0], rect[1])
+            if self.labelInside:
+                text.setPos(rect[0], rect[1])
+            else:
+                text.setPos(rect[0], rect[1] - text.boundingRect().height())
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
             self.labelDict[id_] = text
@@ -457,7 +468,10 @@ class FrameScene(qw.QGraphicsScene):
             self.labelDict[id_] = text
             text.setDefaultTextColor(color)
             pos = np.mean(poly, axis=0)
-            text.setPos(pos[0], pos[1])
+            if self.labelInside:
+                text.setPos(pos[0], pos[1])
+            else:
+                text.setPos(pos[0], pos[1] - text.boundingRect().height())
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
             # print('Herererere')
@@ -571,6 +585,7 @@ class FrameScene(qw.QGraphicsScene):
 
 class FrameView(qw.QGraphicsView):
     sigSetColor = qc.pyqtSignal(qg.QColor)
+    sigSetSelectedColor = qc.pyqtSignal(qg.QColor)
     sigSetColormap = qc.pyqtSignal(str, int)
     sigSetRectangles = qc.pyqtSignal(dict)
     sigSetPolygons = qc.pyqtSignal(dict)
@@ -581,6 +596,7 @@ class FrameView(qw.QGraphicsView):
     setArenaMode = qc.pyqtSignal()
     setRoiRectMode = qc.pyqtSignal()
     setRoiPolygonMode = qc.pyqtSignal()
+    sigSetLabelInside = qc.pyqtSignal(bool)
     sigLineWidth = qc.pyqtSignal(float)
     sigFontSize = qc.pyqtSignal(int)
     sigRelativeFontSize = qc.pyqtSignal(float)
@@ -609,6 +625,8 @@ class FrameView(qw.QGraphicsView):
         self.showGrayscaleAction.triggered.connect(self.frameScene.setGrayScale)
         self.setColorAction = qw.QAction('Set color')
         self.setColorAction.triggered.connect(self.chooseColor)
+        self.setSelectedColorAction = qw.QAction('Set color of selected ID')
+        self.setSelectedColorAction.triggered.connect(self.chooseSelectedColor)
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(self.setAutoColor)
@@ -616,6 +634,10 @@ class FrameView(qw.QGraphicsView):
         self.colormapAction = qw.QAction('Colormap')
         self.colormapAction.triggered.connect(self.setColormap)
         self.colormapAction.setCheckable(True)
+        self.setLabelInsideAction = qw.QAction('Label inside bbox')
+        self.setLabelInsideAction.setCheckable(True)
+        self.setLabelInsideAction.setChecked(self.frameScene.labelInside)
+        self.setLabelInsideAction.triggered.connect(self.frameScene.setLabelInside)
         self.lineWidthAction = qw.QAction('Line width')
         self.lineWidthAction.triggered.connect(self.setLW)
         self.fontSizeAction = qw.QAction('Set font size in points')        
@@ -631,6 +653,7 @@ class FrameView(qw.QGraphicsView):
         self.showIdAction.setChecked(True)
         self.showIdAction.triggered.connect(self.frameScene.setShowId)
         self.sigSetColor.connect(self.frameScene.setColor)
+        self.sigSetSelectedColor.connect(self.frameScene.setSelectedColor)
         self.setArenaMode.connect(self.frameScene.setArenaMode)
         self.setRoiRectMode.connect(self.frameScene.setRoiRectMode)
         self.setRoiPolygonMode.connect(self.frameScene.setRoiPolygonMode)
@@ -715,6 +738,12 @@ class FrameView(qw.QGraphicsView):
         self.sigSetColor.emit(color)
         self.colormapAction.setChecked(False)
         self.autoColorAction.setChecked(False)
+
+    @qc.pyqtSlot()
+    def chooseSelectedColor(self):
+        color = qw.QColorDialog.getColor(initial=self.frameScene.selectedColor,
+                                         parent=self)
+        self.sigSetSelectedColor.emit(color)
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, checked):
