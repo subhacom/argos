@@ -290,6 +290,7 @@ class ArgosMain(qw.QMainWindow):
                                     self._video_widget.setColorAction,
                                     self._video_widget.autoColorAction,
                                     self._video_widget.colormapAction,
+                                    self._video_widget.setLabelInsideAction,
                                     self._video_widget.fontSizeAction,
                                     self._video_widget.relativeFontSizeAction,
                                     self._video_widget.lineWidthAction,

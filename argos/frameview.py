@@ -42,13 +42,23 @@ class FrameScene(qw.QGraphicsScene):
         self._frame = None
         self.geom = DrawingGeom.arena
         self.grayscale = False  # frame will be converted to grayscale
-        self.color_mode = ColorMode.single
+        self.colorMode = settings.value('argos/color_mode', 0)
+        if self.colorMode == 0:
+            self.colorMode = ColorMode.single
+        elif self.colorMode == 1:
+            self.colorMode = ColorMode.auto
+        else:
+            self.colorMode = ColorMode.cmap
         # self.autocolor = False
-        self.colormap = 'viridis'
-        self.max_colors = 100
-        self.color = qg.QColor(qc.Qt.green)
-        self.selectedColor = qg.QColor(qc.Qt.blue)
-        self.incomplete_color = qg.QColor(qc.Qt.magenta)
+        self.colormap = settings.value('argos/colormap', 'viridis')
+        self.maxColors = 100
+        self.color = settings.value('argos/color', '#00ff00')
+        self.color = qg.QColor(self.color)
+        self.selectedColor = settings.value('argos/selected_color', '#0000ff')
+        self.selectedColor = qg.QColor(self.selectedColor)
+        self.incompleteColor = settings.value('argos/incomplete_color',
+                                               '#ff00ff')
+        self.incompleteColor = qg.QColor(self.incompleteColor)
         self.linewidth = settings.value('argos/linewidth', 2.0, type=float)
         self.labelInside = settings.value('argos/labelinside', True, type=bool)
         # self.linestyle_selected = qc.Qt.DotLine
@@ -89,11 +99,11 @@ class FrameScene(qw.QGraphicsScene):
         boldFont.setWeight(qg.QFont.Bold)
         for key in self.itemDict:
             if key in selected:
-                if self.color_mode == ColorMode.auto:
+                if self.colorMode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
-                elif self.color_mode == ColorMode.cmap:
+                elif self.colorMode == ColorMode.cmap:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.max_colors, self.max_colors,
+                        *get_cmap_color(key % self.maxColors, self.maxColors,
                                         self.colormap))
                 else:
                     color = self.selectedColor
@@ -104,11 +114,11 @@ class FrameScene(qw.QGraphicsScene):
                 self.labelDict[key].setFont(boldFont)
                 self.labelDict[key].setZValue(1)
             else:
-                if self.color_mode == ColorMode.auto:
+                if self.colorMode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
-                elif self.color_mode == ColorMode.cmap:
+                elif self.colorMode == ColorMode.cmap:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.max_colors, self.max_colors,
+                        *get_cmap_color(key % self.maxColors, self.maxColors,
                                         self.colormap))
                 else:
                     color = self.color
@@ -185,12 +195,12 @@ class FrameScene(qw.QGraphicsScene):
         elif self.geom == DrawingGeom.polygon:
             poly = qg.QPolygonF([qc.QPointF(*p) for p in item])
             item = qw.QGraphicsPolygonItem(poly)
-        if self.color_mode == ColorMode.auto:
+        if self.colorMode == ColorMode.auto:
             pen = qg.QPen(qg.QColor(*make_color(index)))
-        elif self.color_mode == ColorMode.cmap:
+        elif self.colorMode == ColorMode.cmap:
             pen = qg.QPen(
-                qg.QColor(*get_cmap_color(index % self.max_colors,
-                                          self.max_colors,
+                qg.QColor(*get_cmap_color(index % self.maxColors,
+                                          self.maxColors,
                                           self.colormap)))
         else:
             pen = qg.QPen(self.color)
@@ -214,7 +224,7 @@ class FrameScene(qw.QGraphicsScene):
 
     def addIncompletePath(self, path: qg.QPainterPath) -> None:
         self._clearIncomplete()
-        pen = qg.QPen(self.incomplete_color)
+        pen = qg.QPen(self.incompleteColor)
         pen.setWidth(self.linewidth)
         self.incomplete_item = self.addPath(path, pen)
 
@@ -297,7 +307,9 @@ class FrameScene(qw.QGraphicsScene):
     def setColor(self, color: qg.QColor) -> None:
         """Color of completed rectangles"""
         self.color = color
-        self.color_mode = ColorMode.single
+        self.colorMode = ColorMode.single
+        settings.setValue('argos/color', color.name())
+        settings.setValue('argos/color_mode', 0)
         for key, item in self.itemDict.items():
             if key not in self.selected:
                 pen = item.pen()
@@ -310,6 +322,7 @@ class FrameScene(qw.QGraphicsScene):
     def setSelectedColor(self, color: qg.QColor) -> None:
         """Color of selected rectangle"""
         self.selectedColor = color
+        settings.setValue('argos/selected_color', color.name())
         for key in self.selected:
             item = self.itemDict[key]
             pen = item.pen()
@@ -320,7 +333,8 @@ class FrameScene(qw.QGraphicsScene):
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
         if auto:
-            self.color_mode = ColorMode.auto
+            self.colorMode = ColorMode.auto
+            settings.setValue('argos/color_mode', 1)
             # self.linestyle_selected = qc.Qt.DotLine
             for key, item in self.itemDict.items():
                 color = qg.QColor(*make_color(key))
@@ -329,7 +343,8 @@ class FrameScene(qw.QGraphicsScene):
                 item.setPen(pen)
                 self.labelDict[key].setDefaultTextColor(color)
         else:
-            self.color_mode = ColorMode.single
+            self.colorMode = ColorMode.single
+            settings.setValue('argos/color_mode', 0)
             # self.linestyle_selected = qc.Qt.SolidLine
             for key, item in self.itemDict.items():
                 pen = item.pen()
@@ -347,27 +362,26 @@ class FrameScene(qw.QGraphicsScene):
     @qc.pyqtSlot(str, int)
     def setColormap(self, cmap, max_items):
         """Set a colormap `cmap` to use for getting unique color for each
-        item where maximum number of items is `max_colors`"""
+        item where maximum number of items is `maxColors`"""
         if max_items < 1:
-            # self.color_mode = ColorMode.single
-            # # self.colormap = None
-            # self.max_colors = 10
-            # self.linestyle_selected = qc.Qt.SolidLine
             return
         try:
             get_cmap_color(0, max_items, cmap)
             self.colormap = cmap
-            self.max_colors = max_items
+            self.maxColors = max_items
             # self.linestyle_selected = qc.Qt.DotLine
-            self.color_mode = ColorMode.cmap
+            self.colorMode = ColorMode.cmap
+            settings.setValue('argos/color_mode', 2)
+            settings.setValue('argos/colormap', cmap)
         except ValueError:
-            self.max_colors = 10
-            self.color_mode = ColorMode.single
+            self.maxColors = 10
+            self.colorMode = ColorMode.single
+            settings.setValue('argos/color_mode', 0)
             # self.linestyle_selected = qc.Qt.SolidLine
             return
         for key, item in self.itemDict.items():
             color = qg.QColor(
-                *get_cmap_color(key % self.max_colors, self.max_colors,
+                *get_cmap_color(key % self.maxColors, self.maxColors,
                                 self.colormap))
             pen = item.pen()
             pen.setColor(color)
@@ -378,7 +392,8 @@ class FrameScene(qw.QGraphicsScene):
 
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
-        self.incomplete_color = color
+        self.incompleteColor = color
+        settings.setValue('argos/incomplete_color', color.name())
         pen = self.incomplete_item.pen()
         pen.setColor(color)
         self.incomplete_item.setPen(pen)
@@ -414,11 +429,11 @@ class FrameScene(qw.QGraphicsScene):
         self.clearItems()
         self.polygons = rects
         for id_, rect in rects.items():
-            if self.color_mode == ColorMode.auto:
+            if self.colorMode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.color_mode  == ColorMode.cmap:
+            elif self.colorMode  == ColorMode.cmap:
                 color = qg.QColor(
-                    *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
+                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap))
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color, self.linewidth))
@@ -449,11 +464,11 @@ class FrameScene(qw.QGraphicsScene):
         for id_, poly in polygons.items():
             if len(poly.shape) != 2 or poly.shape[0] < 3:
                 continue
-            if self.color_mode == ColorMode.auto:
+            if self.colorMode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.color_mode == ColorMode.cmap:
+            elif self.colorMode == ColorMode.cmap:
                 color = qg.QColor(
-                    *get_cmap_color(id_ % self.max_colors, self.max_colors, self.colormap))
+                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap))
             else:
                 color = self.color
             self.polygons[id_] = poly
@@ -545,7 +560,7 @@ class FrameScene(qw.QGraphicsScene):
         self.sigMousePos.emit(pos)
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if len(self.points) > 0:
-            pen = qg.QPen(self.incomplete_color, self.linewidth)
+            pen = qg.QPen(self.incompleteColor, self.linewidth)
             if self.geom == DrawingGeom.rectangle:
                 if self.incomplete_item is not None:
                     # logging.debug('AAAAA %r', len(self.items()))

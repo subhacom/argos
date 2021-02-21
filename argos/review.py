@@ -708,7 +708,7 @@ class ReviewScene(FrameScene):
         self.histGradient = 1
         self.trackHist = []
         self.pathCmap = settings.value('review/path_cmap', 'viridis')
-        self.markerThickness = settings.value('review/marker_thickness', 2.0)
+        self.markerThickness = settings.value('review/marker_thickness', 2.0, type=float)
         self.pathDia = settings.value('review/path_diameter', 5)
         self.trackStyle = '-'  # `-` for line, `o` for ellipse
         # TODO implement choice of the style
@@ -774,11 +774,11 @@ class ReviewScene(FrameScene):
         for id_, tdata in rects.items():
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
-            if self.color_mode == ColorMode.auto:
+            if self.colorMode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.color_mode == ColorMode.cmap:
+            elif self.colorMode == ColorMode.cmap:
                 color = qg.QColor(
-                    *get_cmap_color(id_ % self.max_colors, self.max_colors,
+                    *get_cmap_color(id_ % self.maxColors, self.maxColors,
                                     self.colormap))
             else:
                 color = qg.QColor(self.color)
@@ -941,7 +941,7 @@ class TrackList(qw.QListWidget):
             try:
                 idx = sorted_tracks.index(self.selected[0])
                 self.setCurrentRow(idx)
-                print('BBBB. Selected items', self.selected, 'current row', idx)
+                # print('BBBB. Selected items', self.selected, 'current row', idx)
             except ValueError:
                 pass
             self.blockSignals(False)
@@ -952,7 +952,7 @@ class TrackList(qw.QListWidget):
     def sendSelected(self):
         """Intermediate slot to convert text labels into integer track ids"""
         self.selected = [int(item.text()) for item in self.selectedItems()]
-        print('AAAAA. Selected items', self.selected)
+        # print('AAAAA. Selected items', self.selected)
         self.sigSelected.emit(self.selected)
 
 
@@ -1157,6 +1157,8 @@ class ReviewWidget(qw.QWidget):
             self.leftView.frameScene.setColor)
         self.rightView.sigSetSelectedColor.connect(
             self.leftView.frameScene.setSelectedColor)
+        self.rightView.sigTrackMarkerThickness.connect(
+            self.leftView.frameScene.setTrackMarkerThickness)
         # self.sigSetColormap.connect(self.leftView.frameScene.setColormap)
         # self.sigSetColormap.connect(self.rightView.frameScene.setColormap)
         self.leftView.frameScene.sigMousePos.connect(self.mousePosMessage)
@@ -2208,6 +2210,8 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot(int, int, bool, bool)
     def mapTracks(self, new_id: int, orig_id: int, swap: bool,
                   cur: bool) -> None:
+        if new_id == orig_id:
+            return
         if swap:
             self.track_reader.swapTrack(self.frame_no, orig_id, new_id, cur)
         else:

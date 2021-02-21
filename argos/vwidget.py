@@ -115,8 +115,11 @@ class VideoWidget(qw.QWidget):
         self.colormapAction = qw.QAction('Use colormap')
         self.colormapAction.setCheckable(True)
         self.colormapAction.triggered.connect(self.setColormap)
+        self.setLabelInsideAction = qw.QAction('Label inside bbox')
+        self.setLabelInsideAction.setCheckable(True)
         self.fontSizeAction = qw.QAction('Set font size in points')
-        self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')
+        self.relativeFontSizeAction = qw.QAction(
+            'Set font size as % of larger side of image')
         self.lineWidthAction = qw.QAction('Line width')
         self.infoAction = qw.QAction('Video information')
         self.infoAction.triggered.connect(self.vid_info.show)
@@ -140,7 +143,8 @@ class VideoWidget(qw.QWidget):
                                                 'Frame height (pixels)', -1)
         if not accept:
             height = -1
-        fps, accept = qw.QInputDialog.getDouble(self, 'Frames per second', 'Frames per second', 30)
+        fps, accept = qw.QInputDialog.getDouble(self, 'Frames per second',
+                                                'Frames per second', 30)
         if not accept:
             fps = 30
         self.video_filename = str(cam_idx)
@@ -285,6 +289,10 @@ class VideoWidget(qw.QWidget):
                 self.display_widget.autoColorAction.trigger)
             self.sigSetColormap.connect(
                 self.display_widget.frameScene.setColormap)
+            self.setLabelInsideAction.setChecked(
+                self.display_widget.setLabelInsideAction.isChecked())
+            self.setLabelInsideAction.triggered.connect(
+                self.display_widget.setLabelInsideAction.trigger)
             self.fontSizeAction.triggered.connect(
                 self.display_widget.fontSizeAction.trigger)
             self.relativeFontSizeAction.triggered.connect(
@@ -354,7 +362,7 @@ class VideoWidget(qw.QWidget):
         ptime = timedelta(seconds=ptime)
         if self.outfile.endswith('.csv'):
             data_file_str = f'{self.writer.seg_filename}' \
-                        ' and {self.writer.track_filename}'
+                            ' and {self.writer.track_filename}'
         else:
             data_file_str = f'{self.outfile}'
 
@@ -414,7 +422,7 @@ class VideoWidget(qw.QWidget):
         self.endTime = time.perf_counter()
         if self.startTime != None:
             ptime = timedelta(seconds=self.endTime - self.startTime)
-            msg = f'Processed till frame # {self.currentFrame}'    \
+            msg = f'Processed till frame # {self.currentFrame}' \
                   f' in time: {ptime}.'
             logging.info(msg)
             self.sigStatusMsg.emit(msg)
