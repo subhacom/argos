@@ -1374,7 +1374,7 @@ class ReviewWidget(qw.QWidget):
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
         self.labelInsideAction = self.rightView.setLabelInsideAction
-        self.rightView.sigSetLabelInside.connect(
+        self.labelInsideAction.triggered.connect(
             self.leftView.frameScene.setLabelInside)
         self.lineWidthAction = self.rightView.lineWidthAction
         self.rightView.sigLineWidth.connect(

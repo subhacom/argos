@@ -611,7 +611,7 @@ class FrameView(qw.QGraphicsView):
     setArenaMode = qc.pyqtSignal()
     setRoiRectMode = qc.pyqtSignal()
     setRoiPolygonMode = qc.pyqtSignal()
-    sigSetLabelInside = qc.pyqtSignal(bool)
+    # sigSetLabelInside = qc.pyqtSignal(bool)
     sigLineWidth = qc.pyqtSignal(float)
     sigFontSize = qc.pyqtSignal(int)
     sigRelativeFontSize = qc.pyqtSignal(float)
