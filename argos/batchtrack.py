@@ -2,9 +2,9 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-14 1:39 PM
 """
-==============================
-Track objects in batch mode
-==============================
+===============================================
+Track objects in batch mode (non-interactively)
+===============================================
 Usage:
 ::
      python -m argos.batchtrack -i {input_file} -o {output_file}
