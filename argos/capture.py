@@ -58,6 +58,38 @@ format requires H.264 library, which can be installed as follows:
   https://github.com/cisco/openh264/releases and save them in your
   library path.
 
+Examples
+--------
+1. Read video from file ``myvideo.mpg`` and save output in
+``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
+10`` part tells the program to detect any movement such that more than
+10 contiguous pixels have changed in the frame thresholded at 20:
+frames
+::
+    python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
+    --format=DIVX -m --threshold=20 -a 10
+
+The recording will stop when the user presses ``Escape`` or ``Q`` key.
+
+2. Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi
+
+3. Record from camera# 0 for 24 hours, saving every 10,000 frames into a
+separate file:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
+    --duration=24:00:00 --max_frames=10000
+
+This will produce files with names ``myvideo_motion_cap_000.avi``,
+``myvideo_motion_cap_001.avi``, etc. along with the timestamps in files named
+``myvideo_motion_cap_000.avi.csv``, ``myvideo_motion_cap_001.avi.csv``. The
+user can stop recording at any time by pressing ``Escape`` or ``Q`` key.
+
+4. Record a frame every 3 seconds:
+::
+    python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
+
 Common problem
 --------------
 
@@ -74,34 +106,7 @@ following error:
 
 Solution: Use .avi instead of .mp4 extension when specifying output filename.
 
-Examples
---------
-Read video from file ``myvideo.mpg`` and save output in
-``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
-10`` part tells the program to detect any movement such that more than
-10 contiguous pixels have changed in the frame thresholded at 20:
-frames
-::
-    python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
-    --format=DIVX -m --threshold=20 -a 10
-
-
-Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
-::
-    python -m argos.capture -i 0 -o myvideo_motion_cap.avi
-
-Record from camera# 0 for 24 hours, saving every 10,000 frames into a
-separate file:
-::
-    python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
-    --duration=24:00:00 --max_frames=10000
-
-Record a frame every 3 seconds:
-::
-    python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
-
 """
-
 
 import sys
 import os
@@ -114,11 +119,11 @@ from matplotlib import colors
 
 from argos import caputil
 
-
 has_ccapture = False
 
 try:
     from argos.ccapture import vcapture
+
     has_ccapture = True
     print('Loaded C-function for video capture.')
 except ImportError as err:
@@ -261,7 +266,8 @@ except ImportError as err:
                 time_delta = ts - t_prev
                 time_delta = time_delta.total_seconds()
                 # print(f'Time from start {time_from_start}, specified duration {params["duration"]} s')
-                if (params['duration'] > 0) and (time_from_start > params['duration']):
+                if (params['duration'] > 0) and (
+                        time_from_start > params['duration']):
                     break
 
                 if params['motion_based']:
@@ -279,18 +285,20 @@ except ImportError as err:
                     if params['timestamp']:
                         if params['tb'] is not None:
                             (w, h), baseline = cv2.getTextSize(
-                                tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5,  2)
+                                tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                             cv2.rectangle(frame, (params['tx'], params['ty']),
                                           (params['tx'] + w, params['ty'] - h),
                                           params['tb'], cv2.FILLED)
-                        cv2.putText(frame, tstring, (params['tx'], params['ty']),
+                        cv2.putText(frame, tstring,
+                                    (params['tx'], params['ty']),
                                     cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
                                     params['tc'], 2, cv2.LINE_AA)
                     out.write(frame)
                     if params['show_contours'] and (len(contours) > 0):
                         print('Color:', params['tc'])
                         cv2.drawContours(frame, contours, -1, params['tc'], 2)
-                    tswriter.writerow([read_frames - 1, writ_frames - 1, tstring])
+                    tswriter.writerow(
+                        [read_frames - 1, writ_frames - 1, tstring])
                     # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
                     writ_frames = ((writ_frames + 1) % params['max_frames']) \
                         if params['max_frames'] > 0 else (writ_frames + 1)
@@ -367,7 +375,7 @@ def check_params(args):
         fps, width, height = caputil.get_video_fps(input_)
     print(f'Detected effective input FPS = {fps}')
     if params['fps'] <= 0:
-            params['fps'] = fps
+        params['fps'] = fps
     if params['width'] <= 0 or params['height'] <= 0:
         params['width'] = width
         params['height'] = height
@@ -404,9 +412,9 @@ def make_parser():
                                      ' the input file.')
     parser.add_argument('-i', '--input', type=str, default='0',
                         help='Input source, '
-                        'if unspecified or 0 use first available camera;'
-                        'if string, extract motion from video file;'
-                        'if an integer, that camera number.')
+                             'if unspecified or 0 use first available camera;'
+                             'if string, extract motion from video file;'
+                             'if an integer, that camera number.')
     parser.add_argument('-o', '--output', type=str, default='',
                         help='output file path')
     motion_group = parser.add_argument_group(
@@ -416,30 +424,30 @@ def make_parser():
                               help='Whether to use motion detection')
     motion_group.add_argument('-k', '--kernel_width', type=int, default=21,
                               help='Width of the Gaussian kernel for smoothing'
-                              ' the frame before comparison with previous'
-                              'frame. Small changes are better detected '
-                              ' With a smaller value (21 works well for about'
-                              ' 40x10 pixel insects)')
+                                   ' the frame before comparison with previous'
+                                   'frame. Small changes are better detected '
+                                   ' With a smaller value (21 works well for about'
+                                   ' 40x10 pixel insects)')
     motion_group.add_argument('--threshold', type=int, default=10,
                               help='Grayscale threshold value for detecting'
-                              ' change in pixel value between frames')
+                                   ' change in pixel value between frames')
     motion_group.add_argument('-a', '--min_area', type=int, default=100,
                               help='Area in pixels that must change in'
-                              ' order to consider it actual movement as'
-                              'opposed to noise.'
-                              ' Works with --motion_based option')
+                                   ' order to consider it actual movement as'
+                                   'opposed to noise.'
+                                   ' Works with --motion_based option')
     motion_group.add_argument('--show_contours', action='store_true',
                               help='Draw the contours exceeding `min_area`.'
-                              ' Useful for debugging')
+                                   ' Useful for debugging')
     motion_group.add_argument('--show_diff', action='store_true',
                               help='Show the absolute difference between'
-                              ' successive frames and the thresholded '
-                              ' difference in two additional windows.'
-                              ' Useful for debugging and choosing parameters'
-                              ' for motion detection.'
-                              'NOTE: the diff values are displayed using'
-                              ' the infamous jet colormap, which turns out'
-                              ' to be good at highlighting small differences')
+                                   ' successive frames and the thresholded '
+                                   ' difference in two additional windows.'
+                                   ' Useful for debugging and choosing parameters'
+                                   ' for motion detection.'
+                                   'NOTE: the diff values are displayed using'
+                                   ' the infamous jet colormap, which turns out'
+                                   ' to be good at highlighting small differences')
     timestamp_group = parser.add_argument_group(
         title='Timestamp parameters',
         description='Parameters to display timestamp in recorded frame')
@@ -451,18 +459,18 @@ def make_parser():
                                  help='Y position of timestamp text')
     timestamp_group.add_argument('--tc', type=str, default='#ff0000',
                                  help='Color of timestamp text in web format'
-                                 ' (#RRGGBB)')
+                                      ' (#RRGGBB)')
     timestamp_group.add_argument('--tb', type=str, default='',
                                  help='Background color for timestamp text')
     timestamp_group.add_argument('--fs', type=float, default=1.0,
                                  help='Font scale for timestamp text '
-                                 '(this is not font size).')
+                                      '(this is not font size).')
     parser.add_argument('--interval', type=float, default=-1,  #
                         help='Interval in seconds between acquiring frames.')
     parser.add_argument('--duration', type=str, default='',
                         help='Duration of recordings in HH:MM:SS format.'
-                        ' If unspecified or empty string, we will record'
-                        'indefinitely.')
+                             ' If unspecified or empty string, we will record'
+                             'indefinitely.')
     parser.add_argument('--interactive', type=int, default=1,
                         help='Whether to display video as it gets captured. '
                              'Setting it to 0 may speed up things a bit.')
@@ -470,20 +478,20 @@ def make_parser():
                         help='Whether to select ROI.')
     parser.add_argument('--max_frames', type=int, default=-1,
                         help='After these many frames, save in a '
-                        'new video file')
+                             'new video file')
     parser.add_argument('--format', type=str, default='MJPG',
                         help='Output video codec, see '
-                        'http://www.fourcc.org/codecs.php for description'
-                        ' of available codecs on different platforms.'
-                        ' default X264 produces the smallest videos')
+                             'http://www.fourcc.org/codecs.php for description'
+                             ' of available codecs on different platforms.'
+                             ' default X264 produces the smallest videos')
     camera_group = parser.add_argument_group(
         title='Camera settings',
         description='Parameters to set camera properties')
     camera_group.add_argument('--fps', type=float, default=30,
                               help='frames per second, if recording from a'
-                              ' camera, and set to negative, we '
-                              'record 120 frames first to estimate frame'
-                              ' rate of camera.')
+                                   ' camera, and set to negative, we '
+                                   'record 120 frames first to estimate frame'
+                                   ' rate of camera.')
     camera_group.add_argument('--width', type=int, default=-1,
                               help='Frame width')
     camera_group.add_argument('--height', type=int, default=-1,

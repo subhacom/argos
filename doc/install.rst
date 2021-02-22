@@ -6,20 +6,20 @@ Installation using Anaconda
    <https://www.anaconda.com/products/individual#Downloads>`_.
    
 2. Create an environment with required packages (enter this commands
-   in Anaconda prompt):
-   ::
-   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers
+   in Anaconda prompt)::
+
+     conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers
    
    This will create a virtual Python environment called ``track``.
    
-3. Activate the environment (enter this commands in Anaconda prompt):
-   ::
-   conda activate track
+3. Activate the environment (enter this commands in Anaconda prompt)::
+
+     conda activate track
    
 4. Install OpenCV with contributed modules (required for some recent tracking 
-   algorithms, but not part of the main OpenCV distribution available in conda):
-   ::
-   pip install opencv-contrib-python
+   algorithms, but not part of the main OpenCV distribution available in conda)::
+
+     pip install opencv-contrib-python
    
 5. Install PyTorch.
 
@@ -31,9 +31,9 @@ Installation using Anaconda
 
    In case you do not have a CUDA capable GPU, you have to use
    *CPU-only* version (which can be ~10 times slower), in the Anaconda
-   prompt:
-   ::
-   conda install pytorch torchvision cpuonly -c pytorch 
+   prompt::
+
+     conda install pytorch torchvision cpuonly -c pytorch
 
 6. Install ``pycocotools``.
 
@@ -44,11 +44,13 @@ Installation using Anaconda
      2. Go to ``C:\Program Files (x86)\Microsoft Visual C++ Build
         Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
      3. Install [git](https://git-scm.com/downloads)
-     4. In the Anaconda command prompt run:
-	::
-        pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
+     4. In the Anaconda command prompt run::
+
+          pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
 		
    On Linux/Unix/Mac you need to have ``make`` and ``g++`` installed, and then in 
-   the Anaconda command prompt:
-   ::
-   pip install pycocotools
+   the Anaconda command prompt::
+
+     pip install pycocotools
+
+

@@ -61,6 +61,8 @@ class FrameScene(qw.QGraphicsScene):
         self.incompleteColor = qg.QColor(self.incompleteColor)
         self.linewidth = settings.value('argos/linewidth', 2.0, type=float)
         self.labelInside = settings.value('argos/labelinside', True, type=bool)
+        self.alphaUnselected = settings.value('argos/alpha_unselected', 255,
+                                            type=int)
         # self.linestyle_selected = qc.Qt.DotLine
         self.showBbox = True
         self.showId = True
@@ -69,6 +71,8 @@ class FrameScene(qw.QGraphicsScene):
         self.points = []
         self.selected = []
         self.font = qw.QApplication.font()
+        self.boldFont = qg.QFont(self.font)
+        self.boldFont.setWeight(qg.QFont.Bold)
         self.textIgnoresTransformation = True
         # self.font.setBold(True)
 
@@ -95,8 +99,10 @@ class FrameScene(qw.QGraphicsScene):
     def setSelected(self, selected: List[int]) -> None:
         """Set list of selected items"""
         self.selected = selected
-        boldFont = qg.QFont(self.font)
-        boldFont.setWeight(qg.QFont.Bold)
+        if len(selected) == 0:
+            self._updateItemDisplay()
+            self.update()
+            return
         for key in self.itemDict:
             if key in selected:
                 if self.colorMode == ColorMode.auto:
@@ -107,11 +113,12 @@ class FrameScene(qw.QGraphicsScene):
                                         self.colormap))
                 else:
                     color = self.selectedColor
+                # Make the selected item bbox thicker
                 pen = qg.QPen(color, self.linewidth + 2)
                 self.itemDict[key].setPen(pen)
                 self.itemDict[key].setZValue(1)
                 self.labelDict[key].setDefaultTextColor(color)
-                self.labelDict[key].setFont(boldFont)
+                self.labelDict[key].setFont(self.boldFont)
                 self.labelDict[key].setZValue(1)
             else:
                 if self.colorMode == ColorMode.auto:
@@ -122,13 +129,15 @@ class FrameScene(qw.QGraphicsScene):
                                         self.colormap))
                 else:
                     color = self.color
-                # color.setAlpha(64)  # make the non-selected items transparent
+                    # make the non-selected items transparent
+                color.setAlpha(self.alphaUnselected)
                 pen = qg.QPen(color, self.linewidth)
                 self.itemDict[key].setPen(pen)
                 self.itemDict[key].setZValue(0)
                 self.labelDict[key].setDefaultTextColor(color)
                 self.labelDict[key].setFont(self.font)
                 self.labelDict[key].setZValue(0)
+        self.update()
 
     @qc.pyqtSlot()
     def keepSelected(self):
@@ -252,30 +261,36 @@ class FrameScene(qw.QGraphicsScene):
         self.clearItems()
         self.invalidate(self.sceneRect())
 
+    def _setLabelInside(self, labelInside):
+        for key, item in self.itemDict.items():
+            text = self.labelDict[key]
+            bbox = item.sceneBoundingRect()
+            if labelInside:
+                text.setPos(bbox.x(), bbox.y())
+            else:
+                text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
+
     @qc.pyqtSlot(bool)
     def setLabelInside(self, val):
         """If True, draw the label inside bbox, otherwise, above it"""
         self.labelInside = val
         settings.setValue('argos/labelinside', val)
+        self._setLabelInside(val)
+        self.update()
 
     @qc.pyqtSlot(float)
     def setLineWidth(self, width):
         self.linewidth = width
         settings.setValue('argos/linewidth', width)
-        for item in self.itemDict.values():
-            pen = item.pen()
-            pen.setWidth(width)
-            item.setPen(pen)
+        self._updateItemDisplay()
         self.update()
 
     @qc.pyqtSlot(int)
     def setFontSize(self, size):
         self.font.setPointSize(size)
-        for key, label in self.labelDict.items():
-            if sip.isdeleted(label):
-                print(f'Error: label deleted "{key}"')                
-            label.setFont(self.font)
-            label.adjustSize()
+        self.boldFont = qg.QFont(self.font)
+        self.boldFont.setBold(True)
+        self._updateItemDisplay()
         self.update()
 
     @qc.pyqtSlot(float)
@@ -284,22 +299,18 @@ class FrameScene(qw.QGraphicsScene):
             frame_width = max((self._frame.height(), self._frame.width()))
             size = int(frame_width * size / 100)
             self.font.setPixelSize(size)
-            for key, label in self.labelDict.items():
-                if sip.isdeleted(label):
-                    print('Error: label deleted', key)                
-                label.setFont(self.font)
-                label.adjustSize()
+            self.boldFont = qg.QFont(self.font)
+            self.boldFont.setBold(True)
             self.sigFontSizePixels.emit(size)
+            self._updateItemDisplay()
             self.update()
 
     @qc.pyqtSlot(int)
     def setFontSizePixels(self, size):
         self.font.setPixelSize(size)
-        for key, label in self.labelDict.items():
-            if sip.isdeleted(label):
-                print('Error: label deleted', key)                
-            label.setFont(self.font)
-            label.adjustSize()
+        self.boldFont = qg.QFont(self.font)
+        self.boldFont.setBold(True)
+        self._updateItemDisplay()
         self.update()
     
 
@@ -310,12 +321,7 @@ class FrameScene(qw.QGraphicsScene):
         self.colorMode = ColorMode.single
         settings.setValue('argos/color', color.name())
         settings.setValue('argos/color_mode', 0)
-        for key, item in self.itemDict.items():
-            if key not in self.selected:
-                pen = item.pen()
-                pen.setColor(self.color)
-                item.setPen(pen)
-                self.labelDict[key].setDefaultTextColor(self.color)
+        self._updateItemDisplay()
         self.update()
 
     @qc.pyqtSlot(qg.QColor)
@@ -323,12 +329,95 @@ class FrameScene(qw.QGraphicsScene):
         """Color of selected rectangle"""
         self.selectedColor = color
         settings.setValue('argos/selected_color', color.name())
-        for key in self.selected:
+        if len(self.selected) == 0:
+            return
+        self._updateItemDisplay()
+        self.update()
+
+    @qc.pyqtSlot(int)
+    def setAlphaUnselected(self, val: int) -> None:
+        assert (0 <= val) and (255 >= val), f'Alpha must be in [0, 255] range. Got {val}'
+        settings.setValue('argos/alpha_unselected', val)
+        self.alphaUnselected = val
+        # If nothing is selected don't dim everything
+        if len(self.selected) == 0:
+            return
+        self._updateItemDisplay()
+        self.update()
+
+
+    def _updateItemDisplay(self):
+        """Make the selected item's bbox thicker and label font bold.
+
+        If nothing is selected make all labels bold and normal color.
+
+        If anything is selected, make them opaque and thicker, labels in bold
+        and those unselected will have transparency from `self.alphaUnselected`
+        value and labels in normal font.
+        """
+
+        unselected = set(list(self.itemDict.keys())) - set(self.selected)
+
+        if len(self.selected) == 0:
+            for key, item in self.itemDict.items():
+                pen = item.pen()
+                pen.setWidth(self.linewidth)
+                if self.colorMode == ColorMode.single:
+                    color = qg.QColor(self.color)
+                else:
+                    color = pen.color()
+                color.setAlpha(255)
+                pen.setColor(color)
+                item.setPen(pen)
+                label = self.labelDict[key]
+                label.setDefaultTextColor(color)
+                label.setFont(self.boldFont)
+                label.adjustSize()
+                if not self.showBbox:
+                    item.setOpacity(0)
+                if not self.showId:
+                    label.setOpacity(0)
+            return
+
+        for key in unselected:
             item = self.itemDict[key]
             pen = item.pen()
-            pen.setColor(self.selectedColor)
+            pen.setWidth(self.linewidth)
+            if self.colorMode == ColorMode.single:
+                color = qg.QColor(self.color)
+            else:
+                color = pen.color()
+            color.setAlpha(self.alphaUnselected)
+            pen.setColor(color)
             item.setPen(pen)
-            self.labelDict[key].setDefaultTextColor(self.selectedColor)
+            self.labelDict[key].setDefaultTextColor(color)
+            self.labelDict[key].setFont(self.font)
+            self.labelDict[key].adjustSize()
+            item.setZValue(0)
+
+        for key in self.selected:
+            if key not in self.itemDict:
+                continue
+            item = self.itemDict[key]
+            label = self.labelDict[key]
+            pen = item.pen()
+            pen.setWidth(self.linewidth + 2)
+            if self.colorMode == ColorMode.single:
+                color = qg.QColor(self.selectedColor)
+            else:
+                color = pen.color()
+            color.setAlpha(255)
+            pen.setColor(color)
+            item.setPen(pen)
+            label.setDefaultTextColor(color)
+            label.setFont(self.boldFont)
+            label.adjustSize()
+            item.setZValue(1)
+
+        if not self.showBbox:
+            [item.setOpacity(0) for item in self.itemDict.values()]
+        if not self.showId:
+            [label.setOpacity(0) for label in self.labelDict.values()]
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, auto: bool):
@@ -340,23 +429,14 @@ class FrameScene(qw.QGraphicsScene):
                 color = qg.QColor(*make_color(key))
                 pen = item.pen()
                 pen.setColor(color)
+                if key in self.selected:
+                    pen.setWidth(self.linewidth + 2)
                 item.setPen(pen)
-                self.labelDict[key].setDefaultTextColor(color)
+                # self.labelDict[key].setDefaultTextColor # this is done in _updateItemDisplay
         else:
             self.colorMode = ColorMode.single
             settings.setValue('argos/color_mode', 0)
-            # self.linestyle_selected = qc.Qt.SolidLine
-            for key, item in self.itemDict.items():
-                pen = item.pen()
-                pen.setColor(self.color)
-                item.setPen(pen)
-                self.labelDict[key].setDefaultTextColor(self.color)
-            for key in self.selected:
-                item = self.itemDict[key]
-                pen = item.pen()
-                pen.setColor(self.selectedColor)
-                item.setPen(pen)
-                self.labelDict[key].setDefaultTextColor(self.selectedColor)
+        self._updateItemDisplay()
         self.update()
 
     @qc.pyqtSlot(str, int)
@@ -386,7 +466,7 @@ class FrameScene(qw.QGraphicsScene):
             pen = item.pen()
             pen.setColor(color)
             item.setPen(pen)
-            self.labelDict[key].setDefaultTextColor(color)
+        self._updateItemDisplay()
         self.update()
 
 
@@ -437,21 +517,13 @@ class FrameScene(qw.QGraphicsScene):
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color, self.linewidth))
-            if not self.showBbox:
-                item.setOpacity(0)
             self.itemDict[id_] = item
-            text = self.addText(str(id_), self.font)
-            text.setDefaultTextColor(color)
-            if self.labelInside:
-                text.setPos(rect[0], rect[1])
-            else:
-                text.setPos(rect[0], rect[1] - text.boundingRect().height())
+            text = self.addText(str(id_), self.boldFont)
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
             self.labelDict[id_] = text
-            if not self.showId:
-                text.setOpacity(0)
-            # logging.debug(f'Set {id_}: {rect}')
+        self._updateItemDisplay()
+        self._setLabelInside(self.labelInside)
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
@@ -476,23 +548,13 @@ class FrameScene(qw.QGraphicsScene):
             points = [qc.QPoint(point[0], point[1]) for point in poly]
             polygon = qg.QPolygonF(points)
             item = self.addPolygon(polygon, qg.QPen(color, self.linewidth))
-            if not self.showBbox:
-                item.setOpacity(0)
             self.itemDict[id_] = item
             text = self.addText(str(id_), self.font)
             self.labelDict[id_] = text
-            text.setDefaultTextColor(color)
-            pos = np.mean(poly, axis=0)
-            if self.labelInside:
-                text.setPos(pos[0], pos[1])
-            else:
-                text.setPos(pos[0], pos[1] - text.boundingRect().height())
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
-            # print('Herererere')
-            if not self.showId:
-                text.setOpacity(0)
-            # logging.debug(f'Set {id_}: {poly}')
+        self._updateItemDisplay()
+        self._setLabelInside(self.labelInside)
         if self.arena is not None:
             self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
@@ -615,11 +677,13 @@ class FrameView(qw.QGraphicsView):
     sigLineWidth = qc.pyqtSignal(float)
     sigFontSize = qc.pyqtSignal(int)
     sigRelativeFontSize = qc.pyqtSignal(float)
+    sigSetAlphaUnselected = qc.pyqtSignal(int)
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
         self._makeScene()
         self.sigSetColormap.connect(self.frameScene.setColormap)
+        self.sigSetAlphaUnselected.connect(self.frameScene.setAlphaUnselected)
         self.sigSetRectangles.connect(self.frameScene.setRectangles)
         self.sigSetPolygons.connect(self.frameScene.setPolygons)
         self.sigLineWidth.connect(self.frameScene.setLineWidth)
@@ -642,6 +706,8 @@ class FrameView(qw.QGraphicsView):
         self.setColorAction.triggered.connect(self.chooseColor)
         self.setSelectedColorAction = qw.QAction('Set color of selected ID')
         self.setSelectedColorAction.triggered.connect(self.chooseSelectedColor)
+        self.setAlphaUnselectedAction = qw.QAction('Set opacity of non-selected IDs')
+        self.setAlphaUnselectedAction.triggered.connect(self.setAlphaUnselected)
         self.autoColorAction = qw.QAction('Autocolor')
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(self.setAutoColor)
@@ -759,6 +825,16 @@ class FrameView(qw.QGraphicsView):
         color = qw.QColorDialog.getColor(initial=self.frameScene.selectedColor,
                                          parent=self)
         self.sigSetSelectedColor.emit(color)
+
+    @qc.pyqtSlot()
+    def setAlphaUnselected(self):
+        alpha, accept = qw.QInputDialog.getInt(self, 'Opacity of unselected IDs',
+                                       'Alpha (0=fully transparent, 255=fully opaque)',
+                                       value=self.frameScene.alphaUnselected,
+                                       min=0, max=255)
+        print('Received', alpha)
+        if accept:
+            self.sigSetAlphaUnselected.emit(alpha)
 
     @qc.pyqtSlot(bool)
     def setAutoColor(self, checked):

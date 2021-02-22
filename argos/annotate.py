@@ -19,7 +19,7 @@ Preparation
 Create a folder and copy all the images you want to annotate into it.
 
 If you have videos instead, you need to extract some video
-frames. There are many programs, inlcuding most video players, which
+frames. There are many programs, including most video players, which
 can do this. Argos includes a small utility script
 :py:mod:`argos.extract_frames` if you need.
 
@@ -41,7 +41,7 @@ main window, with an empty display like below.
 
 The ``Files/Dirs`` pane on the bottom right lists all the files in the
 image directory selected at startup. (Note that this pane may take up
-too mich screen space. You can close any of the panes using the 'x'
+too much screen space. You can close any of the panes using the 'x'
 button on their titlebar or or move them around by dragging them with
 left mouse button).
 
@@ -70,7 +70,7 @@ spots on the paper floor, edges of the petri dishes as well as the
 animals. 
 
 We want to train the YOLACT network to detect the locusts. So we must
-remove any segmented objects that are no locusts. To do this, click on
+remove any segmented objects that are not locusts. To do this, click on
 the ID of an unwanted object on the left pane listing ``Segmented
 objects``. The selected object will be outlined with dotted blue line. 
 
@@ -90,8 +90,8 @@ segmented object.
 Alternatively, if the number of animals is small compared to the
 spuriously segmented objects, you can select all the animals by
 keeping the ``Ctrl`` key pressed while left-clicking on the IDs of the
-animals on the left pane. Then clicking ``Keep selected objects`` or
-pressing ``k`` on the keyboard will delete all other segmented
+animals on the left pane. Then click ``Keep selected objects`` or
+press ``k`` on the keyboard to delete all other segmented
 objects.
 
 By default, objects are outlined with solid green line, and selected
@@ -100,7 +100,7 @@ from ``View`` menu.
 
 In the ``View`` menu you can check ``Autocolor`` to make the program
 automatically use a different color for each object. In this case, the
-selected object is outlined in a dotted line of the same color, while
+selected object is outlined in a thicker line of the same color, while
 all other object outlines are dimmed.
 
 You can also choose ``Colormap`` from the view menu and specify the
@@ -652,11 +652,15 @@ class TrainingWidget(qw.QMainWindow):
         self.viewMenu = self.menuBar().addMenu('View')
         self.viewMenu.addActions([self.displayWidget.zoomInAction,
                                   self.displayWidget.zoomOutAction,
+                                  self.displayWidget.setColorAction,
+                                  self.displayWidget.setSelectedColorAction,
+                                  self.displayWidget.setAlphaUnselectedAction,
                                   self.displayWidget.autoColorAction,
                                   self.displayWidget.colormapAction,
                                   self.displayWidget.lineWidthAction,
                                   self.displayWidget.fontSizeAction,
-                                  self.displayWidget.relativeFontSizeAction])
+                                  self.displayWidget.relativeFontSizeAction,
+                                  self.displayWidget.setLabelInsideAction])
         self.docksMenu = self.viewMenu.addMenu('Dock widgets')
         self.docksMenu.addActions([self.showFileDockAction,
                                   self.showSegDockAction,
