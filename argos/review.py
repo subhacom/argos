@@ -731,7 +731,11 @@ class ReviewScene(FrameScene):
     @qc.pyqtSlot(np.ndarray)
     def showTrackHist(self, track: np.ndarray) -> None:
         for item in self.trackHist:
-            self.removeItem(item)
+            try:
+                self.removeItem(item)
+            except Exception as e:
+                print(e)
+                break
         self.trackHist = []
         colors = [qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
             for ii in range(len(track))]
@@ -824,6 +828,11 @@ class ReviewScene(FrameScene):
         #     self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         # self.sigPolygons.emit(self.polygons)
         # self.sigPolygonsSet.emit()
+
+    def clearAll(self):
+        super(ReviewScene, self).clearAll()
+        self.trackHist = []
+        self.selected = []
 
 
 class TrackView(FrameView):
@@ -948,7 +957,7 @@ class TrackList(qw.QListWidget):
                                int(target.text()),
                                self._drag_button == qc.Qt.RightButton,
                                current)
-        event.accept()
+        event.ignore()
 
     @qc.pyqtSlot(list)
     def replaceAll(self, track_list: List[int]):
@@ -1191,6 +1200,13 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
         if not self.showHistoryAction.isChecked():
+            return
+        if len(selected) == 0:
+            track = np.empty(0)
+            if self.sender() == self.right_list:
+                self.sigProjectTrackHist.emit(track)
+            else:
+                self.sigProjectTrackHistAll.emit(track)
             return
 
         for sel in selected:
