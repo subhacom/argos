@@ -65,8 +65,9 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
 7. Install Argos with this command:
 
    ```
-    pip install argos
-    ```
+   pip install argos-tracker
+   ```
+   
 
 ### Usage
     To try Argos tracking on objects in COCO dataset, download the

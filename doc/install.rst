@@ -54,9 +54,9 @@ Installation using Anaconda
      pip install pycocotools
 
 
-7. Finally, install argos with the command
+7. Finally, install argos with the command::
 
-       pip install argos
+       pip install argos-tracker
 
 8. Download pretrained models for testing and for training.
    
