@@ -54,3 +54,8 @@ Installation using Anaconda
      pip install pycocotools
 
 
+7. Finally, install argos with the command
+
+       pip install argos
+
+
