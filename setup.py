@@ -83,7 +83,7 @@ setup(
         'scipy', 
         'scikit-learn',
         'pandas',
-        'pytables',
+        'tables',
         'sortedcontainers',
         'pyqt5',
         'opencv-contrib-python', 

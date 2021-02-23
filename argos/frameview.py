@@ -108,6 +108,8 @@ class FrameScene(qw.QGraphicsScene):
             self.update()
             return
         for key in self.itemDict:
+            item = self.itemDict[key]
+            label = self.labelDict[key]
             if key in selected:
                 if self.colorMode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
@@ -116,14 +118,12 @@ class FrameScene(qw.QGraphicsScene):
                         *get_cmap_color(key % self.maxColors, self.maxColors,
                                         self.colormap))
                 else:
-                    color = self.selectedColor
+                    color = qg.QColor(self.selectedColor)
                 # Make the selected item bbox thicker
                 pen = qg.QPen(color, self.linewidth + 2)
-                self.itemDict[key].setPen(pen)
-                self.itemDict[key].setZValue(1)
-                self.labelDict[key].setDefaultTextColor(color)
-                self.labelDict[key].setFont(self.boldFont)
-                self.labelDict[key].setZValue(1)
+                item.setZValue(1)
+                label.setZValue(1)
+                label.setFont(self.boldFont)
             else:
                 if self.colorMode == ColorMode.auto:
                     color = qg.QColor(*make_color(key))
@@ -132,15 +132,16 @@ class FrameScene(qw.QGraphicsScene):
                         *get_cmap_color(key % self.maxColors, self.maxColors,
                                         self.colormap))
                 else:
-                    color = self.color
+                    color = qg.QColor(self.color)
                     # make the non-selected items transparent
                 color.setAlpha(self.alphaUnselected)
                 pen = qg.QPen(color, self.linewidth)
-                self.itemDict[key].setPen(pen)
-                self.itemDict[key].setZValue(0)
-                self.labelDict[key].setDefaultTextColor(color)
-                self.labelDict[key].setFont(self.font)
-                self.labelDict[key].setZValue(0)
+                item.setZValue(0)
+                label.setZValue(0)
+                label.setFont(self.font)
+            item.setPen(pen)
+            label.setDefaultTextColor(color)
+            label.adjustSize()
         self.update()
 
     @qc.pyqtSlot()
@@ -525,6 +526,7 @@ class FrameScene(qw.QGraphicsScene):
             text = self.addText(str(id_), self.boldFont)
             text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
                          self.textIgnoresTransformation)
+            text.adjustSize()
             self.labelDict[id_] = text
         self._updateItemDisplay()
         self._setLabelInside(self.labelInside)
