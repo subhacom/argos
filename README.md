@@ -61,30 +61,27 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    ```
    pip install pycocotools
    ```
-   
+
+7. Install Argos with this command:
+
+   ```
+    pip install argos
+    ```
+
 ### Usage
+    To try Argos tracking on objects in COCO dataset, download the
+    pretrained model released with YOLACT
+    [here](https://drive.google.com/file/d/1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_/view?usp=sharing)
+    or go to [YOLACT repository](https://github.com/dbolya/yolact) to
+    find a mirror.  The corresponding configuration file is already
+    installed in
+    `{your_python_environment}/lib/site-packages/argos/config/yolact_base/yolact_base_config.yml`.
+    If you used Anaconda as described here,
+    `{your_python_environment}` should be
+    `C:\Users\{username}\Anaconda3\env\track\` for Anaconda3 on
+    Windows, `~/.conda/envs/track` on Linux.
 
-7. In the Anaconda prompt, go to where `argos` is unpacked:
 
-   ```
-   cd {your_argos_directory} 
-   ```
-   
-   it should have these directories there: `argos`, `config`, and `yolact`.
-8. In the Anaconda prompt, update Python path to include this directory:
-
-   on Windows command prompt:
-   
-   ```
-   set PYTHONPATH=.;%PYTHONPATH%
-   ```
-   
-   and on Linux/Unix/Mac with `bash` shell:
-   
-   ```
-   export PYTHONPATH=.:$PYTHONPATH
-   ```
-   
 #### Interactive tracking
 
 The main tracking program is `argos/track.py`. It provides a graphical
@@ -108,9 +105,11 @@ program.
 	  1. Select output data directory/file. You have a choice of CSV
          (text) or HDF5 (binary) format. HDF5 is recommended.
 	  2. Select Yolact configuration file, go to the `config`
-         directory inside argos directory and select `yolact.yml`.
+         directory inside argos directory and select
+         `yolact_base/yolact_base_config.yml`.
 	  3. File containing trained network weights, and here you should
-         select the `babylocust_resnet101_119999_240000.pth` file.
+         select the `yolact_base_54_800000.pth` file downloaded from
+         YOLACT repository page.
 	  
 11. Start tracking: click the `play/pause` button and you should see
     the tracked locusts. The data will be saved in the filename you

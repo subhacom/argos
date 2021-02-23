@@ -58,4 +58,23 @@ Installation using Anaconda
 
        pip install argos
 
+8. Download pretrained models for testing and for training.
+   
+   To try Argos tracking on objects in COCO dataset, download the
+   pretrained model released with YOLACT
+   `here <https://drive.google.com/file/d/1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_/view?usp=sharing>`_
+   or go to `YOLACT repository <https://github.com/dbolya/yolact>`_ to
+   find a mirror.  The corresponding configuration file is already
+   installed in
+   ``{your_python_environment}/lib/site-packages/argos/config/yolact_base/yolact_base_config.yml``.
+   If you used Anaconda as described here,
+   ``{your_python_environment}`` should be
+   ``C:\Users\{username}\Anaconda3\env\track\`` for Anaconda3 on
+   Windows, ``~/.conda/envs/track`` on Linux.
 
+   To train on your own images, use this backbone distributed with
+   YOLACT:
+   `resnet101_reducedfc.pth <https://drive.google.com/file/d/1tvqFPd4bJtakOlmn-uIA492g2qurRChj/view?usp=sharing>`_. Argos
+   Annotation tool will generate the corresponding configuration for
+   you.
+   
