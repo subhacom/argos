@@ -84,15 +84,19 @@ class FrameScene(qw.QGraphicsScene):
 
     def clearItems(self):
         self.points = []
-        # self.selected = []
+        for item in self.itemDict.values():
+            self.removeItem(item)
+        for label in self.labelDict.values():
+            self.removeItem(label)
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
-        self.incomplete_item = None
-        self.clear()
+        self._clearIncomplete()
+        # self.clear()
 
     def clearAll(self):
         self.clearItems()
+        self.clear()
         self._frame = None
 
     @qc.pyqtSlot(list)

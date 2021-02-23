@@ -704,7 +704,7 @@ class ReviewScene(FrameScene):
 
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
-        self.historic_track_ls = qc.Qt.DashLine
+        self.lineStyleOldTrack = qc.Qt.DashLine
         self.histGradient = 1
         self.trackHist = []
         self.pathCmap = settings.value('review/path_cmap', 'viridis')
@@ -767,48 +767,63 @@ class ReviewScene(FrameScene):
         logging.debug(
             f'{self.objectName()} Received rectangles from {self.sender().objectName()}')
         logging.debug(f'{self.objectName()} Rectangles: {rects}')
-        self.clearItems()
-        self.trackHist = []
         logging.debug(f'{self.objectName()} cleared')
+        self.clearItems()
+        tmpRects = {id_: rect[:4] for id_, rect in rects.items()}
+        super(ReviewScene, self).setRectangles(tmpRects)
 
         for id_, tdata in rects.items():
             if tdata.shape[0] != 5:
                 raise ValueError(f'Incorrectly sized entry: {id_}: {tdata}')
-            if self.colorMode == ColorMode.auto:
-                color = qg.QColor(*make_color(id_))
-            elif self.colorMode == ColorMode.cmap:
-                color = qg.QColor(
-                    *get_cmap_color(id_ % self.maxColors, self.maxColors,
-                                    self.colormap))
-            else:
-                color = qg.QColor(self.color)
-            # Use transparency to indicate age
-            alpha = 255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]),
-                                         self.histGradient) / self.histGradient)
-            color.setAlpha(int(alpha))
-            pen = qg.QPen(color, self.linewidth)
-            if tdata[4] != self.frameno:
-                pen.setStyle(self.historic_track_ls)
-                logging.debug(f'{self.objectName()}: old track : {id_}')
-            rect = tdata[:4].copy()
-            item = self.addRect(*rect, pen)
-            self.itemDict[id_] = item
-            text = self.addText(str(id_), self.font)
-            self.labelDict[id_] = text
-            text.setFont(self.font)
-            text.setDefaultTextColor(color)
-            if self.labelInside:
-                text.setPos(rect[0], rect[1])
-            else:
-                text.setPos(rect[0], rect[1] - text.boundingRect().height())
-            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
-                         self.textIgnoresTransformation)
-            self.polygons[id_] = rect
-            # logging.debug(f'Set {id_}: {rect}')
-        if self.arena is not None:
-            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
-        self.sigPolygons.emit(self.polygons)
-        self.sigPolygonsSet.emit()
+            item = self.itemDict[id_]
+            label = self.labelDict[id_]
+            if tdata[4] < self.frameno:
+                alpha = int(
+                    255 * (1 - 0.9 * min(np.abs(self.frameno - tdata[4]),
+                                         self.histGradient) / self.histGradient))
+                pen = item.pen()
+                color = pen.color()
+                color.setAlpha(alpha)
+                pen.setColor(color)
+                pen.setStyle(self.lineStyleOldTrack)
+                item.setPen(pen)
+                label.setDefaultTextColor(color)
+                label.setFont(self.font)
+                label.adjustSize()
+        self.update()
+        #     if self.colorMode == ColorMode.auto:
+        #         color = qg.QColor(*make_color(id_))
+        #     elif self.colorMode == ColorMode.cmap:
+        #         color = qg.QColor(
+        #             *get_cmap_color(id_ % self.maxColors, self.maxColors,
+        #                             self.colormap))
+        #     else:
+        #         color = qg.QColor(self.color)
+        #     # Use transparency to indicate age
+        #     color.setAlpha(int(alpha))
+        #     pen = qg.QPen(color, self.linewidth)
+        #     if tdata[4] != self.frameno:
+        #         pen.setStyle(self.lineStyleOldTrack)
+        #         logging.debug(f'{self.objectName()}: old track : {id_}')
+        #     rect = tdata[:4].copy()
+        #     item = self.addRect(*rect, pen)
+        #     self.itemDict[id_] = item
+        #     text = self.addText(str(id_), self.font)
+        #     self.labelDict[id_] = text
+        #     text.setFont(self.font)
+        #     text.setDefaultTextColor(color)
+        #     if self.labelInside:
+        #         text.setPos(rect[0], rect[1])
+        #     else:
+        #         text.setPos(rect[0], rect[1] - text.boundingRect().height())
+        #     text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
+        #                  self.textIgnoresTransformation)
+        #     self.polygons[id_] = rect
+        #     # logging.debug(f'Set {id_}: {rect}')
+        # if self.arena is not None:
+        #     self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
+        # self.sigPolygons.emit(self.polygons)
+        # self.sigPolygonsSet.emit()
 
 
 class TrackView(FrameView):
@@ -861,6 +876,11 @@ class TrackList(qw.QListWidget):
     keepSelection: bool
         Whether to maintain selection of list item across frames. When the path
         of the selected item is drawn, this makes things VERY SLOW.
+
+    selected: list of int
+        IDs of selected objects (in Review tool only a single selection is
+        allowed).
+
     """
     sigMapTracks = qc.pyqtSignal(int, int, bool, bool)
     sigSelected = qc.pyqtSignal(list)
@@ -944,8 +964,10 @@ class TrackList(qw.QListWidget):
             except ValueError:
                 pass
             self.blockSignals(False)
-            self.sigSelected.emit(self.selected)
+            # self.sigSelected.emit(self.selected)
+            return
         self.blockSignals(False)
+        self.sendSelected()
 
     @qc.pyqtSlot()
     def sendSelected(self):
