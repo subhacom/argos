@@ -565,7 +565,7 @@ class TrackReader(qc.QObject):
     def deleteTrack(self, frameNo, origId, endFrame=-1):
         change = Change(frame=frameNo, end=endFrame,
                         change=ChangeCode.op_delete,
-                        orig=origId, new=None,
+                        orig=origId, new=pd.NA,
                         idx=self._change_idx)
         self._change_idx += 1
         self.changeList.add(change)
@@ -656,13 +656,15 @@ class TrackReader(qc.QObject):
             data.to_csv(filepath, index=False)
         else:
             data.to_hdf(filepath, 'tracked', mode='a')
-            changes = [(change.frame, change.change.name,
+            changes = [(change.frame, change.end, change.change.name,
                         change.change.value, change.orig, change.new)
                        for change in self.changeList if change.frame
                        not in self.undone_changes]
+
             changes = pd.DataFrame(data=changes,
-                                   columns=['frame', 'change',
-                                            'code', 'orig', 'new'])
+                                   columns=['frame', 'end', 'change',
+                                            'code', 'orig', 'new'],
+                                   )
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             changes.to_hdf(filepath, f'changes/changelist_{ts}', mode='a')
         self.track_data = data
