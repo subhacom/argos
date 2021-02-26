@@ -156,7 +156,7 @@ class ColorMode(enum.Enum):
     auto = enum.auto()
 
 
-Change = namedtuple('Change', ['frame', 'change', 'orig', 'new', 'idx'])
+Change = namedtuple('Change', ['frame', 'end', 'change', 'orig', 'new', 'idx'])
 """
 A change action by the user when revieweing tracks.
 It is defined by the following attributes:
@@ -165,6 +165,9 @@ Attributes
 ----------
 frame:
    frame number on which the change was applied.
+end:
+   frame number till (inclusive) which the change should be applied. -1 for
+   till end of the video.
 change:
    change code, defined in ChangeCode enum
 orig:
