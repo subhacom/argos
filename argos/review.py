@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-09 1:20 PM
-"""=========================
+"""
+=========================
 Review and correct tracks
 =========================
 Usage:
@@ -368,6 +369,18 @@ original data read from the track file and does not take into account
 any changes you made during a session. To show the updated path, you
 have to first save the data so that all your changes are consolidated.
 
+Note on video format 
+--------------------
+Argos capture utility records video in MJPG format in an AVI container. 
+This is available by default in OpenCV. Although OpenCV can read many
+video formats via the ``ffmpeg`` library, most common video formats are 
+designed for playing sequentially, and jumping back and forth (``seek``)
+by arbitrary number of frames is not easy.
+
+With such videos, attempt to jump frames will result in error, and the 
+review tool will disable ``seek`` when it detects this. To enable seek 
+when the video format permits it, uncheck the ``Disable seek`` item
+in the ``Play`` menu.
 """
 
 import sys
@@ -1352,10 +1365,13 @@ class ReviewWidget(qw.QWidget):
 
     def makeActions(self):
         self.disableSeekAction = qw.QAction('Disable seek')
+        self.disableSeekAction.setToolTip(
+            'Most video formats do not allow '
+            'jumping back and forth by arbitrary number of frames.'
+            ' Checking this prevents errors when processing such videos.')
         self.disableSeekAction.setCheckable(True)
-        disable_seek = settings.value('review/disable_seek', True, type=bool)
-        self.disableSeek(disable_seek)
-        self.disableSeekAction.setChecked(disable_seek)
+        self.disableSeek(False)
+        self.disableSeekAction.setChecked(False)
         self.disableSeekAction.triggered.connect(self.disableSeek)
         self.tieViewsAction = qw.QAction('Scroll views together')
         self.tieViewsAction.setCheckable(True)
