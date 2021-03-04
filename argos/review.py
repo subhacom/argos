@@ -610,13 +610,13 @@ class TrackReader(qc.QObject):
         frameNo = tdata.frame.values[0]
         delete_idx = set()
         for change in self.changeList:
-            if (change.frame > frameNo):
+            if change.frame > frameNo:
                 break
-            if (change.frame in self.undone_changes) or (change.end >= 0 and
-                                                         change.end < frameNo):
+            if (change.frame in self.undone_changes) or (
+                    0 <= change.end < frameNo):
                 continue
             orig_idx = idx_dict.pop(change.orig, None)
-            if (change.change == ChangeCode.op_swap):
+            if change.change == ChangeCode.op_swap:
                 new_idx = idx_dict.pop(change.new, None)
                 if new_idx is not None:
                     tracks[new_idx][0] = change.orig
