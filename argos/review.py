@@ -1529,6 +1529,10 @@ class ReviewWidget(qw.QWidget):
             'Swap tracks in current frame only (drag n drop with right mouse '
             'button with Shift-key pressed)')
         self.swapTracksCurAction.triggered.connect(self.swapTracksCur)
+        self.swapTracksRangeAction = qw.QAction(
+            'Swap tracks up to a specific frame (drag n drop with right mouse '
+            'button with Alt-key pressed)')
+        self.swapTracksRangeAction.triggered.connect(self.swapTracksRange)
         self.replaceTrackAction = qw.QAction(
             'Replace track (drag n drop with left mouse button)')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
@@ -1536,6 +1540,10 @@ class ReviewWidget(qw.QWidget):
             'Replace track in current frame only (drag n drop with left mouse '
             'button with Shift-key pressed)')
         self.replaceTrackCurAction.triggered.connect(self.replaceTrackCur)
+        self.replaceTracksRangeAction = qw.QAction(
+            'Replace track up to a specific frame (drag n drop with left mouse '
+            'button with Alt-key pressed)')
+        self.swapTracksRangeAction.triggered.connect(self.replaceTracksRange)
         self.renameTrackAction = qw.QAction('Rename track (r)')
         self.renameTrackAction.triggered.connect(self.renameTrack)
         self.renameTrackCurAction = qw.QAction(
@@ -1782,6 +1790,24 @@ class ReviewWidget(qw.QWidget):
                        self.frame_no, True)
 
     @qc.pyqtSlot()
+    def swapTracksRange(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        endFrame, accept = qw.QInputDialog.getInt(self,
+                                                  'Frame range',
+                                                  'Apply till frame',
+                                                  self.frame_no,
+                                                  self.frame_no,
+                                                  2 ** 31 - 1)
+        if not accept:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       endFrame, True)
+
+
+    @qc.pyqtSlot()
     def replaceTrackCur(self):
         source = self.all_list.selectedItems()
         target = self.right_list.selectedItems()
@@ -1789,6 +1815,23 @@ class ReviewWidget(qw.QWidget):
             return
         self.mapTracks(int(source[0].text()), int(target[0].text()),
                        self.frame_no, True)
+
+    @qc.pyqtSlot()
+    def replaceTracksRange(self):
+        source = self.all_list.selectedItems()
+        target = self.right_list.selectedItems()
+        if len(source) == 0 or len(target) == 0:
+            return
+        endFrame, accept = qw.QInputDialog.getInt(self,
+                                                  'Frame range',
+                                                  'Apply till frame',
+                                                  self.frame_no,
+                                                  self.frame_no,
+                                                  2 ** 31 - 1)
+        if not accept:
+            return
+        self.mapTracks(int(source[0].text()), int(target[0].text()),
+                       endFrame, False)
 
     @qc.pyqtSlot(int)
     def gotoFrame(self, frame_no):
@@ -2397,8 +2440,11 @@ class ReviewerMain(qw.QMainWindow):
 
         actionMenu = self.menuBar().addMenu('Action')
         actionMenu.addActions([self.reviewWidget.swapTracksAction,
+                               self.reviewWidget.swapTracksCurAction,
+                               self.reviewWidget.swapTracksRangeAction,
                                self.reviewWidget.replaceTrackAction,
                                self.reviewWidget.replaceTrackCurAction,
+                               self.reviewWidget.replaceTracksRangeAction,
                                self.reviewWidget.renameTrackAction,
                                self.reviewWidget.renameTrackCurAction,
                                self.reviewWidget.deleteTrackAction,
