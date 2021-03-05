@@ -70,17 +70,18 @@ Argos is a software utility for tracking multiple objects (animals) in a video.
    
 
 ### Usage
-    To try Argos tracking on objects in COCO dataset, download the
-    pretrained model released with YOLACT
-    [here](https://drive.google.com/file/d/1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_/view?usp=sharing)
-    or go to [YOLACT repository](https://github.com/dbolya/yolact) to
-    find a mirror.  The corresponding configuration file is already
-    installed in
-    `{your_python_environment}/lib/site-packages/argos/config/yolact_base/yolact_base_config.yml`.
-    If you used Anaconda as described here,
-    `{your_python_environment}` should be
-    `C:\Users\{username}\Anaconda3\env\track\` for Anaconda3 on
-    Windows, `~/.conda/envs/track` on Linux.
+
+To try Argos tracking on objects in COCO dataset, download the
+pretrained model released with YOLACT
+[here](https://drive.google.com/file/d/1UYy3dMapbH1BnmtZU4WH1zbYgOzzHHf_/view?usp=sharing)
+or go to [YOLACT repository](https://github.com/dbolya/yolact) to find
+a mirror.  The corresponding configuration file is already installed
+in
+`{your_python_environment}/lib/site-packages/argos/config/yolact_base/yolact_base_config.yml`.
+
+If you used Anaconda as described here, `{your_python_environment}`
+should be `C:\Users\{username}\Anaconda3\env\track\` for Anaconda3 on
+Windows, `~/.conda/envs/track` on Linux.
 
 
 #### Interactive tracking

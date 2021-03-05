@@ -181,6 +181,7 @@ later).
    object in the ``Right tracks`` is displayed on the right pane.
 
 
+
 Moving around and break points
 ------------------------------
 
@@ -368,6 +369,19 @@ make the appropriate changes. Remember that the path history uses the
 original data read from the track file and does not take into account
 any changes you made during a session. To show the updated path, you
 have to first save the data so that all your changes are consolidated.
+
+
+
+Selecting a region of interest
+------------------------------
+
+You can exclude some spurious detections by defining a region of interest
+in the review tool. Click on the right frame with left-mouse button in order
+to start drawing a polygon. Keep clicking to add a vertex at current mouse
+cursor position. To close the polygon, click as close to the starting point 
+as possible. This will crop the frame to polygon and fit it within the view.
+As you move forward, any detection outside the polygon will be excluded.
+
 
 Note on video format 
 --------------------

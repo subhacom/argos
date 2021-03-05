@@ -4,6 +4,21 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+# NOTES:
+
+# It is better to create latex ``sphinx-build -b latex . latex`` and
+# then build PDF using something else, like ``pdflatex``, because
+# direct pdf generation with ``sphinx-build -b pdf . pdf`` uses
+# rst2pdf which truncates long lines of code. Still the wrapped code
+# lines cannot be easily copied to command line because the PDF has a
+# special character to indicate new line.
+
+# Build docx : ``sphinx-build -b docx . docx`` This is pretty good as
+# the code blocks are wrapped without any special character. However,
+# the title, creator and subject properties for docx builder seem to
+# be ineffective. Need to edit that manually.
+
+
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -18,11 +33,11 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'Argos'
-copyright = '2021, Subhasis Ray'
+copyright = 'Public Domain'
 author = 'Subhasis Ray'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = '0.1.0'
 version = release  # Special for rst2pdf
 
 # -- General configuration ---------------------------------------------------
@@ -60,3 +75,24 @@ html_theme = 'alabaster'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_logo = 'images/argos_logo.svg'
+html_theme_options = {
+    'logo_only': True,
+    'display_version': False,
+}
+
+# -- Options for latex
+latex_logo = 'images/argos_logo.png'
+
+# -- Options for docxbuilder
+docx_documents = [
+    ('index',
+     'Argos.docx',
+     {
+         'title': project,
+         'creator': author,
+         'subject': 'Tracking multiple animals in videos',
+         'keywords': ['object tracking', 'video processing']
+     },
+     True),
+]
