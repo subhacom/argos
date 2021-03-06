@@ -36,6 +36,13 @@ passed after it.
 With the ``--vout`` option, it will save the video with bounding boxes
 in the filename passed after it.
 
+With ``--trail`` option, it will show the trail  of each animal from past
+``trail`` frames. However, if ``trail_sec`` flag is set, it will show the trails
+ for past ``trail`` seconds.
+
+With ``--randcolor`` flag set, it will draw each track (bbox and ID) in a random
+color.
+
 """
 import os
 import cv2
@@ -60,7 +67,7 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
     else:
         tracks = pd.read_hdf(trackfile, 'tracked')
     tracks.describe()
-    print('%%%%', bbox_alpha)
+    # print('%%%%', bbox_alpha)
     img = None
     fig, ax = plt.subplots()
     if vidfile is not None:
@@ -73,7 +80,7 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
             print('Could not read image')
         elif img.shape[-1] == 3:  # BGR
             if gray:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)                
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         elif len(img.shape) == 2:
@@ -143,13 +150,56 @@ def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
 
 def play_tracks(vidfile, trackfile, lw=2, color='auto',
                 fontscale=1, fthickness=1,
-                fstart=0, fend=-1,
+                fstart=0, fend=-1, trail=0, trail_sec=False,
                 torigfile=None, tmtfile=None,
                 vout=None, outfmt='MJPG', fps=None,
-                timestamp=False, skipempty=False):
+                timestamp=False, dt=True, skipempty=False):
     """
+    Play the video from `vidfile` and overlay the bounding boxes and IDs of the
+    tracked animals from `trackfile`.
+
+    Parameters
+    ----------
+    vidfile: str
+        Path of video file.
+    trackfile: str
+        Path of track data file.
+    lw: int
+        Line width for drawing
+    color: str
+        If ``auto``, use random color for each animal.
+        Anything but ``auto`` will use red.
+    fontscale: float
+        Scaling for text font
+    fthickness: int
+        Font thickness in OpenCV text display
+    fstart: int
+        Frame # to start with
+    fend: int
+        Last frame # to process (-1 means end of video)
+    trail: int
+        Number of frames or seconds of trail to show before current frame. Thus
+        with `trail`=100, the positions in the past 100 frames will be drawn
+        like a tail behind each animal.
+    trail_sec: bool
+        Whether the `trail` is number of frames or number of seconds.
+    torigfile: str
+        Path to original timestamp file.
+    tmtfile: str
+        Path to motion-tracked timestamp file.
+    vout: str
+        output video file path.
+    outfmt: str
+        output video format
+    fps: float
+        fps of output video
+    timestamp: bool
+        If `True` then show timestamp.
+    dt: bool
+        If `True`, and `timestamp` is also `True`, then show time elapsed from
+        start instead of timestamp.
     skipempty: bool
-        skip frames without any track 
+        If `True` skip frames without any track.
     """
     cap = cv2.VideoCapture(vidfile)
     frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
@@ -225,14 +275,38 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
             cv2.putText(frame, str(int(frame_no)), (100, 100),
                         cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
                         fthickness, cv2.LINE_AA)
-            ts = timestamps[timestamps['frame'] == frame_no]['timestamp'].iloc[0]
+            ts = timestamps[timestamps['frame'] == frame_no]['timestamp'].iloc[
+                0]
+            if dt:
+                ts = ts - timestamps['timestamp'].min()
             cv2.putText(frame, str(ts), (frame.shape[1] - 200, 100),
                         cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
                         fthickness, cv2.LINE_AA)
+        # Get the trail of the track (history)
+        hist = None
+        if trail > 0:
+            if trail_sec:
+                ts = \
+                    timestamps[timestamps['frame'] == frame_no][
+                        'timestamp'].iloc[0]
+                tdelta = ts - timestamps['timestamp']
+                ds = tdelta.dt.total_seconds()
+                tgood = timestamps[(0 < ds) & (ds < trail)]
+                hist = pd.merge(tracks, tgood, how='inner',
+                                on='frame')
+            else:
+                hist = tracks[(tracks.frame < frame_no) &
+                              (tracks.frame >= frame_no - trail)]
         for row in trackdata.itertuples():
             # print(f'{row.x}\n{row.y}\n{row.w}\n=====')
             id_ = int(row.trackid)
-            print(id_, colors[id_])
+            if hist is not None:
+                cur_hist = hist[hist.trackid == id_]
+                hx = cur_hist.x.values + cur_hist.w.values / 2.0
+                hy = cur_hist.y.values + cur_hist.h.values / 2.0
+                [cv2.circle(frame, (int(_hx), int(_hy)), 1, colors[id_], -1)
+                 for _hx, _hy in zip(hx, hy)]
+            # print(id_, colors[id_])
             cv2.rectangle(frame, (int(row.x), int(row.y)),
                           (int(row.x + row.w), int(row.y + row.h)),
                           colors[id_], lw)
@@ -260,12 +334,12 @@ def make_parser():
                         help='Timestamp file for original video')
     parser.add_argument('--tmt', type=str,
                         help='Timestamp file for video with movement'
-                        ' detection')
+                             ' detection')
     parser.add_argument('-q', '--quiver', action='store_true',
                         help='Show quiver plot for tracks')
     parser.add_argument('--qcmap', default='hot',
                         help='Colormap used in quiver plot. This can be any'
-                        ' colormap name defined in the matplotlib library')
+                             ' colormap name defined in the matplotlib library')
     parser.add_argument('--qwidth', type=float, default=-1.0,
                         help='Whether to scale vectors by magnitude in quiver'
                              ' plot.')
@@ -273,10 +347,10 @@ def make_parser():
                         help='Show bounding boxes of tracked objects')
     parser.add_argument('--af', default=0.0, type=float,
                         help='When displaying bounding box, alpha value at'
-                        ' first frame.')
+                             ' first frame.')
     parser.add_argument('--al', default=1.0, type=float,
                         help='When displaying bounding box, alpha value at'
-                        ' last frame.')
+                             ' last frame.')
     parser.add_argument('--ap', default=1.0, type=float,
                         help='Alpha value of plot lines')
     parser.add_argument('--wp', default=8.0, type=float,
@@ -291,7 +365,7 @@ def make_parser():
                         help='Line width of bounding box in plot')
     parser.add_argument('--fs', default=1.0, type=float,
                         help='Font scale to use in video display')
-    parser.add_argument('--ft', default=10, type=int,
+    parser.add_argument('--ft', default=1, type=int,
                         help='Font thickness to use in video display')
     parser.add_argument('--fps', default=10, type=int,
                         help='Frames per second in output video')
@@ -304,20 +378,27 @@ def make_parser():
     parser.add_argument('--vfmt', type=str, default='MJPG',
                         help='Output video format')
     parser.add_argument('--gray', action='store_true',
-                        help='Make plot background image gray')    
+                        help='Make plot background image gray')
     parser.add_argument('--timestamp', action='store_true',
                         help='Enable time stamp and frame no in video display')
+    parser.add_argument('--dt', action='store_true',
+                        help='Show ellapsed time since start instead of '
+                             'timestamp in video display')
     parser.add_argument('--axes', action='store_true',
                         help='Show axes in plot overlayed on image')
     parser.add_argument('--play', action='store_true',
                         help='Play video with bounding boxes')
     parser.add_argument('--randcolor', action='store_true',
                         help='Use random colors to plot individual tracks '
-                        '(when NOT doing quiver plot)')
+                             '(when NOT doing quiver plot)')
     parser.add_argument('--fstart', default=0, type=int,
                         help='Start frame to plot/display from')
     parser.add_argument('--fend', default=-1, type=int,
                         help='Last frame to display')
+    parser.add_argument('--trail', default=0, type=int,
+                        help='Length of trail of each animal')
+    parser.add_argument('--trail_sec', action='store_true',
+                        help='The trail length is number of frames or seconds')
     return parser
 
 
@@ -331,7 +412,9 @@ if __name__ == '__main__':
                     torigfile=args.torig,
                     tmtfile=args.tmt,
                     vout=args.vout,
-                    outfmt=args.vfmt, fps=args.fps, timestamp=args.timestamp)
+                    outfmt=args.vfmt, fps=args.fps,
+                    timestamp=args.timestamp, dt=args.dt,
+                    trail=args.trail, trail_sec=args.trail_sec)
     fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms,
                       show_bbox=args.bbox, bbox_alpha=(args.af, args.al),
                       plot_alpha=args.ap,
