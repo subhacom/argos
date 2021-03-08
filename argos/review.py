@@ -2159,7 +2159,9 @@ class ReviewWidget(qw.QWidget):
             return
         viddir = os.path.dirname(track_filename)
         vid_filename, vfilter = qw.QFileDialog.getOpenFileName(
-            self, 'Open video', viddir)
+            self, f'Open video for {os.path.basename(track_filename)}', viddir,
+            filter='Video (*.avi *.mp4 *.mpg *.mpeg *.ogg *.webm *.wmv *.mov);;'
+                   ' All files (*)')
         logging.debug(f'filename:{vid_filename}\nselected filter:{vfilter}')
         if len(vid_filename) == 0:
             return
