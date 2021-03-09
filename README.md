@@ -432,3 +432,13 @@ tracks and correct mistakes.
     conda remove opencv-python
     pip install opencv-contrib-python
     ```
+- I get this exception when running argos after installation
+  ```
+  ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
+  ```
+
+  This happens with older version of numpy (should be 1.20 or later). 
+  Try upgrading numpy:
+  ```
+  pip install -U numpy
+  ```
