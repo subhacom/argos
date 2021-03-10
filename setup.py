@@ -58,7 +58,7 @@ ext_modules = [
 ]
 setup(
     name='argos-tracker',
-    version='0.1.0-4',
+    version='0.1.0-5',
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
     description='Software utility for tracking multiple objects (animals) in a video.',

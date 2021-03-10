@@ -603,7 +603,7 @@ class TrackReader(qc.QObject):
     def deleteTrack(self, frameNo, origId, endFrame=-1):
         change = Change(frame=frameNo, end=endFrame,
                         change=ChangeCode.op_delete,
-                        orig=origId, new=pd.NA,
+                        orig=origId, new=-1,
                         idx=self._change_idx)
         self._change_idx += 1
         self.changeList.add(change)
@@ -1923,9 +1923,8 @@ class ReviewWidget(qw.QWidget):
                          if change.frame not in
                          self.trackReader.undone_changes]
         pos = np.searchsorted(change_frames, self.frame_no, side='right')
-        if pos > len(change_frames):
-            return
-        self.gotoFrame(change_frames[pos])
+        if 0 <= pos < len(change_frames):
+            self.gotoFrame(change_frames[pos])
 
     @qc.pyqtSlot()
     def gotoPrevChange(self):
