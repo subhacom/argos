@@ -48,8 +48,8 @@ version = release  # Special for rst2pdf
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    # 'rst2pdf.pdfbuilder',
-    # 'docxbuilder',
+    'rst2pdf.pdfbuilder',
+    'docxbuilder',
 ]
 pdf_documents = [('index', project, u'Argos documentation', u'Subhasis Ray')]
 
