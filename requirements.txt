@@ -11,5 +11,6 @@ matplotlib
 scikit-learn
 sortedcontainers
 pycocotools
+git+git://github.com/subhacom/yolact_ray.git#egg=yolact
 
 
