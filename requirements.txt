@@ -4,7 +4,7 @@ torch
 numpy
 scipy
 pandas
-pytables
+tables
 PyYAML
 matplotlib
 scikit-learn
