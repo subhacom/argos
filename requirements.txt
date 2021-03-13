@@ -1,4 +1,5 @@
 Cython
+PyQt5
 opencv-contrib-python
 torch
 numpy
