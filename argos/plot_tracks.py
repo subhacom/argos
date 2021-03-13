@@ -55,6 +55,18 @@ from sklearn.utils.murmurhash import murmurhash3_32
 from argparse import ArgumentParser
 
 
+def resize_dim(w, h, width=None, height=None):
+    """Calculate width and height so that aspect ratio is maintained,
+    giving priority to width."""
+    if width is None and height is None:
+        return (w, h)
+    if width is None:
+        width = int(w * height / float(h))
+    else:
+        height = int(h * width / float(w))
+    return (width, height)
+
+
 def plot_tracks(trackfile, ms=5, lw=5, show_bbox=True,
                 bbox_alpha=(0.0, 1.0), plot_alpha=1.0, quiver=True,
                 qcmap='hot', qwidth=-1, vidfile=None,
@@ -152,7 +164,7 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
                 fontscale=1, fthickness=1,
                 fstart=0, fend=-1, trail=0, trail_sec=False,
                 torigfile=None, tmtfile=None,
-                vout=None, outfmt='MJPG', fps=None,
+                vout=None, outfmt='MJPG', fps=None, vwidth=None, vheight=None,
                 timestamp=False, dt=True, skipempty=False):
     """
     Play the video from `vidfile` and overlay the bounding boxes and IDs of the
@@ -193,6 +205,10 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
         output video format
     fps: float
         fps of output video
+    vwidth: int
+        Output video width.
+    vheight: int
+        Output video height.
     timestamp: bool
         If `True` then show timestamp.
     dt: bool
@@ -202,9 +218,9 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
         If `True` skip frames without any track.
     """
     cap = cv2.VideoCapture(vidfile)
-    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     if not cap.isOpened():
         print('Could not open file', vidfile)
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     if trackfile.endswith('.csv'):
         tracks = pd.read_csv(trackfile)
     else:
@@ -247,10 +263,19 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
         else:
             colors[ii] = (0, 0, 255)
     out = None
+    width = None
+    height = None
+    scale_x = 1
+    scale_y = 1
     if vout is not None:
         fourcc = cv2.VideoWriter_fourcc(*outfmt)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if vwidth is not None or vheight is not None:
+            w, h = resize_dim(width, height, vwidth, vheight)
+            scale_x = w / float(width)
+            scale_y = h / float(height)
+            width, height = (w, h)
         if fps is None:
             fps = infps
         out = cv2.VideoWriter(vout, fourcc, fps,
@@ -271,6 +296,8 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
         trackdata = tracks[tracks.frame == frame_no]
         if (len(trackdata) == 0) and skipempty:
             continue
+        if vout is not None and vwidth is not None or vheight is not None:
+            frame = cv2.resize(frame, (width, height), cv2.INTER_AREA)
         if timestamp:
             cv2.putText(frame, str(int(frame_no)), (100, 100),
                         cv2.FONT_HERSHEY_COMPLEX, fontscale, (255, 255, 0),
@@ -307,10 +334,10 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
                 [cv2.circle(frame, (int(_hx), int(_hy)), 1, colors[id_], -1)
                  for _hx, _hy in zip(hx, hy)]
             # print(id_, colors[id_])
-            cv2.rectangle(frame, (int(row.x), int(row.y)),
-                          (int(row.x + row.w), int(row.y + row.h)),
+            cv2.rectangle(frame, (int(row.x * scale_x), int(row.y * scale_y)),
+                          (int((row.x + row.w) * scale_x), int((row.y + row.h) * scale_y)),
                           colors[id_], lw)
-            cv2.putText(frame, str(id_), (int(row.x), int(row.y)),
+            cv2.putText(frame, str(id_), (int(row.x * scale_x), int(row.y * scale_y)),
                         cv2.FONT_HERSHEY_COMPLEX, fontscale, colors[id_],
                         fthickness, cv2.LINE_AA)
         cv2.imshow(win, frame)
@@ -399,6 +426,10 @@ def make_parser():
                         help='Length of trail of each animal')
     parser.add_argument('--trail_sec', action='store_true',
                         help='The trail length is number of frames or seconds')
+    parser.add_argument('--wv', type=int,
+                        help='Output video width')
+    parser.add_argument('--hv', type=int,
+                        help='Output video height')
     return parser
 
 
@@ -414,7 +445,8 @@ if __name__ == '__main__':
                     vout=args.vout,
                     outfmt=args.vfmt, fps=args.fps,
                     timestamp=args.timestamp, dt=args.dt,
-                    trail=args.trail, trail_sec=args.trail_sec)
+                    trail=args.trail, trail_sec=args.trail_sec,
+                    vwidth=args.wv, vheight=args.hv)
     fig = plot_tracks(args.data, vidfile=args.video, ms=args.ms,
                       show_bbox=args.bbox, bbox_alpha=(args.af, args.al),
                       plot_alpha=args.ap,

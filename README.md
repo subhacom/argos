@@ -83,6 +83,24 @@ If you used Anaconda as described here, `{your_python_environment}`
 should be `C:\Users\{username}\Anaconda3\env\track\` for Anaconda3 on
 Windows, `~/.conda/envs/track` on Linux.
 
+You can also download some weights and corresponding configuration
+files here: [Argos example config](https://www.dropbox.com/sh/9fcgouv6wsjvypk/AAC5A2BIrbpdOG5vy8YwOk6ca?dl=0)
+
+To run any of the utilities in the Argos toolkit, you have to switch
+to the Anaconda environment created during the installation:
+
+```
+conda activate track
+```
+
+And then run the utility as a Python module:
+
+```
+python -m argos.{utility}
+```
+
+Continue reading below, or refer to the documentation for specific
+cases.
 
 #### Interactive tracking
 
