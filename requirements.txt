@@ -11,6 +11,7 @@ matplotlib
 scikit-learn
 sortedcontainers
 pycocotools
+torchvision
 
 
 
