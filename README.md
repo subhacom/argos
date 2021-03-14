@@ -495,3 +495,30 @@ tracks and correct mistakes.
   Check if you have NVIDIA drivers for CUDA installed. Also note that
   CUDA does not work from Windows Subsystem for Linux (WSL). In
   general it is a good idea to install Argos on the native platform.
+
+## Credits
+
+- [SORT](https://github.com/abewley/sort) was developed by Alex
+  Bewley. The related publication is:
+  ```
+  @inproceedings{Bewley2016_sort,
+    author={Bewley, Alex and Ge, Zongyuan and Ott, Lionel and Ramos, Fabio and Upcroft, Ben},
+    booktitle={2016 IEEE International Conference on Image Processing (ICIP)},
+    title={Simple online and realtime tracking},
+    year={2016},
+    pages={3464-3468},
+    keywords={Benchmark testing;Complexity theory;Detectors;Kalman filters;Target tracking;Visualization;Computer Vision;Data Association;Detection;Multiple Object Tracking},
+    doi={10.1109/ICIP.2016.7533003}
+  }
+  ```
+  
+- [YOLACT](https://github.com/dbolya/yolact) was developed by Daniel
+  Bolya. The related publication is:
+  ```
+  @inproceedings{yolact-iccv2019,
+  author    = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
+  title     = {YOLACT: {Real-time} Instance Segmentation},
+  booktitle = {ICCV},
+  year      = {2019},
+  }
+  ```
