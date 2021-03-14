@@ -460,3 +460,39 @@ tracks and correct mistakes.
   ```
   pip install -U numpy
   ```
+
+- When installing with `pip` I get this error message 
+  ```
+  Collecting torch
+    Downloading torch-1.8.0-cp39-cp39-manylinux1_x86_64.whl (735.5 MB)
+  
+  ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes. Otherwise, examine the package contents carefully; someone may have tampered with them.
+  ```
+  Try pip with `--no-cache-dir` option, like this:
+  ```
+  pip install --no-cache-dir torch
+  ```
+- I get this exception when trying to run argos tracker
+  ```
+  ModuleNotFoundError: No module named 'pycocotools'
+  ```
+  
+  This indicates that pycocotools is not installed on your system. We
+  did not include pycocotools in the dependencies as that creates
+  problem for MS Windows (see special case for Windows in installation
+  instrctions above).
+  
+  On Unix-like systems (Linux/Mac) you can install pycocotools with
+  ```
+  pip install pycocotools
+  ```
+  
+- I get this error when trying `python -m argos.track`:
+  ```
+  RuntimeError: Found no NVIDIA driver on your system. Please check that you have an NVIDIA GPU and installed a driver from http://www.nvidia.com/Download/index.aspx
+  ```
+  
+  Check if you have NVIDIA drivers for CUDA installed. Also note that
+  CUDA does not work from Windows Subsystem for Linux (WSL), so
+  `argos.track` will not work with that. However other components of
+  `Argos` do work with WSL.
