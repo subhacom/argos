@@ -114,7 +114,7 @@ annotation in a way that YOLACT can process for training. Note that this is for
 a single category of objects.
 
 Preparation
-===========
+-----------
 Create a folder and copy all the images you want to annotate into it.
 
 If you have videos instead, you need to extract some video
@@ -128,7 +128,7 @@ folder. All the images should be directly in this folder, no
 subfolders.
 
 Annotate new images
-===================
+-------------------
 After you select the image folder, the annotator will show you the
 main window, with an empty display like below.
 
