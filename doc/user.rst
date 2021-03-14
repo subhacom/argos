@@ -1066,11 +1066,11 @@ passed after it.
 With the ``--vout`` option, it will save the video with bounding boxes
 in the filename passed after it.
 
-With ``--trail`` option, it will show the trail  of each animal from past
-``trail`` frames. However, if ``trail_sec`` flag is set, it will show the trails
- for past ``trail`` seconds.
+With ``--trail`` option, it will show the trail of each animal from
+the past ``trail`` frames. However, if ``trail_sec`` flag is set, it
+will show the trails for past ``trail`` seconds.
 
-With ``--randcolor`` flag set, it will draw each track (bbox and ID) in a random
-color.
+With ``--randcolor`` flag set, it will draw each track (bbox and ID)
+in a random color.
 
 
