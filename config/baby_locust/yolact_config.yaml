@@ -1,0 +1,19 @@
+base: yolact_base_config
+dataset:
+  class_names:
+  - locust
+  has_gt: true
+  name: null
+  train_images: /data/rays3/locust_tracking/yolact_train/train_20200831/training
+  train_info: /data/rays3/locust_tracking/yolact_train/train_20200831/training/annotations.json
+  valid_images: /data/rays3/locust_tracking/yolact_train/train_20200831/validation
+  valid_info: /data/rays3/locust_tracking/yolact_train/train_20200831/validation/annotations.json
+lr_steps:
+- 100000
+- 150000
+- 175000
+- 190000
+max_iter: 200000
+max_size: 550
+name: locust_weights
+num_classes: 2
