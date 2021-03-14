@@ -493,6 +493,5 @@ tracks and correct mistakes.
   ```
   
   Check if you have NVIDIA drivers for CUDA installed. Also note that
-  CUDA does not work from Windows Subsystem for Linux (WSL), so
-  `argos.track` will not work with that. However other components of
-  `Argos` do work with WSL.
+  CUDA does not work from Windows Subsystem for Linux (WSL). In
+  general it is a good idea to install Argos on the native platform.
