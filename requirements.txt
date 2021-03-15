@@ -1,0 +1,17 @@
+Cython
+PyQt5
+opencv-contrib-python
+torch
+numpy
+scipy
+pandas
+tables
+PyYAML
+matplotlib
+scikit-learn
+sortedcontainers
+pycocotools
+torchvision
+
+
+

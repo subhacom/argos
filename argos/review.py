@@ -237,7 +237,10 @@ that frame.
   key.
 
   To delete a track only in the current frame, but to keep future occurrences
-  intact, press ``Ctrl+X`` instead.
+  intact, press ``Shift+X`` instead.
+
+  To apply this from the current frame till a specific frame, press ``Alt+X``.
+  A dialog box will appear so you can specify the end frame.
 
 - Replacing/Assigning
 
@@ -258,6 +261,10 @@ that frame.
   To apply this only in the current frame keep the ``Shift`` key pressed while
   drag-n-dropping.
 
+  To apply this from the current frame till a specific frame, keep the ``Alt``
+  key pressed while drag-n-dropping. A dialog box will appear so you can specify
+  the end frame.
+
 - Swapping
 
   In some cases, especially when one object crosses over another, the
@@ -272,6 +279,10 @@ that frame.
 
   To apply this only in the current frame keep the ``Shift`` key pressed while
   drag-n-dropping.
+
+  To apply this from the current frame till a specific frame, keep the ``Alt``
+  key pressed while drag-n-dropping. A dialog box will appear so you can specify
+  the end frame.
 
 - Renaming
 
@@ -592,7 +603,7 @@ class TrackReader(qc.QObject):
     def deleteTrack(self, frameNo, origId, endFrame=-1):
         change = Change(frame=frameNo, end=endFrame,
                         change=ChangeCode.op_delete,
-                        orig=origId, new=pd.NA,
+                        orig=origId, new=-1,
                         idx=self._change_idx)
         self._change_idx += 1
         self.changeList.add(change)
@@ -1561,15 +1572,18 @@ class ReviewWidget(qw.QWidget):
         self.renameTrackAction = qw.QAction('Rename track (r)')
         self.renameTrackAction.triggered.connect(self.renameTrack)
         self.renameTrackCurAction = qw.QAction(
-            'Rename track in current frame (Ctrl+r)')
+            'Rename track in current frame (Shift+r)')
         self.renameTrackCurAction.triggered.connect(self.renameTrackCur)
         self.deleteTrackAction = qw.QAction('Delete track (Delete/x)')
         self.deleteTrackAction.setToolTip(
-            'Keep Ctrl key pressed for only current frame')
+            'Keep Shift key pressed for only current frame')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.deleteTrackCurAction = qw.QAction(
-            'Delete track only in current frame (Ctrl+Delete/Ctrl+x')
+            'Delete track only in current frame (Shift+Delete/Shift+x')
         self.deleteTrackCurAction.triggered.connect(self.deleteSelectedCur)
+        self.deleteTrackRangeAction = qw.QAction(
+            'Delete track up to a specific frame (Alt+Delete/Alt+x')
+        self.deleteTrackRangeAction.triggered.connect(self.deleteSelectedRange)
         self.undoCurrentChangesAction = qw.QAction(
             'Undo changes in current frame (Ctrl+z)')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
@@ -1660,21 +1674,21 @@ class ReviewWidget(qw.QWidget):
         self.sc_remove_2.activated.connect(self.deleteSelectedFut)
 
         self.sc_remove_cur = qw.QShortcut(
-            qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Delete), self)
+            qg.QKeySequence(qc.Qt.SHIFT + qc.Qt.Key_Delete), self)
         self.sc_remove.activated.connect(self.deleteSelectedCur)
 
-        self.sc_remove_cur_2 = qw.QShortcut(qg.QKeySequence('Ctrl+X'), self)
+        self.sc_remove_cur_2 = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
         self.sc_remove_cur_2.activated.connect(self.deleteSelectedCur)
 
-        self.sc_remove_range = qw.QShortcut(qg.QKeySequence('Shift+X'), self)
+        self.sc_remove_range = qw.QShortcut(qg.QKeySequence('Alt+X'), self)
         self.sc_remove_range.activated.connect(self.deleteSelectedRange)
         self.sc_remove_range_2 = qw.QShortcut(
-            qg.QKeySequence(qc.Qt.SHIFT + qc.Qt.Key_Delete), self)
+            qg.QKeySequence(qc.Qt.ALT + qc.Qt.Key_Delete), self)
         self.sc_remove_range_2.activated.connect(self.deleteSelectedRange)
 
         self.sc_rename = qw.QShortcut(qg.QKeySequence('R'), self)
         self.sc_rename.activated.connect(self.renameTrack)
-        self.sc_rename_cur = qw.QShortcut(qg.QKeySequence('Ctrl+R'), self)
+        self.sc_rename_cur = qw.QShortcut(qg.QKeySequence('Shift+R'), self)
         self.sc_rename_cur.activated.connect(self.renameTrackCur)
         self.sc_speedup = qw.QShortcut(
             qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_Up), self)
@@ -1725,7 +1739,7 @@ class ReviewWidget(qw.QWidget):
                                                   self.frame_no,
                                                   2 ** 31 - 1)
             if not ok:
-                endFrame = -1
+                return
         if cur:
             endFrame = self.frame_no
         for sel in selected:
@@ -1909,9 +1923,8 @@ class ReviewWidget(qw.QWidget):
                          if change.frame not in
                          self.trackReader.undone_changes]
         pos = np.searchsorted(change_frames, self.frame_no, side='right')
-        if pos > len(change_frames):
-            return
-        self.gotoFrame(change_frames[pos])
+        if 0 <= pos < len(change_frames):
+            self.gotoFrame(change_frames[pos])
 
     @qc.pyqtSlot()
     def gotoPrevChange(self):

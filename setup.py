@@ -58,19 +58,26 @@ ext_modules = [
 ]
 setup(
     name='argos-tracker',
-    version='0.1.0-4',
+    version='0.1.0-6',
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
     description='Software utility for tracking multiple objects (animals) in a video.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/subhacom/argos',
+    project_urls={
+    'Documentation': 'https://argos.readthedocs.io',
+    'Source': 'https://github.com/subhacom/argos',
+    'Tracker': 'https://github.com/subhacom/argos/issues',
+    },
     packages=find_packages(),
     ext_modules=cythonize(ext_modules),
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: Public Domain',
-        'Operating System :: OS Independent',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: MacOS',
+        'Operating System :: POSIX :: Linux',
         'Topic :: Scientific/Engineering',
         'Topic :: Utilities',
     ],

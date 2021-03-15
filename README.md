@@ -83,6 +83,24 @@ If you used Anaconda as described here, `{your_python_environment}`
 should be `C:\Users\{username}\Anaconda3\env\track\` for Anaconda3 on
 Windows, `~/.conda/envs/track` on Linux.
 
+You can also download some weights and corresponding configuration
+files here: [Argos example config](https://www.dropbox.com/sh/9fcgouv6wsjvypk/AAC5A2BIrbpdOG5vy8YwOk6ca?dl=0)
+
+To run any of the utilities in the Argos toolkit, you have to switch
+to the Anaconda environment created during the installation:
+
+```
+conda activate track
+```
+
+And then run the utility as a Python module:
+
+```
+python -m argos.{utility}
+```
+
+Continue reading below, or refer to the documentation for specific
+cases.
 
 #### Interactive tracking
 
@@ -432,3 +450,75 @@ tracks and correct mistakes.
     conda remove opencv-python
     pip install opencv-contrib-python
     ```
+- I get this exception when running argos after installation
+  ```
+  ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
+  ```
+
+  This happens with older version of numpy (should be 1.20 or later). 
+  Try upgrading numpy:
+  ```
+  pip install -U numpy
+  ```
+
+- When installing with `pip` I get this error message 
+  ```
+  Collecting torch
+    Downloading torch-1.8.0-cp39-cp39-manylinux1_x86_64.whl (735.5 MB)
+  
+  ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes. Otherwise, examine the package contents carefully; someone may have tampered with them.
+  ```
+  Try pip with `--no-cache-dir` option, like this:
+  ```
+  pip install --no-cache-dir torch
+  ```
+- I get this exception when trying to run argos tracker
+  ```
+  ModuleNotFoundError: No module named 'pycocotools'
+  ```
+  
+  This indicates that pycocotools is not installed on your system. We
+  did not include pycocotools in the dependencies as that creates
+  problem for MS Windows (see special case for Windows in installation
+  instrctions above).
+  
+  On Unix-like systems (Linux/Mac) you can install pycocotools with
+  ```
+  pip install pycocotools
+  ```
+  
+- I get this error when trying `python -m argos.track`:
+  ```
+  RuntimeError: Found no NVIDIA driver on your system. Please check that you have an NVIDIA GPU and installed a driver from http://www.nvidia.com/Download/index.aspx
+  ```
+  
+  Check if you have NVIDIA drivers for CUDA installed. Also note that
+  CUDA does not work from Windows Subsystem for Linux (WSL). In
+  general it is a good idea to install Argos on the native platform.
+
+## Credits
+
+- [SORT](https://github.com/abewley/sort) was developed by Alex
+  Bewley. The related publication is:
+  ```
+  @inproceedings{Bewley2016_sort,
+    author={Bewley, Alex and Ge, Zongyuan and Ott, Lionel and Ramos, Fabio and Upcroft, Ben},
+    booktitle={2016 IEEE International Conference on Image Processing (ICIP)},
+    title={Simple online and realtime tracking},
+    year={2016},
+    pages={3464-3468},
+    keywords={Benchmark testing;Complexity theory;Detectors;Kalman filters;Target tracking;Visualization;Computer Vision;Data Association;Detection;Multiple Object Tracking},
+    doi={10.1109/ICIP.2016.7533003}
+  }
+  ```
+  
+- [YOLACT](https://github.com/dbolya/yolact) was developed by Daniel
+  Bolya. The related publication is:
+  ```
+  @inproceedings{yolact-iccv2019,
+  author    = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
+  title     = {YOLACT: {Real-time} Instance Segmentation},
+  booktitle = {ICCV},
+  year      = {2019},
+  }
+  ```
