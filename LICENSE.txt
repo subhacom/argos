@@ -1,8 +1,6 @@
 Argos, a software utility for tracking objects in videos, written
 by Subhasis Ray (lastname dot firstname at gmail dot com) is released to the
-public domain under the following Unlicense. Any redistribution of existing
-software (YOLACT and SORT in particular) that Argos depends on, are under their
-original license.
+public domain under the following Unlicense.
 
 
                           The Unlicense
