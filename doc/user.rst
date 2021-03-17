@@ -386,7 +386,7 @@ Track objects interactively
 
 Usage:
 ::
-    python -m argos.track
+    python -m argos_track
 
 
 In Argos, this is the main tool for tracking objects
@@ -559,7 +559,7 @@ This program allows non-interactive tracking of objects in a video.
 When using classical segmentation this can speed things up by
 utilizing multiple CPU cores.
 
-It may be easier to use the interactive tracking :py:mod:`argos.track`
+It may be easier to use the interactive tracking :py:mod:`argos_track`
 to play with the segmentation parameters to see what work best for
 videos in a specific setting. The optimal setting can then be exported
 to a configuration file which will then be passed with ``-c`` command
@@ -624,7 +624,7 @@ the file ``config/weights.pth``.
 
 
 All of this can be more easily set graphically in
-:py:mod:`argos.track` and exported into a file, which can then be
+:py:mod:`argos_track` and exported into a file, which can then be
 passed with ``-c {config_file}``.
 
 =========================
