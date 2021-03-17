@@ -14,7 +14,7 @@
 
 - Install from TestPyPI
 
-      pip install --index-url https://test.pypi.org/simple/ --no-deps argos-tracker --extra-index-url https://pypi.org/simple
+      pip install --index-url https://test.pypi.org/simple/ --no-deps argos_toolkit --extra-index-url https://pypi.org/simple
 
 
 ``argos-tracker`` is just PyPI name, the installed package is named

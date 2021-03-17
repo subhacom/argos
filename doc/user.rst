@@ -1032,6 +1032,33 @@ review tool will disable ``seek`` when it detects this. To enable seek
 when the video format permits it, uncheck the ``Disable seek`` item
 in the ``Play`` menu.
 
+
+Note on data format
+-------------------
+Argos saves and reads data in comma separated values in text format
+(`.csv`), and HDF5 (`.h5`, `.hdf`) format. The HDF5 format is
+recommended as it allows meta information, and keeps all the data
+together.
+
+The HDF5 data is saved and read as Pandas DataFrame in Python under
+the name ``/tracked`` for track data and ``/segmented`` for raw
+instance segmentation. You can read these into Pandas DataFrames as
+`pd.read_hdf(filename, 'tracked')` and `pd.read_hdf(filename, 'segmented')`
+respectively.
+
+The ``tracked`` dataframe has these columns: ``frame, trackid, x, y,
+w, h`` where ``frame`` is the video frame number, ``trackid`` is a
+non-negative integer identifying a track, ``x, y, w, h`` describe
+bounding box of the tracked object in this frame where `(x, y)` is the
+coordinate of top left corner of the bounding box, ``w`` its width and
+``x`` its height.
+
+In addition, when you make changes in the Review tool, it saves the
+changes you made in the group ``changes``. There will be a subgroup
+for each save with its timestamp, and you can load these as Pandas
+DataFrames.
+
+
 =============================
 Utility to display the tracks
 =============================
