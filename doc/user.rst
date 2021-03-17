@@ -692,7 +692,7 @@ or selecting ``Delete track`` from ``Action`` in menubar
 
 Once you delete ``4``, selection will change to the next object
 (``# 5``) and the path taken by it over time will be displayed in the
-same purple-to-yellow color code (:numref:`review_post_delete`) [#_].
+same purple-to-yellow color code (:numref:`review_post_delete`) [#]_.
 
 .. [#] Changing the frame will clear the selection and the path
        display. If you want the selection (and the path-display of the
