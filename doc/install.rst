@@ -59,7 +59,7 @@ Installation using Anaconda
      pip install pycocotools
 
 
-7. Finally, install argos with the command::
+7. Finally, install the argos toolkit including the tracker with these commands::
 
        pip install argos-toolkit
        pip install argos-tracker
