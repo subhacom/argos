@@ -45,10 +45,6 @@ Installation using Anaconda
         Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
      3. Install [git](https://git-scm.com/downloads)
      4. In the Anaconda command prompt run::
-
-          pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
-
-	If using Powershell, use this command instead::
 		
           pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
 
