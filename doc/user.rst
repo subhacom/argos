@@ -549,10 +549,10 @@ Track objects in batch mode (non-interactively)
 ===============================================
 Usage:
 ::
-     python -m argos.batchtrack -i {input_file} -o {output_file}
+     python -m argos_track.batchtrack -i {input_file} -o {output_file}
      -c {config_file}
 
-Try ``python -m argos.batchtrack -h`` for details of command-line
+Try ``python -m argos_track.batchtrack -h`` for details of command-line
 options.
 
 This program allows non-interactive tracking of objects in a video.
@@ -569,7 +569,7 @@ Examples
 --------
 Use YOLACT for segmentation and SORT for tracking:
 ::
-    python -m argos.batchtrack -i video.avi -o video.h5 -m yolact \\
+    python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
     --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
     --overlap_thresh=0.3 --cuda=True \\
     --pmin=10 --pmax=500 --wmin=5 --wmax=100 --hmin=5 --hmax=100 \\
