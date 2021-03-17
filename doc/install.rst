@@ -48,7 +48,7 @@ Installation using Anaconda
 
           pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
 
-	If using Powershell, use this command instead:
+	If using Powershell, use this command instead::
 		
           pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
 
