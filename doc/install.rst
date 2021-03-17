@@ -47,7 +47,12 @@ Installation using Anaconda
      4. In the Anaconda command prompt run::
 
           pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
+
+	If using Powershell, use this command instead:
 		
+          pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
+
+	
    On Linux/Unix/Mac you need to have ``make`` and ``g++`` installed, and then in 
    the Anaconda command prompt::
 
@@ -56,6 +61,7 @@ Installation using Anaconda
 
 7. Finally, install argos with the command::
 
+       pip install argos-toolkit
        pip install argos-tracker
 
 8. Download pretrained models for testing and for training.
