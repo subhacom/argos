@@ -22,6 +22,10 @@ There are many other excellent tools for tracking animal behavior, but Argos:
 The user documentation for Argos is available on
 [readthedocs](https://argos.readthedocs.io/en/latest/).
 
+Argos is in the Public Domain, while the 
+[tracker tool](https://github.com/subhacom/argos_tracker) 
+is released under GPL. Both are free and open source.
+
 Instead of reinventing the wheel, we put together algorithms developed
 by researchers in computer vision in a simple graphical interface to
 facilitate the work of biologists.
