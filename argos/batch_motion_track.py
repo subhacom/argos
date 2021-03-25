@@ -59,6 +59,6 @@ if __name__ == '__main__':
                 res = proc.communicate()
                 print('Return code', proc.returncode)
                 # print('Result\n', res)
-                print('STDERR\n', res[1].decode('utf-8')
+                print('STDERR\n', res[1].decode('utf-8'))
         except KeyboardInterrupt:
             sys.exit(0)
