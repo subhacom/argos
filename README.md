@@ -1,5 +1,38 @@
 # Argos: tracking multiple objects
-Argos is a software utility for tracking multiple objects (animals) in a video.
+Argos is a free, open source software toolkit to facilitate tracking
+multiple objects (animals) in videos.
+
+There are many other excellent tools for tracking animal behavior, but Argos:
+0. Does not require constant background.
+1. Can use classical segmentation methods like thresholding, contour
+   detection, and watershed when objects have good contrast with
+   background.
+2. Can use a fast Convolutional Neural Network to detect objects in a
+   noisy environment, or when the objects do not have uniform color.
+3. Does not assume fixed number of animals: animals can enter and exit
+   a visual scene.
+4. Is a complete toolkit with tools to
+   1. Only capture or extract from videos scenes with significant
+      movement, reducing the amount of data to be processed.
+   2. Facilitate generation of training data from images using a GUI.
+   3. Track animals in videos (as described above) using either a GUI
+      or in batch mode.
+   4. Review and correct detected tracks using a GUI.
+
+The user documentation for Argos is available on
+[readthedocs](https://argos.readthedocs.io/en/latest/).
+
+Instead of reinventing the wheel, we put together algorithms developed
+by researchers in computer vision in a simple graphical interface to
+facilitate the work of biologists.
+
+The components of Argos are loosely coupled. Specifically, the
+tracking does not use neural nets, so no need for training it with
+videos. You need to train the neural net for detection if you want to
+use it, and that can be done with about a hundred training
+images. Moreover, if your target animal is in the COCO database
+(sheep, elephant, giraffe, zebra, horse, dog, bird), you can freely
+download and use pretrained network weights.
 
 ## Getting started
 
