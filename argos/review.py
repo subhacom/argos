@@ -1172,6 +1172,7 @@ class ReviewWidget(qw.QWidget):
         self.sigLeftFrame.connect(self.leftView.setFrame)
         self.sigRightFrame.connect(self.rightView.setFrame)
         self.rightView.sigArena.connect(self.setRoi)
+        self.rightView.sigArena.connect(self.lim_widget.setRoi)
         self.rightView.sigArena.connect(self.leftView.frameScene.setArena)
         self.sigLeftTracks.connect(self.leftView.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)

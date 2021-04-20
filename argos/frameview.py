@@ -36,6 +36,7 @@ class FrameScene(qw.QGraphicsScene):
         self.roi = None
         self.frameno = -1
         self.arena = None
+        self.arenaPolygon = None
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
@@ -88,6 +89,8 @@ class FrameScene(qw.QGraphicsScene):
             self.removeItem(item)
         for label in self.labelDict.values():
             self.removeItem(label)
+        if self.arenaPolygon is not None:
+            self.removeItem(self.arenaPolygon)
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
@@ -255,13 +258,16 @@ class FrameScene(qw.QGraphicsScene):
     def setArena(self, poly: qg.QPolygonF):
         self.clearItems()
         self.arena = qg.QPolygonF(poly)
-        self.addPolygon(self.arena)
+        self.arenaPolygon = self.addPolygon(self.arena)
         self.sigArena.emit(self.arena)
         self.setSceneRect(self.arena.boundingRect())
         
     @qc.pyqtSlot()
     def resetArena(self):
         logging.debug('Resetting arena')
+        if self.arenaPolygon is not None:
+            self.removeItem(self.arenaPolygon)
+            self.arenaPolygon = None
         self.arena = None
         self.clearItems()
         self.invalidate(self.sceneRect())
@@ -531,7 +537,7 @@ class FrameScene(qw.QGraphicsScene):
         self._updateItemDisplay()
         self._setLabelInside(self.labelInside)
         if self.arena is not None:
-            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
+            self.arenaPolygon = self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -562,7 +568,7 @@ class FrameScene(qw.QGraphicsScene):
         self._updateItemDisplay()
         self._setLabelInside(self.labelInside)
         if self.arena is not None:
-            self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
+            self.arenaPolygon = self.addPolygon(self.arena, qg.QPen(qc.Qt.red))
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
