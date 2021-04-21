@@ -714,25 +714,27 @@ class TrackReader(qc.QObject):
         # self.changeList = sorted(self.changeList, key=attrgetter('frame'))
         with open(fname, 'w') as fd:
             writer = csv.writer(fd)
-            writer.writerow(['frame', 'change', 'old', 'new'])
+            writer.writerow(['frame', 'end', 'change', 'code', 'old', 'new'])
             for change in self.changeList:
                 if change.frame not in self.undone_changes:
-                    writer.writerow([change.frame, change.change, change.orig,
-                                     change.new])
+                    writer.writerow([change.frame, change.end,
+                                     change.change.name, change.change.value,
+                                     change.orig, change.new])
 
     @qc.pyqtSlot(str)
     def loadChangeList(self, fname: str) -> None:
         self.changeList.clear()
         with open(fname) as fd:
-            first = True
-            reader = csv.reader(fd)
+            reader = csv.DictReader(fd)
+            idx = 0
             for row in reader:
-                if not first and len(row) > 0:
-                    new = int(row[3]) if len(row[3]) > 0 else None
-                    change = Change(frame=int(row[0]), change=int(row[1]),
-                                    orig=int(row[2]), new=new)
-                    self.changeList.add(change)
-                first = False
+                new = int(row['new']) if len(row['new']) > 0 else None
+                chcode = getattr(ChangeCode, row['change'])
+                change = Change(frame=int(row['frame']), end=int(row['end']),
+                                change=chcode,
+                                orig=int(row['orig']), new=new, idx=idx)
+                self.changeList.add(change)
+                idx += 1
         self.sigChangeList.emit(self.changeList)
 
 
