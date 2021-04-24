@@ -57,38 +57,33 @@ format requires H.264 library, which can be installed as follows:
 Examples
 --------
 1. Read video from file ``myvideo.mpg`` and save output in
-``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
-10`` part tells the program to detect any movement such that more than
-10 contiguous pixels have changed in the frame thresholded at 20:
-
-
-::
-    python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
-    --format=DIVX -m --threshold=20 -a 10
+   ``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
+   10`` part tells the program to detect any movement such that more than
+   10 contiguous pixels have changed in the frame thresholded at 20:
+   ::
+      python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
+      --format=DIVX -m --threshold=20 -a 10
 
 The recording will stop when the user presses ``Escape`` or ``Q`` key.
 
 2. Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
-   
-::
+   ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
 3. Record from camera# 0 for 24 hours, saving every 10,000 frames into a
-separate file:
+   separate file:
+   ::
+      python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
+      --duration=24:00:00 --max_frames=10000
 
-::
-    python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
-    --duration=24:00:00 --max_frames=10000
-
-This will produce files with names ``myvideo_motion_cap_000.avi``,
-``myvideo_motion_cap_001.avi``, etc. along with the timestamps in files named
-``myvideo_motion_cap_000.avi.csv``, ``myvideo_motion_cap_001.avi.csv``. The
-user can stop recording at any time by pressing ``Escape`` or ``Q`` key.
+   This will produce files with names ``myvideo_motion_cap_000.avi``,
+   ``myvideo_motion_cap_001.avi``, etc. along with the timestamps in files named
+   ``myvideo_motion_cap_000.avi.csv``, ``myvideo_motion_cap_001.avi.csv``. The
+   user can stop recording at any time by pressing ``Escape`` or ``Q`` key.
 
 4. Record a frame every 3 seconds:
-   
-::
-    python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
+   ::
+      python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
 
 Common problem
 --------------
@@ -111,7 +106,6 @@ Solution: Use .avi instead of .mp4 extension when specifying output filename.
 Generate training data for YOLACT
 =================================
 Usage:
-
 ::
     python -m argos.annotate
 
@@ -392,7 +386,6 @@ Track objects interactively
 ============================
 
 Usage:
-
 ::
     python -m argos_track
 
@@ -525,8 +518,7 @@ presented (:numref:`track_startup`).
    the group ``/tracked``. The actual values are in the dataset named
    ``table`` inside each group, with columns in same order as described
    above for CSV file. You can load the tracks in a Pandas data frame
-   in python with the code fragment:
-   
+   in python with the code fragment:   
    ::
            tracks = pandas.read_hdf(tracked_filename, 'tracked')
 
@@ -564,7 +556,6 @@ the available algorithms.
 Track objects in batch mode (non-interactively)
 ===============================================
 Usage:
-
 ::
      python -m argos_track.batchtrack -i {input_file} -o {output_file}
      -c {config_file}
@@ -585,7 +576,6 @@ line option .
 Examples
 --------
 Use YOLACT for segmentation and SORT for tracking:
-
 ::
     python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
     --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
@@ -649,7 +639,6 @@ passed with ``-c {config_file}``.
 Review and correct tracks
 =========================
 Usage:
-
 ::
     python -m argos.review
 
@@ -1096,7 +1085,6 @@ Utility to display the tracks
 =============================
 
 Usage:
-
 ::
     python -m argos.plot_tracks -v {videofile} -f {trackfile} \\
     --torig {original-timestamps-file} \\
