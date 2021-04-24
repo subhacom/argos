@@ -60,7 +60,8 @@ Examples
 ``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
 10`` part tells the program to detect any movement such that more than
 10 contiguous pixels have changed in the frame thresholded at 20:
-frames
+
+
 ::
     python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
     --format=DIVX -m --threshold=20 -a 10
@@ -68,11 +69,13 @@ frames
 The recording will stop when the user presses ``Escape`` or ``Q`` key.
 
 2. Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
+   
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
 3. Record from camera# 0 for 24 hours, saving every 10,000 frames into a
 separate file:
+
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
     --duration=24:00:00 --max_frames=10000
@@ -83,6 +86,7 @@ This will produce files with names ``myvideo_motion_cap_000.avi``,
 user can stop recording at any time by pressing ``Escape`` or ``Q`` key.
 
 4. Record a frame every 3 seconds:
+   
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
 
@@ -91,6 +95,7 @@ Common problem
 
 When trying to use H264 format for saving video, you may see the
 following error:
+
 ::
     Creating output file video_filename.mp4
     OpenCV: FFMPEG: tag 0x34363248/'H264' is not supported with codec id 27 and
@@ -106,6 +111,7 @@ Solution: Use .avi instead of .mp4 extension when specifying output filename.
 Generate training data for YOLACT
 =================================
 Usage:
+
 ::
     python -m argos.annotate
 
@@ -121,7 +127,7 @@ If you have videos instead, you can extract some video
 frames using ``File->Extract frames from video`` in the menu.
 
 There are many other programs, including most video players, which
-allow extracting a single frame from a video if you need more control.
+allow extracting individual frames from a video if you need more control.
 
 Upon startup the program will prompt you to choose the folder
 containing the images to be annotated. Browse to the desired image
@@ -386,6 +392,7 @@ Track objects interactively
 ============================
 
 Usage:
+
 ::
     python -m argos_track
 
@@ -519,6 +526,7 @@ presented (:numref:`track_startup`).
    ``table`` inside each group, with columns in same order as described
    above for CSV file. You can load the tracks in a Pandas data frame
    in python with the code fragment:
+   
    ::
            tracks = pandas.read_hdf(tracked_filename, 'tracked')
 
@@ -556,6 +564,7 @@ the available algorithms.
 Track objects in batch mode (non-interactively)
 ===============================================
 Usage:
+
 ::
      python -m argos_track.batchtrack -i {input_file} -o {output_file}
      -c {config_file}
@@ -576,6 +585,7 @@ line option .
 Examples
 --------
 Use YOLACT for segmentation and SORT for tracking:
+
 ::
     python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
     --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
@@ -590,10 +600,10 @@ rest of the arguments:
 - ``-m yolact`` tells it to use YOLACT as the segmentation method.
 
 - ``--yconfig=config/yolact.yml``: Read YOLACT settings from the file
-``config/yolact.yml``
+  ``config/yolact.yml``
 
 - ``-w config/weights.pth``: Read YOLACT neural network weights from
-the file ``config/weights.pth``.
+  the file ``config/weights.pth``.
 
 - ``-s 0.1``: Include detections with score above 0.1
 
@@ -639,6 +649,7 @@ passed with ``-c {config_file}``.
 Review and correct tracks
 =========================
 Usage:
+
 ::
     python -m argos.review
 
@@ -646,8 +657,8 @@ Usage:
 Basic operation
 ---------------
 At startup it will show a window with two empty panes separated in the
-middle by three empty lists titled ``Left tracks``, ``All tracks`` and
-``Right tracks`` like :numref:`review_startup` below.
+middle by three empty lists titled ``Previous tracks``, ``All tracks`` and
+``Current tracks`` like :numref:`review_startup` below.
 
 .. _review_startup:
 .. figure:: ../doc/images/review_00.png
@@ -716,7 +727,7 @@ same purple-to-yellow color code (:numref:`review_post_delete`) [#]_.
    is selected.
 
 Now to play the video, click the ``play`` button at bottom. The right
-frame will be transfereed to the left pane, and the next frame will
+frame will be transferred to the left pane, and the next frame will
 appear in the right pane.
 
 You will notice the spinbox on bottom right updates the current frame
@@ -763,7 +774,7 @@ message will remind you of the last change
 
 You can also choose ``Show popup message for left/right mismatch`` in
 the ``Diff settings`` menu. In this case whenever the trackids on the
-left frame are different from those on the right frame, the video will
+previous frame are different from those on the current frame, the video will
 be paused with a popup message.
 
 If you want to just watch the video without interruption, select ``No
@@ -792,15 +803,16 @@ by clicking the left mouse-button to set the vertices of a polygon. Click on
 the first vertex to close the polygon. If you want to cancel it half-way, click
 the right mouse-button.
 
+
 The track lists 
 ---------------
 
-The three lists between the left and right video frame in the GUI
-present the track Ids of the detected objects. These allow you to
+The three lists between the left (previous) and right (current) video frame in
+the GUI present the track Ids of the detected objects. These allow you to
 display the tracks and carry out modifications of the tracks described
 later).
 
-- ``Left tracks`` shows the tracks detected in the left (previous)
+- ``Previous tracks`` shows the tracks detected in the left (previous)
   frame. If you select an entry here, its detected track across frames
   will be overlayed on the previous frame in the left pane
   (:numref:`review_track_hist`).
@@ -812,8 +824,8 @@ later).
   you select different entries in ``Left tracks`` and ``All tracks``,
   the last selected track will be displayed.
 
-- ``Right tracks`` shows the tracks detected in the current frame.  If
-  you select an entry here, its detected track across frames will be
+- ``Current tracks`` shows the tracks detected in the current frame (on the
+  right).  If you select an entry here, its detected track across frames will be
   overlayed on the current frame in the right pane.
 
 .. _review_track_hist:
@@ -821,9 +833,9 @@ later).
    :width: 100%
    :alt: Track of the selected object
 
-   The track of the selected object (track Id) in ``Left tracks`` or
+   The track of the selected object (track Id) in ``Previous tracks`` or
    ``All tracks`` is displayed on the left pane. That of the selected
-   object in the ``Right tracks`` is displayed on the right pane.
+   object in the ``Current tracks`` is displayed on the right pane.
 
 
 
@@ -897,7 +909,7 @@ that frame.
   the new trackid, we need to assign ``5`` to track id ``12``.
 
   The easiest way to do this is to use the left mouse button to drag
-  the entry ``5`` from either the ``Left tracks`` list or the ``All
+  the entry ``5`` from either the ``Previous tracks`` list or the ``All
   tracks list`` and drop it on entry ``12`` in the ``Right tracks``
   list.  You can also select ``5`` in the left or the middle list and
   ``12`` in the right list and then select ``Replace track`` from the
@@ -917,8 +929,8 @@ that frame.
   swapping them.
 
   To do this, use the right mouse button to drag and drop one entry
-  from the ``All tracks`` or ``Left tracks`` list on the other in the
-  ``Right tracks`` list. You can also select the track Ids in the
+  from the ``All tracks`` or ``Previous tracks`` list on the other in the
+  ``Current tracks`` list. You can also select the track Ids in the
   lists and then click the ``Swap tracks`` entry in the ``Action``
   menu.
 
@@ -932,7 +944,7 @@ that frame.
 - Renaming
 
   To rename a track with a different, nonexistent Id, select the track
-  in one of the ``Right tracks`` list and then press the ``R`` key, or
+  in one of the ``Current tracks`` list and then press the ``R`` key, or
   use the ``Action`` menu to get a prompt for the new Id number. Note
   that normally Argos does not use negative track Id numbers, so for
   temporary use it is safe to use negative numbers and it will not
@@ -1084,6 +1096,7 @@ Utility to display the tracks
 =============================
 
 Usage:
+
 ::
     python -m argos.plot_tracks -v {videofile} -f {trackfile} \\
     --torig {original-timestamps-file} \\

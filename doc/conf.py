@@ -45,8 +45,8 @@ version = release  # Special for rst2pdf
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.autodoc',
     'rst2pdf.pdfbuilder',
     'docxbuilder',
 ]

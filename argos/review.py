@@ -13,8 +13,8 @@ Usage:
 Basic operation
 ---------------
 At startup it will show a window with two empty panes separated in the
-middle by three empty lists titled ``Left tracks``, ``All tracks`` and
-``Right tracks`` like :numref:`review_startup` below.
+middle by three empty lists titled ``Previous tracks``, ``All tracks`` and
+``Current tracks`` like :numref:`review_startup` below.
 
 .. _review_startup:
 .. figure:: ../doc/images/review_00.png
@@ -66,8 +66,13 @@ or selecting ``Delete track`` from ``Action`` in menubar
    Screenshot of review tool deleting object
 
 Once you delete ``4``, selection will change to the next object
-(#``5``) and the path taken by it over time will be displayed in the
-same purple-to-yellow color code (:numref:`review_post_delete`).
+(``# 5``) and the path taken by it over time will be displayed in the
+same purple-to-yellow color code (:numref:`review_post_delete`) [#]_.
+
+.. [#] Changing the frame will clear the selection and the path
+       display. If you want the selection (and the path-display of the
+       selected ID) to be retained across frames, check the menu item
+       ``View->Retain selection across frames``.
 
 .. _review_post_delete:
 .. figure:: ../doc/images/review_04.png
@@ -78,7 +83,7 @@ same purple-to-yellow color code (:numref:`review_post_delete`).
    is selected.
 
 Now to play the video, click the ``play`` button at bottom. The right
-frame will be transfereed to the left pane, and the next frame will
+frame will be transferred to the left pane, and the next frame will
 appear in the right pane.
 
 You will notice the spinbox on bottom right updates the current frame
@@ -125,7 +130,7 @@ message will remind you of the last change
 
 You can also choose ``Show popup message for left/right mismatch`` in
 the ``Diff settings`` menu. In this case whenever the trackids on the
-left frame are different from those on the right frame, the video will
+previous frame are different from those on the current frame, the video will
 be paused with a popup message.
 
 If you want to just watch the video without interruption, select ``No
@@ -158,12 +163,12 @@ the right mouse-button.
 The track lists 
 ---------------
 
-The three lists between the left and right video frame in the GUI
-present the track Ids of the detected objects. These allow you to
+The three lists between the left (previous) and right (current) video frame in
+the GUI present the track Ids of the detected objects. These allow you to
 display the tracks and carry out modifications of the tracks described
 later).
 
-- ``Left tracks`` shows the tracks detected in the left (previous)
+- ``Previous tracks`` shows the tracks detected in the left (previous)
   frame. If you select an entry here, its detected track across frames
   will be overlayed on the previous frame in the left pane
   (:numref:`review_track_hist`).
@@ -175,8 +180,8 @@ later).
   you select different entries in ``Left tracks`` and ``All tracks``,
   the last selected track will be displayed.
 
-- ``Right tracks`` shows the tracks detected in the current frame.  If
-  you select an entry here, its detected track across frames will be
+- ``Current tracks`` shows the tracks detected in the current frame (on the
+  right).  If you select an entry here, its detected track across frames will be
   overlayed on the current frame in the right pane.
 
 .. _review_track_hist:
@@ -184,9 +189,9 @@ later).
    :width: 100%
    :alt: Track of the selected object
 
-   The track of the selected object (track Id) in ``Left tracks`` or
+   The track of the selected object (track Id) in ``Previous tracks`` or
    ``All tracks`` is displayed on the left pane. That of the selected
-   object in the ``Right tracks`` is displayed on the right pane.
+   object in the ``Current tracks`` is displayed on the right pane.
 
 
 
@@ -260,7 +265,7 @@ that frame.
   the new trackid, we need to assign ``5`` to track id ``12``.
 
   The easiest way to do this is to use the left mouse button to drag
-  the entry ``5`` from either the ``Left tracks`` list or the ``All
+  the entry ``5`` from either the ``Previous tracks`` list or the ``All
   tracks list`` and drop it on entry ``12`` in the ``Right tracks``
   list.  You can also select ``5`` in the left or the middle list and
   ``12`` in the right list and then select ``Replace track`` from the
@@ -280,8 +285,8 @@ that frame.
   swapping them.
 
   To do this, use the right mouse button to drag and drop one entry
-  from the ``All tracks`` or ``Left tracks`` list on the other in the
-  ``Right tracks`` list. You can also select the track Ids in the
+  from the ``All tracks`` or ``Previous tracks`` list on the other in the
+  ``Current tracks`` list. You can also select the track Ids in the
   lists and then click the ``Swap tracks`` entry in the ``Action``
   menu.
 
@@ -295,7 +300,7 @@ that frame.
 - Renaming
 
   To rename a track with a different, nonexistent Id, select the track
-  in one of the ``Right tracks`` list and then press the ``R`` key, or
+  in one of the ``Current tracks`` list and then press the ``R`` key, or
   use the ``Action`` menu to get a prompt for the new Id number. Note
   that normally Argos does not use negative track Id numbers, so for
   temporary use it is safe to use negative numbers and it will not

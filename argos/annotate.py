@@ -1256,7 +1256,8 @@ class TrainingWidget(qw.QMainWindow):
 
         filename, _ = qw.QFileDialog.getOpenFileName(
                 self, 'Load video', directory=saveDir,
-                filter='Video file (*.avi);;All files (*)')
+                filter='Video file (*.avi *.mp4 *.mpg *.mpeg *.ogg *.webm *.wmv'
+                       ' *.mov);;All files (*)')
         if len(filename) == 0:
             return
         nframes, ok = qw.QInputDialog.getInt(self, 'Extract frames',
