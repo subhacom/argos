@@ -228,3 +228,6 @@ change_name = {
 """
 Dict mapping the change codes to their human readable names.
 """
+
+#: number of frames to extract by default
+EXTRACT_FRAMES = 200

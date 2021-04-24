@@ -773,8 +773,7 @@ class ReviewScene(FrameScene):
             try:
                 self.removeItem(item)
             except Exception as e:
-                print(e)
-                break
+                pass
         self.trackHist = []
         colors = [qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
                   for ii in range(len(track))]

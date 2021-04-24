@@ -7,6 +7,7 @@ General utility functions
 =========================
 
 """
+import os
 from typing import Tuple, List, Dict, Set
 import sys
 import cv2
@@ -489,3 +490,38 @@ def get_cmap_color(num, maxnum, cmap):
     rgba = cm.get_cmap(cmap)(float(num) / maxnum)
     int_rgb = (max(0, min(255, floor(v * 256))) for v in rgba[:3])
     return int_rgb
+
+
+def extract_frames(vidfile, nframes, scale=1.0, outdir='.', random=False):
+    """Extract `nframes` frames from `vidfile` into `outdir`"""
+    cap = cv2.VideoCapture(vidfile)
+    fname = os.path.basename(vidfile)
+    prefix = fname.rpartition('.')[0]
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    idx = np.arange(frame_count, dtype=int)
+    if frame_count < nframes:
+        if random:
+            np.random.shuffle(idx)
+            idx = idx[:nframes]
+        else:
+            step = frame_count // nframes
+            idx = idx[::step]
+    idx = sorted(idx)
+    ii = 0
+    jj = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if frame is None:
+            break
+        if idx[jj] == ii:
+            size = (int(frame.shape[1] * scale),
+                int(frame.shape[0] * scale))
+            if scale < 1:
+                frame = cv2.resize(frame, size, cv2.INTER_AREA)
+            elif scale > 1:
+                frame = cv2.resize(frame, size, cv2.INTER_CUBIC)
+            cv2.imwrite(os.path.join(outdir,
+                                     f'{prefix}_{idx[jj]:06d}.png'), frame)
+            jj += 1
+        ii += 1
+    cap.release()

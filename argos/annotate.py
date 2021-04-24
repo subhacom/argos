@@ -28,6 +28,13 @@ containing the images to be annotated. Browse to the desired image
 folder. All the images should be directly in this folder, no
 subfolders.
 
+If you want to extract training images from a recorded video file, choose
+``Cancel`` in this dialog and select ``File->Extract from video`` in the menu.
+This will ask you to choose the video file, then the number of frames you want
+to extract, whether the frames should be randomly selected or not, and the
+folder to dump them in. Once finished, the output folder is set as the input
+image folder.
+
 Annotate new images
 ===================
 After you select the image folder, the annotator will show you the
@@ -305,6 +312,7 @@ from argos.constants import (
     DrawingGeom)
 
 from argos import utility as ut
+from argos import constants as const
 # from argos import frameview
 from argos.frameview import FrameView
 from argos.segwidget import SegWidget
@@ -550,6 +558,8 @@ class TrainingWidget(qw.QMainWindow):
         self.imagedirAction.triggered.connect(self.openImageDir)
         self.outdirAction = qw.QAction('Open output directory')
         self.outdirAction.triggered.connect(self.setOutputDir)
+        self.extractFramesAction = qw.QAction('Extract frames from video')
+        self.extractFramesAction.triggered.connect(self.extractFrames)
         self.nextFrameAction = qw.QAction('&Next image (PgDn)')
         self.nextFrameAction.triggered.connect(self.nextFrame)
         self.prevFrameAction = qw.QAction('&Previous image (PgUp)')
@@ -581,6 +591,11 @@ class TrainingWidget(qw.QMainWindow):
         self.showActionsDockAction = qw.QAction('Segmentation actions')
         self.showActionsDockAction.setCheckable(True)
         self.showActionsDockAction.setChecked(True)
+
+        self.hideIntermediateAction = qw.QAction('Hide intermediate result')
+
+        self.hideIntermediateAction.triggered.connect(
+            self.segWidget.hideIntermediateOutput)
 
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
@@ -639,6 +654,7 @@ class TrainingWidget(qw.QMainWindow):
         self.fileMenu = self.menuBar().addMenu('&File')
         self.fileMenu.addActions([self.imagedirAction,
                                   self.outdirAction,
+                                  self.extractFramesAction,
                                   self.loadSegmentationsAction,
                                   self.saveSegmentationAction,
                                   self.exportSegmentationAction])
@@ -660,7 +676,8 @@ class TrainingWidget(qw.QMainWindow):
                                   self.displayWidget.lineWidthAction,
                                   self.displayWidget.fontSizeAction,
                                   self.displayWidget.relativeFontSizeAction,
-                                  self.displayWidget.setLabelInsideAction])
+                                  self.displayWidget.setLabelInsideAction,
+                                  self.hideIntermediateAction])
         self.docksMenu = self.viewMenu.addMenu('Dock widgets')
         self.docksMenu.addActions([self.showFileDockAction,
                                   self.showSegDockAction,
@@ -680,26 +697,28 @@ class TrainingWidget(qw.QMainWindow):
         else:
             self.sigSetDisplayGeom.emit(DrawingGeom.polygon)
 
-    def openImageDir(self):
-        directory = settings.value('training/imagedir', '.')
-        directory = qw.QFileDialog.getExistingDirectory(self,
-                                                        'Open image diretory',
-                                                        directory=directory)
+    def _openImageDir(self, directory):
         logging.debug(f'Opening directory "{directory}"')
-        if len(directory) == 0:
-            return
         try:
-            self.imageDir = directory
-            self.imageDirName.setText(directory)
             self.imageFiles = [entry.path for entry in
-                               os.scandir(self.imageDir)]
+                               os.scandir(directory)]
             self.imageIndex = -1
             settings.setValue('training/imagedir', directory)
+            self.imageDir = directory
+            self.imageDirName.setText(directory)
         except IOError as err:
             qw.QMessageBox.critical(self, 'Could not open image directory',
                                     str(err))
-            return
         self.fileView.setRootIndex(self.fileModel.setRootPath(self.imageDir))
+
+    def openImageDir(self):
+        directory = settings.value('training/imagedir', '.')
+        tmp = qw.QFileDialog.getExistingDirectory(self,
+                                                        'Open image diretory',
+                                                        directory=directory)
+        if len(tmp) > 0:
+            directory = tmp
+        self._openImageDir(directory)
 
     def setOutputDir(self):
         directory = settings.value('training/outdir', '.')
@@ -835,6 +854,7 @@ class TrainingWidget(qw.QMainWindow):
         logging.debug('Saved settings')
 
     def closeEvent(self, a0: qg.QCloseEvent) -> None:
+        self.segWidget.hideIntermediateOutput()
         if self.saved:
             a0.accept()
         else:
@@ -1227,6 +1247,42 @@ class TrainingWidget(qw.QMainWindow):
             self.segDict = {fpath: seg for fpath, seg in segDict.items()}
         settings.setValue('training/savedir', os.path.dirname(filename))
         self.gotoFrame(0)
+
+    @qc.pyqtSlot()
+    def extractFrames(self):
+        """Extract frames from a video and open the extraction directory for
+        annotating images"""
+        saveDir = settings.value('training/savedir', '.')
+
+        filename, _ = qw.QFileDialog.getOpenFileName(
+                self, 'Load video', directory=saveDir,
+                filter='Video file (*.avi);;All files (*)')
+        if len(filename) == 0:
+            return
+        nframes, ok = qw.QInputDialog.getInt(self, 'Extract frames',
+                                         'Number of frames to extract',
+                                         const.EXTRACT_FRAMES, min=0)
+        if not ok:
+            return
+        scale, _ =  qw.QInputDialog.getDouble(self, 'Extract frames',
+                                         'Scale each frame X',
+                                         1.0, min=0.1)
+        if not ok:
+            return
+        random = qw.QMessageBox.question(self, 'Random frames?',
+                                         'Select random frames?',
+                                         qw.QMessageBox.Yes | qw.QMessageBox.No)
+        extractDir = qw.QFileDialog.getExistingDirectory(self,
+            'Extract frames into directory',
+            saveDir
+        )
+        if len(extractDir) == 0:
+            return
+        ut.extract_frames(filename, nframes, scale, extractDir,
+                          random=qw.QMessageBox.Yes)
+        self._openImageDir(extractDir)
+
+
 
 if __name__ == '__main__':
     app = qw.QApplication(sys.argv)

@@ -583,9 +583,13 @@ class SegWidget(qw.QWidget):
 
         self._intermediate_win = FrameView()
         self.resetRoi.connect(self._intermediate_win.resetArenaAction.trigger)
-        self._intermediate_win.setWindowFlag(
-            qc.Qt.Window + qc.Qt.WindowStaysOnTopHint)
+        flags = qc.Qt.WindowFlags(qc.Qt.CustomizeWindowHint +
+            qc.Qt.WindowStaysOnTopHint +
+            qc.Qt.WindowTitleHint +
+            qc.Qt.WindowMinMaxButtonsHint)
+        self._intermediate_win.setWindowFlags(flags)
         self._intermediate_win.hide()
+
         # Housekeeping - widgets to be shown or hidden based on choice of method
         self._seg_param_widgets = {
             'Threshold': [],
@@ -642,6 +646,7 @@ class SegWidget(qw.QWidget):
         self.worker.sigSegPolygons.connect(self.sigSegPolygons)
         self.worker.sigIntermediate.connect(self._intermediate_win.setFrame)
         self.sigQuit.connect(self.saveSettings)
+        self.sigQuit.connect(self._intermediate_win.close)
         ###################
         # Thread setup
         self.sigQuit.connect(self.thread.quit)
@@ -683,6 +688,10 @@ class SegWidget(qw.QWidget):
             self._intermediate_win.setWindowTitle(text)
             self._intermediate_win.show()
         self.sigIntermediateOutput.emit(segstep_dict[text])
+
+    @qc.pyqtSlot()
+    def hideIntermediateOutput(self):
+        self.setIntermediateOutput('Final')
 
     @qc.pyqtSlot()
     def saveSettings(self):
