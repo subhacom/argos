@@ -147,6 +147,14 @@ and right display is not good enough (:numref:`review_overlay`).
    more red or blue in pixels where they mismatch.
 
 
+Selecting a region of interest (ROI)
+------------------------------------
+If you want to process only a certain part of the frames, you can draw an ROI
+by clicking the left mouse-button to set the vertices of a polygon. Click on
+the first vertex to close the polygon. If you want to cancel it half-way, click
+the right mouse-button.
+
+
 The track lists 
 ---------------
 
@@ -411,7 +419,7 @@ in the ``Play`` menu.
 import sys
 import os
 import csv
-
+import time
 from typing import List, Dict
 import logging
 import threading
@@ -775,6 +783,8 @@ class ReviewScene(FrameScene):
             except Exception as e:
                 pass
         self.trackHist = []
+        if self._frame is None:
+            return
         colors = [qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
                   for ii in range(len(track))]
         pens = [qg.QPen(qg.QBrush(color), self.markerThickness)
@@ -1115,7 +1125,7 @@ class ReviewWidget(qw.QWidget):
         self.left_list.setDragEnabled(True)
         list_layout = qw.QVBoxLayout()
         list_layout.setSizeConstraint(qw.QLayout.SetMinimumSize)
-        label = qw.QLabel('Left tracks')
+        label = qw.QLabel('Previous')
         label.setSizePolicy(qw.QSizePolicy.Minimum, qw.QSizePolicy.Minimum)
         label.setMaximumWidth(max_list_width)
         list_layout.addWidget(label)
@@ -1136,7 +1146,7 @@ class ReviewWidget(qw.QWidget):
         self.right_list.setMaximumWidth(max_list_width)
         list_layout = qw.QVBoxLayout()
         list_layout.setSizeConstraint(qw.QLayout.SetMinimumSize)
-        list_layout.addWidget(qw.QLabel('Right tracks'))
+        list_layout.addWidget(qw.QLabel('Current'))
         list_layout.addWidget(self.right_list)
         panes_layout.addLayout(list_layout)
 

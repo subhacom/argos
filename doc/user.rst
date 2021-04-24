@@ -117,10 +117,11 @@ Preparation
 -----------
 Create a folder and copy all the images you want to annotate into it.
 
-If you have videos instead, you need to extract some video
-frames. There are many programs, including most video players, which
-can do this. Argos includes a small utility script
-:py:mod:`argos.extract_frames` if you need.
+If you have videos instead, you can extract some video
+frames using ``File->Extract frames from video`` in the menu.
+
+There are many other programs, including most video players, which
+allow extracting a single frame from a video if you need more control.
 
 Upon startup the program will prompt you to choose the folder
 containing the images to be annotated. Browse to the desired image
@@ -522,6 +523,13 @@ presented (:numref:`track_startup`).
            tracks = pandas.read_hdf(tracked_filename, 'tracked')
 
 
+Selecting a region of interest (ROI)
+------------------------------------
+If you want to process only a certain part of the frames, you can draw an ROI
+by clicking the left mouse-button to set the vertices of a polygon. Click on
+the first vertex to close the polygon. If you want to cancel it half-way, click
+the right mouse-button.
+
 Classical segmentation
 ----------------------
 
@@ -776,6 +784,13 @@ and right display is not good enough (:numref:`review_overlay`).
    producing shades of magenta where they have similar values, and
    more red or blue in pixels where they mismatch.
 
+
+Selecting a region of interest (ROI)
+------------------------------------
+If you want to process only a certain part of the frames, you can draw an ROI
+by clicking the left mouse-button to set the vertices of a polygon. Click on
+the first vertex to close the polygon. If you want to cancel it half-way, click
+the right mouse-button.
 
 The track lists 
 ---------------
