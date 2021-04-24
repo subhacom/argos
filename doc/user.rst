@@ -1,6 +1,26 @@
 Argos: User Documentation
 =========================
 
+Overview
+--------
+Argos comes with four main components:
+
+- **Capture tool** for capturing video with camera, or for extracting parts of an existing video.
+
+- **Tracking tool** for automatically tracking animals in videos using either classical object segmentation or a neural net.
+  
+- **Annotation tool** for creating dataset to train the neural net for the Tracking tool.
+
+- **Review tool** for manually reviewing and correcting the automatically detected tracks.
+
+
+.. figure:: ../doc/images/argos_flowchart.png
+   :width: 100%
+   :alt: Flowcharts for four tools in Argos
+
+   Flow charts showing how to work with the four tools in Argos.
+
+
 ========================
 Capture or process video
 ========================
