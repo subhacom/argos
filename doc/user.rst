@@ -90,7 +90,6 @@ Common problem
 
 When trying to use H264 format for saving video, you may see the
 following error:
-
 ::
     Creating output file video_filename.mp4
     OpenCV: FFMPEG: tag 0x34363248/'H264' is not supported with codec id 27 and
