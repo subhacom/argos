@@ -1,8 +1,11 @@
+#########################
 Argos: User Documentation
-=========================
+#########################
 
+********
 Overview
---------
+********
+
 Argos comes with four main components:
 
 - **Capture tool** for capturing video with camera, or for extracting parts of an existing video.
@@ -21,9 +24,9 @@ Argos comes with four main components:
    Flow charts showing how to work with the four tools in Argos.
 
 
-========================
-Capture or process video
-========================
+************************
+*Capture* or process video
+************************
 Usage:
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
@@ -75,7 +78,7 @@ format requires H.264 library, which can be installed as follows:
   library path.
 
 Examples
---------
+========
 1. Read video from file ``myvideo.mpg`` and save output in
    ``myvideo_motion_cap.avi`` in DIVX format. The ``-m --threshold=20 -a
    10`` part tells the program to detect any movement such that more than
@@ -106,7 +109,7 @@ The recording will stop when the user presses ``Escape`` or ``Q`` key.
       python -m argos.capture -i 0 -o myvideo_motion_cap.avi --interval=3.0
 
 Common problem
---------------
+==============
 
 When trying to use H264 format for saving video, you may see the
 following error:
@@ -121,9 +124,9 @@ following error:
 
 Solution: Use .avi instead of .mp4 extension when specifying output filename.
 
-=================================
-Generate training data for YOLACT
-=================================
+*********************************
+*Annotate*: Generate training data for YOLACT
+*********************************
 Usage:
 ::
     python -m argos.annotate
@@ -133,7 +136,7 @@ annotation in a way that YOLACT can process for training. Note that this is for
 a single category of objects.
 
 Preparation
------------
+===========
 Create a folder and copy all the images you want to annotate into it.
 
 If you have videos instead, you can extract some video
@@ -148,7 +151,7 @@ folder. All the images should be directly in this folder, no
 subfolders.
 
 Annotate new images
--------------------
+===================
 After you select the image folder, the annotator will show you the
 main window, with an empty display like below.
 
@@ -228,7 +231,7 @@ colors, going back to the first color when all the colors have been
 used.
 
 Segmentation settings
----------------------
+=====================
 
 The segmentation settings pane allows you to control how each image is
 segmented. The segmentation here is done in the following steps:
@@ -334,22 +337,23 @@ segmented. The segmentation here is done in the following steps:
       object should be less than these many pixels.
 
 Save segmentation
------------------
+=================
 
 You can save all the data for currently segmented images in a file by
 pressing ``Ctrl+S`` on keyboard or selecting ``File->Save segmentation`` from the
 menu bar. This will be a Python pickle file (extension ``.pkl`` or
 ``.pickle``).
 
+
 Load segmentation
------------------
+=================
 
 You can load segmentation data saved before by pressing ``Ctrl+O`` on
 keyboard or by selecting ``File->Open saved segmentation`` from the
 menu bar.
 
 Export training and validation data
------------------------------------
+===================================
 
 Press ``Ctrl+E`` on keyboard or select ``File->Export training and
 validation data`` from menubar to export the annotation data in a
@@ -400,9 +404,9 @@ and the split of training and validation set.
 
    Screenshot of suggested command line after exporting annotations.
 
-============================
-Track objects interactively
-============================
+****************************
+*Track* interactively
+****************************
 
 Usage:
 ::
@@ -420,7 +424,7 @@ YOLACT library, or by classical image processing algorithms. Each of
 these has its advantages and disadvantages.
 
 Basic usage
------------
+===========
 
 This assumes you have a YOLACT network trained with images of your
 target object. YOLACT comes with a network pretrained with a variety
@@ -543,14 +547,14 @@ presented (:numref:`track_startup`).
 
 
 Selecting a region of interest (ROI)
-------------------------------------
+====================================
 If you want to process only a certain part of the frames, you can draw an ROI
 by clicking the left mouse-button to set the vertices of a polygon. Click on
 the first vertex to close the polygon. If you want to cancel it half-way, click
 the right mouse-button.
 
 Classical segmentation
-----------------------
+======================
 
 Using the ``Segmentation method`` menu you can switch from YOLACT to
 classical image segmentation for detecting target objects.  This
@@ -571,9 +575,9 @@ based on local intensity. Thresholding produces a binary image which
 is then processed to detect contiguous patches of pixels using one of
 the available algorithms.
 
-===============================================
-Track objects in batch mode (non-interactively)
-===============================================
+***********************************************
+*Track* in batch mode (non-interactively)
+***********************************************
 Usage:
 ::
      python -m argos_track.batchtrack -i {input_file} -o {output_file}
@@ -593,7 +597,7 @@ to a configuration file which will then be passed with ``-c`` command
 line option .
 
 Examples
---------
+========
 Use YOLACT for segmentation and SORT for tracking:
 ::
     python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
@@ -654,16 +658,16 @@ All of this can be more easily set graphically in
 :py:mod:`argos_track` and exported into a file, which can then be
 passed with ``-c {config_file}``.
 
-=========================
-Review and correct tracks
-=========================
+*************************
+*Review* and correct tracks
+*************************
 Usage:
 ::
     python -m argos.review
 
 
 Basic operation
----------------
+===============
 At startup it will show a window with two empty panes separated in the
 middle by three empty lists titled ``Previous tracks``, ``All tracks`` and
 ``Current tracks`` like :numref:`review_startup` below.
@@ -805,7 +809,7 @@ and right display is not good enough (:numref:`review_overlay`).
 
 
 Selecting a region of interest (ROI)
-------------------------------------
+====================================
 If you want to process only a certain part of the frames, you can draw an ROI
 by clicking the left mouse-button to set the vertices of a polygon. Click on
 the first vertex to close the polygon. If you want to cancel it half-way, click
@@ -813,7 +817,7 @@ the right mouse-button.
 
 
 The track lists 
----------------
+===============
 
 The three lists between the left (previous) and right (current) video frame in
 the GUI present the track Ids of the detected objects. These allow you to
@@ -848,7 +852,7 @@ later).
 
 
 Moving around and break points
-------------------------------
+==============================
 
 To speed up navigation of tracked data, Argos review tool provides
 several shortcuts. The corresponding actions are also available in the
@@ -889,7 +893,7 @@ current frame) by pressing ``Shift + C`` on the keyboard.
 
 
 Correcting tracks
------------------
+=================
 Corrections made in a frame apply to all future frames, unless an operation
 is for current-frame only. The past frames are not affected by the changes.
 You can undo all changes made in a frame by pressing ``Ctrl+z`` when visiting
@@ -988,7 +992,7 @@ list of changes in a time-stamped table
 changes applied to the data
 
 Tips 
----- 
+==== 
 Swapping and assigning on the same trackid within a single frame can
 be problematic.  Sometimes the tracking algorithm can temporarily
 mislabel tracks. For example, object `A` (ID=1) crosses over
@@ -1049,7 +1053,7 @@ have to first save the data so that all your changes are consolidated.
 
 
 Selecting a region of interest
-------------------------------
+==============================
 
 You can exclude some spurious detections by defining a region of interest
 in the review tool. Click on the right frame with left-mouse button in order
@@ -1060,7 +1064,7 @@ As you move forward, any detection outside the polygon will be excluded.
 
 
 Note on video format 
---------------------
+====================
 Argos capture utility records video in MJPG format in an AVI container. 
 This is available by default in OpenCV. Although OpenCV can read many
 video formats via the ``ffmpeg`` library, most common video formats are 
@@ -1074,7 +1078,7 @@ in the ``Play`` menu.
 
 
 Note on data format
--------------------
+===================
 Argos saves and reads data in comma separated values in text format
 (`.csv`), and HDF5 (`.h5`, `.hdf`) format. The HDF5 format is
 recommended as it allows meta information, and keeps all the data
@@ -1099,9 +1103,9 @@ for each save with its timestamp, and you can load these as Pandas
 DataFrames.
 
 
-=============================
+****************************
 Utility to display the tracks
-=============================
+****************************
 
 Usage:
 ::
