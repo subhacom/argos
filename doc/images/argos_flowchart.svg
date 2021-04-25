@@ -631,8 +631,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.49497475"
-     inkscape:cx="427.40098"
-     inkscape:cy="426.40995"
+     inkscape:cx="1251.1126"
+     inkscape:cy="544.59487"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -2257,7 +2257,7 @@
              id="g73881">
             <use
                id="use73866"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Process"
                x="0"
                y="0"
@@ -2281,7 +2281,7 @@
              id="g73910">
             <use
                id="use73895"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Process"
                x="0"
                y="0"
@@ -2305,7 +2305,7 @@
              id="g73939">
             <use
                id="use73924"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Process"
                x="0"
                y="0"
@@ -2354,7 +2354,7 @@
                  y="0"
                  x="0"
                  xlink:href="#InputOutput"
-                 style="fill:#ffb6db;stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-dasharray:none"
+                 style="fill:#b6dbff;stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-dasharray:none"
                  id="use74327-0-7" />
               <g
                  aria-label="Video"
@@ -2461,7 +2461,7 @@
              id="g83421">
             <use
                id="use73866-0"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Process"
                x="0"
                y="0"
@@ -2485,7 +2485,7 @@
              id="g79537-5-9">
             <use
                id="use73242-4-4-8"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Terminal"
                x="0"
                y="0"
@@ -2532,7 +2532,7 @@
              transform="translate(262.93447,29.176175)">
             <use
                id="use73242-8-60-8"
-               style="fill:#009292;stroke:#000000"
+               style="fill:#ffb6db;stroke:#000000"
                xlink:href="#Terminal"
                x="0"
                y="0"
@@ -2573,7 +2573,7 @@
              id="g85400">
             <use
                id="use74327-6-3"
-               style="fill:#009292;stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-dasharray:none"
+               style="fill:#ffb6db;stroke:#000000;stroke-width:0.5;stroke-miterlimit:4;stroke-dasharray:none"
                xlink:href="#InputOutput"
                x="0"
                y="0"
@@ -2603,7 +2603,7 @@
                  y="0"
                  x="0"
                  xlink:href="#Process"
-                 style="fill:#009292;stroke:#000000"
+                 style="fill:#ffb6db;stroke:#000000"
                  id="use73447-49" />
               <text
                  id="text85510"
@@ -2624,9 +2624,9 @@
          id="text88257-2"
          y="45.577816"
          x="155.85085"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333311px;line-height:0%;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.23333311px;line-height:0%;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;fill:#ffb6db;fill-opacity:1;stroke:none;stroke-width:0.26458332"
          xml:space="preserve"><tspan
-           style="font-size:14.11111069px;fill:#009292;stroke:#004949;stroke-width:0.26458332"
+           style="font-size:14.11111069px;fill:#ffb6db;stroke:#ff6db6;stroke-width:0.26458332"
            y="45.577816"
            x="155.85085"
            id="tspan88255-2"
