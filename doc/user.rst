@@ -8,13 +8,13 @@ Overview
 
 Argos comes with four main components:
 
-- **Capture tool** for capturing video with camera, or for extracting parts of an existing video.
+- :ref:`Capture tool<Capture-or-process-video>` for capturing video with camera, or for extracting parts of an existing video.
 
-- **Tracking tool** for automatically tracking animals in videos using either classical object segmentation or a neural net.
+- :ref:`Tracking tool<Track-interactively>` for automatically tracking animals in videos using either classical object segmentation or a neural net.
   
-- **Annotation tool** for creating dataset to train the neural net for the Tracking tool.
+- :ref:`Annotation tool<Annotate-Generate-training-data-for-YOLACT>` for creating dataset to train the neural net for the Tracking tool.
 
-- **Review tool** for manually reviewing and correcting the automatically detected tracks.
+- :ref:`Review tool<Review-and-correct-tracks>` for manually reviewing and correcting the automatically detected tracks.
 
 
 .. figure:: ../doc/images/argos_flowchart.png
@@ -24,9 +24,11 @@ Argos comes with four main components:
    Flow charts showing how to work with the four tools in Argos.
 
 
-************************
-*Capture* or process video
-************************
+.. _Capture-or-process-video:
+
+*****************************
+**Capture** or process video
+*****************************
 Usage:
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
@@ -124,9 +126,12 @@ following error:
 
 Solution: Use .avi instead of .mp4 extension when specifying output filename.
 
-*********************************
-*Annotate*: Generate training data for YOLACT
-*********************************
+
+.. _Annotate-Generate-training-data-for-YOLACT:
+
+******************************************************************
+**Annotate**: Generate training data for YOLACT
+******************************************************************
 Usage:
 ::
     python -m argos.annotate
@@ -404,8 +409,11 @@ and the split of training and validation set.
 
    Screenshot of suggested command line after exporting annotations.
 
+
+.. _Track-interactively:   
+   
 ****************************
-*Track* interactively
+**Track** interactively
 ****************************
 
 Usage:
@@ -575,8 +583,10 @@ based on local intensity. Thresholding produces a binary image which
 is then processed to detect contiguous patches of pixels using one of
 the available algorithms.
 
+.. _Track-in-batch-mode:
+
 ***********************************************
-*Track* in batch mode (non-interactively)
+**Track** in batch mode (non-interactively)
 ***********************************************
 Usage:
 ::
@@ -658,9 +668,12 @@ All of this can be more easily set graphically in
 :py:mod:`argos_track` and exported into a file, which can then be
 passed with ``-c {config_file}``.
 
-*************************
-*Review* and correct tracks
-*************************
+
+.. _Review-and-correct-tracks:
+
+**********************************************************
+**Review** and correct tracks
+**********************************************************
 Usage:
 ::
     python -m argos.review
@@ -1103,9 +1116,11 @@ for each save with its timestamp, and you can load these as Pandas
 DataFrames.
 
 
-****************************
+.. _Utility-to-display-the-tracks:
+
+*************************************************************
 Utility to display the tracks
-****************************
+*************************************************************
 
 Usage:
 ::
