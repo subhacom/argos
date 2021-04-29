@@ -703,20 +703,21 @@ class TrackReader(qc.QObject):
             self.sigSavedFrames.emit(frame_no)
         data = pd.DataFrame(data=data,
                             columns=['frame', 'trackid', 'x', 'y', 'w', 'h'])
+        changes = [(change.frame, change.end, change.change.name,
+                    change.change.value, change.orig, change.new, change.idx)
+                   for change in self.changeList if change.frame
+                   not in self.undone_changes]
+
+        changes = pd.DataFrame(data=changes,
+                               columns=['frame', 'end', 'change', 'code',
+                                        'orig', 'new', 'idx'])
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         if filepath.endswith('.csv'):
             data.to_csv(filepath, index=False)
+            changes.to_csv(f'{filepath}.changelist_{ts}.csv')
         else:
             data.to_hdf(filepath, 'tracked', mode='a')
-            changes = [(change.frame, change.end, change.change.name,
-                        change.change.value, change.orig, change.new)
-                       for change in self.changeList if change.frame
-                       not in self.undone_changes]
-
-            changes = pd.DataFrame(data=changes,
-                                   columns=['frame', 'end', 'change',
-                                            'code', 'orig', 'new'],
-                                   )
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             changes.to_hdf(filepath, f'changes/changelist_{ts}', mode='a')
         self.track_data = data
         self.changeList.clear()
@@ -1565,44 +1566,54 @@ class ReviewWidget(qw.QWidget):
         self.showHistoryAction.setCheckable(True)
         self.showHistoryAction.setChecked(True)
         self.swapTracksAction = qw.QAction(
-            'Swap tracks (drag n drop with right mouse button)')
+            'Swap tracks')
+        self.swapTracksAction.setToolTip('Drag n drop with right mouse button')
         self.swapTracksAction.triggered.connect(self.swapTracks)
         self.swapTracksCurAction = qw.QAction(
-            'Swap tracks in current frame only (drag n drop with right mouse '
-            'button with Shift-key pressed)')
+            'Swap tracks in current frame only')
+        self.swapTracksAction.setToolTip('Ddrag and drop with right mouse '
+            'button with Shift-key pressed')
         self.swapTracksCurAction.triggered.connect(self.swapTracksCur)
         self.swapTracksRangeAction = qw.QAction(
-            'Swap tracks up to a specific frame (drag n drop with right mouse '
-            'button with Alt-key pressed)')
+            'Swap tracks up to a specific frame')
+        self.swapTracksRangeAction.setToolTip('Drag and drop with right mouse '
+            'button with Alt-key pressed')
         self.swapTracksRangeAction.triggered.connect(self.swapTracksRange)
-        self.replaceTrackAction = qw.QAction(
-            'Replace track (drag n drop with left mouse button)')
+        self.replaceTrackAction = qw.QAction('Replace track')
+        self.replaceTrackAction.setToolTip('Drag and drop with left mouse button')
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
         self.replaceTrackCurAction = qw.QAction(
-            'Replace track in current frame only (drag n drop with left mouse '
-            'button with Shift-key pressed)')
+            'Replace track in current frame only')
+        self.replaceTrackCurAction.setToolTip('Drag and drop with left mouse '
+            'button with Shift-key pressed')
         self.replaceTrackCurAction.triggered.connect(self.replaceTrackCur)
         self.replaceTracksRangeAction = qw.QAction(
-            'Replace track up to a specific frame (drag n drop with left mouse '
-            'button with Alt-key pressed)')
+            'Replace track up to a specific frame')
+        self.replaceTrackAction.setToolTip('Drag n drop with left mouse '
+            'button with Alt-key pressed')
         self.swapTracksRangeAction.triggered.connect(self.replaceTracksRange)
         self.renameTrackAction = qw.QAction('Rename track (r)')
+        self.renameTrackAction.setToolTip('Press r key')
         self.renameTrackAction.triggered.connect(self.renameTrack)
         self.renameTrackCurAction = qw.QAction(
-            'Rename track in current frame (Shift+r)')
+            'Rename track in current frame')
+        self.renameTrackCurAction.setToolTip( 'Press Shift+r key')
         self.renameTrackCurAction.triggered.connect(self.renameTrackCur)
-        self.deleteTrackAction = qw.QAction('Delete track (Delete/x)')
+        self.deleteTrackAction = qw.QAction('Delete track')
         self.deleteTrackAction.setToolTip(
-            'Keep Shift key pressed for only current frame')
+            'Press Delete or x.')
         self.deleteTrackAction.triggered.connect(self.deleteSelected)
         self.deleteTrackCurAction = qw.QAction(
-            'Delete track only in current frame (Shift+Delete/Shift+x')
+            'Delete track only in current frame')
+        self.deleteTrackCurAction.setToolTip('Press Shift+Delete or Shift+x key')
         self.deleteTrackCurAction.triggered.connect(self.deleteSelectedCur)
         self.deleteTrackRangeAction = qw.QAction(
-            'Delete track up to a specific frame (Alt+Delete/Alt+x')
+            'Delete track up to a specific frame')
+        self.deleteTrackRangeAction.setToolTip('Press Alt+Delete or Alt+x')
         self.deleteTrackRangeAction.triggered.connect(self.deleteSelectedRange)
         self.undoCurrentChangesAction = qw.QAction(
-            'Undo changes in current frame (Ctrl+z)')
+            'Undo changes in current frame')
+        self.undoCurrentChangesAction.setToolTip('Press Ctrl+z')
         self.undoCurrentChangesAction.triggered.connect(self.undoCurrentChanges)
         self.showLimitsAction = qw.QAction('Size limits')
         self.showLimitsAction.setCheckable(True)
@@ -2038,20 +2049,17 @@ class ReviewWidget(qw.QWidget):
         self.pos_spin.setValue(pos)
         self.pos_spin.blockSignals(False)
         tracks = self.trackReader.getTracks(pos)
+        # ts = time.perf_counter_ns()
         if self.roi is not None:
             # flag tracks outside ROI
-            include = {}
-            track_ids = list(tracks.keys())
-            for tid in track_ids:
-                vertices = rect2points(np.array(tracks[tid][
-                                                :4]))  # In reviewer we also pass the frame no. in 5 th element
-                contained = [
-                    self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
-                    for vtx in vertices]
-                if not np.any(contained):
+            keys = list(tracks.keys())
+            for tid in keys:
+                bbox = qg.QPolygonF(qc.QRectF(*tracks[tid][:4]))
+                if not self.roi.intersects(bbox):
                     self.trackReader.deleteTrack(self.frame_no, tid)
                     tracks.pop(tid)
-
+        # te = time.perf_counter_ns()
+        # print(f'Time with roi "{self.roi}": {(te - ts) * 1e-6} ms')
         self.old_all_tracks = self.all_tracks.copy()
         self.all_tracks = self._flag_tracks(self.all_tracks, tracks)
         self.sigAllTracksList.emit(list(self.all_tracks.keys()))
