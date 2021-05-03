@@ -76,6 +76,7 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
     cdef bint save = True
     cdef bint vid_end = False
     cdef double ttot = 0.0
+    cap = None
     tprev = None
     prev_frame = None
     outfile = None
@@ -107,12 +108,16 @@ cpdef void vcapture(str input_, str output, str fmt, int fps,
             return
     except ValueError:
         tstart = datetime.fromtimestamp(time.mktime(time.localtime(os.path.getmtime(input_))))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if (sys.platform == 'win32') and interactive:
+        cap = cv2.VideoCapture(input_)
+        if not cap.isOpened() and (sys.platform == 'win32') and interactive:
             cap = cv2.VideoCapture(input_, cv2.CAP_DSHOW)
-        else:
-            cap = cv2.VideoCapture(input_)
-        print('Input from file', input_)
+        print('Input from file', input_, 'Open?', cap.isOpened())
+        if not cap.isOpened():
+            print('Could not open video file'
+                    f' {input_} for reading.')
+            return
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        print('Frames to process', int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
         
     try:
         while True:

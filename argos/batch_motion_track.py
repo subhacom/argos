@@ -56,9 +56,10 @@ if __name__ == '__main__':
         try:
             for proc in proclist:
                 proc.wait()
-                res = proc.communicate()
+                stdout, stderr = proc.communicate()
+                print('PID', proc.pid, 'ARGS', proc.args)
                 print('Return code', proc.returncode)
-                # print('Result\n', res)
-                print('STDERR\n', res[1].decode('utf-8'))
+                print('STDOUT:\n', stdout.decode('utf-8'))
+                print('STDERR:\n', stderr.decode('utf-8'))
         except KeyboardInterrupt:
             sys.exit(0)
