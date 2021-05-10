@@ -179,7 +179,8 @@ parameters for segmentation. See below for details on these settings.
 You can press ``PgDn`` key, or click on any of the file names listed
 in ``Files/Dirs`` pane to start segmenting the image files. Keep
 pressing ``PgDn`` to go to next image, and ``PgUp`` to go back to
-previous image.
+previous image. (NOTE: On mac you may not have ``PgUp`` and ``PgDn``
+keys, the equivalents are ``fn+UpArrow`` and ``fn+DownArrow``.
 
 It can take about a second to segment an image, depending on the image
 size and the method of segmentation. Once the image is segmented, the
@@ -725,7 +726,7 @@ this object takes across the video.
 
 Now delete object ``4`` by pressing ``x`` or ``Delete`` on keyboard,
 or selecting ``Delete track`` from ``Action`` in menubar
-(:numref:`review_delete`).
+(:numref:`review_delete`). On macos, the ``delete`` key is actually ``backspace``, and you have to use ``fn+delete`` to delete an object.
 
 .. _review_delete:
 .. figure:: ../doc/images/review_03.png
@@ -758,7 +759,7 @@ appear in the right pane.
 You will notice the spinbox on bottom right updates the current frame
 number as we go forward in the video. Instead of playing the video,
 you can also move one frame at a time by clicking the up-arrow in the
-spinbox, or by pressing ``PgDn`` on keyboard.
+spinbox, or by pressing ``PgDn`` on keyboard (``fn+DownArrow`` on mac). 
 
 It is useful to pause and inspect the tracks whenever a new object is
 dected. In order to pause the video when there is a new trackid, check
@@ -880,7 +881,7 @@ frame where a new trackid was introduced, press ``N`` key (``Jump to
 next new track``).
 
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
-backward by pressing ``Ctrl + PgUp`` on the keyboard.
+backward by pressing ``Ctrl + PgUp`` on the keyboard (the mac equivalents are ``command+fn+DownArrow`` and ``command+fn+UpArrow``).
 
 To jump to a specific frame number, press ``G`` (``Go to frame``)
 and enter the frame number in the dialog box that pops up.
@@ -916,7 +917,8 @@ that frame.
 
   You already saw that one can delete spurious tracks by selecting it
   on the ``Right tracks`` list and delete it with ``x`` or ``Delete``
-  key.
+  key. On macos, the ``delete`` key is actually ``backspace``, and you
+  have to use ``fn+delete`` to delete an object.
 
   To delete a track only in the current frame, but to keep future occurrences
   intact, press ``Shift+X`` instead.
