@@ -93,13 +93,16 @@ Installation using venv (useful on Mac)
      pip install torch torchvision torchaudio opencv-contrib-python Cython
 
      pip install pycocotools argos-toolkit argos-tracker
-     
-   If you have Mac with Intel CPU, and encounter an error after the command above, (like #error: architecture not supported, error: command 'clang' failed with exit status 1) try the following::
+
+   
+If you have Mac with Intel CPU, and encounter an error after the command above, (like #error: architecture not supported, error: command 'clang' failed with exit status 1) try the following::
 
      export ARCHFLAGS="-arch x86_64"
 
      CC=clang CXX=clang++ python -m pip install pycocotools argos-toolkit argos-tracker
    
-  After this, try running the review tool::
+
+
+After this, try running the review tool::
 
     python -m argos.review
