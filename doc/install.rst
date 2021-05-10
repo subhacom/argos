@@ -11,7 +11,7 @@ Installation using Anaconda
      conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers
    
    This will create a virtual Python environment called ``track``.
-   
+
 3. Activate the environment (enter this commands in Anaconda prompt)::
 
      conda activate track
@@ -80,3 +80,26 @@ Installation using Anaconda
    Annotation tool will generate the corresponding configuration for
    you.
    
+
+Installation using venv (useful on Mac)
+=======================================
+
+ On Mac: you can use venv module to create virtual environment like conda (this does not require admin access)::
+
+     python3 -m venv track
+
+     source track/bin/activate
+
+     pip install torch torchvision torchaudio opencv-contrib-python Cython
+
+     pip install pycocotools argos-toolkit argos-tracker
+     
+   If you have Mac with Intel CPU, and encounter an error after the command above, (like #error: architecture not supported, error: command 'clang' failed with exit status 1) try the following::
+
+     export ARCHFLAGS="-arch x86_64"
+
+     CC=clang CXX=clang++ python -m pip install pycocotools argos-toolkit argos-tracker
+   
+  After this, try running the review tool::
+
+    python -m argos.review
