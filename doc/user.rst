@@ -881,7 +881,8 @@ frame where a new trackid was introduced, press ``N`` key (``Jump to
 next new track``).
 
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
-backward by pressing ``Ctrl + PgUp`` on the keyboard (the mac equivalents are ``command+fn+DownArrow`` and ``command+fn+UpArrow``).
+backward by pressing ``Ctrl + PgUp`` on the keyboard (the mac
+equivalents are ``command+fn+DownArrow`` and ``command+fn+UpArrow``).
 
 To jump to a specific frame number, press ``G`` (``Go to frame``)
 and enter the frame number in the dialog box that pops up.
@@ -1030,7 +1031,8 @@ Sometimes this may not be obvious because the IDs may be lost for a
 few frames and later one of the objects re-identified with the old ID
 of the other one.
 
-For example this sequence of events may occur: 
+For example this sequence of events may occur:
+
 1. A(1) approaches B(2).
 2. B(2) Id is lost
 3. Both A and B get single bounding box with ID 1.
@@ -1038,6 +1040,7 @@ For example this sequence of events may occur:
 5. A has new ID 3, B reappears with 1.
 
 Action sequence to fix this:
+
 1. Go back where A and B have single ID 1.
 2. Swap 2 and 1.
 3. Go forward when 3 appears on A.
@@ -1160,5 +1163,37 @@ will show the trails for past ``trail`` seconds.
 
 With ``--randcolor`` flag set, it will draw each track (bbox and ID)
 in a random color.
+
+
+******************************
+Summary of keyboard shortcuts
+******************************
+
+.. note::       
+   On mac notebooks, Ctrl = command, Alt = option, PgUp = fn + up-arrow, PdDn = fn + down-arrow, Delete = fn + delete.
+
+   The equivalent of PC keys are listed here: https://support.apple.com/guide/mac-help/windows-keys-on-a-mac-keyboard-cpmh0152/mac
+
+
+
+.. csv-table:: Keyboard shortcuts for Annotation tool
+   :file: keys_annotate.csv
+   :header-rows: 1
+		 
+	  
+.. list-table:: Keyboard shortcuts for Tracking tool
+   :header-rows: 1
+
+   * - Keys
+     - Action
+   * - Spacebar
+     - Play -> Pause, Pause -> Play, OK in popup dialogs
+   * - Ctrl + o
+     - Open video
+
+
+.. csv-table:: Keyboard shortcuts for Review tool
+   :file: keys_review.csv
+   :header-rows: 1
 
 

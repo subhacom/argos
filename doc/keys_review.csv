@@ -1,0 +1,40 @@
+Keys,Action
+Ctrl + o,Open tracks and video file
+Ctrl + s (mac: command + s),Save reviewed tracks
+Spacebar,"Play-> Pause, Pause -> Play"
+b,Set breakpoint
+Ctrl + b,Set breakpoint at current frame
+Shift + b,Clear breakpoint
+a,Set breakpoint at apparance of an ID
+d,Set breakpoint at disappearance of an ID
+Shift + a,Clear breakpoint at appearance of an ID
+Shift + d,Clear breakpoint at disappearance of an ID
+g,Go to frame
+j,Jump to frame with breakpoint
+PgDn (mac: fn + down-arrow),Go to next frame
+PgUp (mac: fn + up-arrow),Go to previous frame
+Ctrl + PgDn (mac: command + fn + down-arrow),Jump 10 frames forward
+Ctrl + PgUp (mac: command + fn + up-arrow),Jump 10 frames back
+n,Jump to next mismatch of IDs between two successive frames
+p,Jump to previous mismatch of IDs between two successive frames
+c,Jump to next change in ChangeList from current frame
+Shift + c,Jump to last change in ChangeList from current frame
+\+,Zoom-in previous frame
+\_ (underscore),Zoom-out previous frame
+\=,Zoom-in current frame
+\- (minus),Zoom-out current frame
+o,Toggle display of old tracks (ghosted)
+t,Toggle display of path history of tracks
+s,Toggle retaining selection across change of frames
+Alt + c (twice if window is hidden),Show list of changes
+x,Delete selected ID
+Delete (mac: fn + delete),Delete selected ID from current and future frames
+Shift + x,delete selected ID in current frame only
+Shift + Delete (mac: Shift + fn + delete),delete selected ID in current frame only
+Alt + x (mac: option + x),Delete selected ID from a range of frames
+Alt + delete (mac: option + fn + delete),Delete selected ID from a range of frames
+r,Rename selected track
+Shift + r,Rename selected track only in current frame
+Ctrl + z,Undo changes in current frame
+Ctrl + PgUp (mac: command + fn + up-arrow),Increase the speed of playback
+Ctrl + PgDn (mac: command + fn + down-arrow),Decrease the speed of playback

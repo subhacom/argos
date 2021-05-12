@@ -1,0 +1,14 @@
+Keys,Action
+\+,Zoom-in
+\-,Zoom-out
+PgDn (mac: fn + down-arrow),Next image
+PgUp (mac: fn + up-arrow),Previous image
+Delete (mac: fn + delete),Remove segmentation
+x,Remove selected segmentations
+k,Keep selected segmentations (delete unselected)
+Shift + x,Keep selected segmentations (delete unselected)
+c,Clear segementation of current image
+r,Segment current image again
+Ctrl + s,Save segmentation to file
+Ctrl + o,Load segementation from file
+Ctrl + e,Export annotated data as training and validation sets in COCO format
