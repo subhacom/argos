@@ -84,7 +84,7 @@ Installation using Anaconda
 Installation using venv (useful on Mac)
 =======================================
 
- On Mac: you can use venv module to create virtual environment like conda (this does not require admin access)::
+On Mac: you can use venv module to create virtual environment like conda (this does not require admin access)::
 
      python3 -m venv track
 
@@ -92,10 +92,14 @@ Installation using venv (useful on Mac)
 
      pip install torch torchvision torchaudio opencv-contrib-python Cython
 
+
+     
+Followed by::
+  
      pip install pycocotools argos-toolkit argos-tracker
 
    
-If you have Mac with Intel CPU, and encounter an error after the command above, (like #error: architecture not supported, error: command 'clang' failed with exit status 1) try the following::
+If you have Mac with Intel CPU, and encounter an error after the command above, (like `#error: architecture not supported, error: command 'clang' failed with exit status 1`) try the following::
 
      export ARCHFLAGS="-arch x86_64"
 
