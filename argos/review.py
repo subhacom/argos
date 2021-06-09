@@ -1406,6 +1406,27 @@ class ReviewWidget(qw.QWidget):
             except TypeError:
                 pass
 
+    def wheelEvent(self, event):
+        steps = event.angleDelta().y() // 120
+        # print('Mouse wheel steps', steps)
+        direction = steps and steps // abs(steps) # 0, 1, or -1
+        # print(event.modifiers())
+        if event.modifiers() == qc.Qt.NoModifier:
+            fwd = self.nextFrame
+            bak = self.prevFrame
+        elif event.modifiers() == qc.Qt.ShiftModifier:
+            fwd = self.jumpForward
+            bak = self.jumpBackward
+        else:
+            super(ReviewWidget, self).wheelEvent(event)
+            return
+
+        for step in range(1, abs(steps) + 1):
+            if direction == -1:
+                fwd()
+            elif direction == 1:
+                bak()
+
     def makeActions(self):
         self.disableSeekAction = qw.QAction('Disable seek')
         self.disableSeekAction.setToolTip(
