@@ -38,3 +38,10 @@ Shift + r,Rename selected track only in current frame
 Ctrl + z,Undo changes in current frame
 Ctrl + PgUp (mac: command + fn + up-arrow),Increase the speed of playback
 Ctrl + PgDn (mac: command + fn + down-arrow),Decrease the speed of playback
+Mouse Wheel Down, Go to next frame
+Mouse Wheel Up, Go to previous frame
+Shift + Mouse Wheel Down, Go forward 10 frames
+Shift + Mouse Wheel Up, Go back 10 frames
+Ctrl + Mouse Wheel Down, Zoom out
+Ctrl + Mouse Wheel Up, Zoom in
+
