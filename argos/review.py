@@ -1423,9 +1423,9 @@ class ReviewWidget(qw.QWidget):
             return
 
         for step in range(1, abs(steps) + 1):
-            if direction == 1:
+            if direction == -1:
                 fwd()
-            elif direction == -1:
+            elif direction == 1:
                 bak()
             if self.frame_no == self.breakpoint:
                 break
