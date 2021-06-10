@@ -11,6 +11,7 @@
 
       python -m twine upload --repository testpypi dist/*
 
+      python -m twine upload --repository pypi dist/*
 
 - Install from TestPyPI
 
@@ -58,7 +59,7 @@ ext_modules = [
 ]
 setup(
     name='argos_toolkit',
-    version='0.1.0-12',
+    version='0.1.0-13',
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
     description='Software utility for tracking multiple objects (animals) in a video.',

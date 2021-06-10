@@ -1411,10 +1411,11 @@ class ReviewWidget(qw.QWidget):
         # print('Mouse wheel steps', steps)
         direction = steps and steps // abs(steps) # 0, 1, or -1
         # print(event.modifiers())
-        if event.modifiers() == qc.Qt.NoModifier:
+        if event.modifiers() == qc.Qt.ShiftModifier:
             fwd = self.nextFrame
             bak = self.prevFrame
-        elif event.modifiers() == qc.Qt.ShiftModifier:
+        elif (event.modifiers() & qc.Qt.ControlModifier) and  \
+             (event.modifiers() & qc.Qt.ShiftModifier):
             fwd = self.jumpForward
             bak = self.jumpBackward
         else:
@@ -1422,10 +1423,12 @@ class ReviewWidget(qw.QWidget):
             return
 
         for step in range(1, abs(steps) + 1):
-            if direction == -1:
+            if direction == 1:
                 fwd()
-            elif direction == 1:
+            elif direction == -1:
                 bak()
+            if self.frame_no == self.breakpoint:
+                break
 
     def makeActions(self):
         self.disableSeekAction = qw.QAction('Disable seek')
@@ -1943,11 +1946,17 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def jumpForward(self):
-        self.gotoFrame(self.frame_no + self.jump_step)
+        target = self.frame_no + self.jump_step
+        if (self.frame_no < self.breakpoint) and (target > self.breakpoint):
+            target = self.breakpoint
+        self.gotoFrame(target)
 
     @qc.pyqtSlot()
     def jumpBackward(self):
-        self.gotoFrame(self.frame_no - self.jump_step)
+        target = self.frame_no - self.jump_step
+        if (self.frame_no > self.breakpoint) and (target < self.breakpoint):
+            target = self.breakpoint
+        self.gotoFrame(target)
 
     @qc.pyqtSlot()
     def jumpNextNew(self):
