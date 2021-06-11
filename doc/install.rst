@@ -37,7 +37,12 @@ Installation using Anaconda
 
 6. Install ``pycocotools``.
 
-   On Windows:
+   On Windows::
+
+      pip install pycocotools-windows
+
+   Alternatively:
+   
      1. Install `MS Visual Studio Build Tools
         <https://go.microsoft.com/fwlink/?LinkId=691126>`_.  Select
         Windows XX SDK for your version of Windows.

@@ -897,8 +897,8 @@ class FrameView(qw.QGraphicsView):
                 [self.zoomOut() for ii in range(int(-ndegrees / 15))]
             # logging.debug('Angle %f degrees', a0.angleDelta().y() / 8)
             a0.accept()
-        # else:
-        #     super(FrameView, self).wheelEvent(a0)
+        elif a0.modifiers() == qc.Qt.NoModifier:
+            super(FrameView, self).wheelEvent(a0)
             # a0.ignore()
 
 
