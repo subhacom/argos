@@ -472,10 +472,10 @@ class TrackReader(qc.QObject):
         self.track_data = self.track_data.astype({'frame': int,
                                                   'trackid': int})
         self.last_frame = self.track_data.frame.max()
-        self.wmin = 0
-        self.wmax = 1000
-        self.hmin = 0
-        self.hmax = 1000
+        self.wmin = settings.value('segment/min_width', 0)
+        self.wmax = settings.value('segment/max_width', 1000)
+        self.hmin = settings.value('segment/min_height', 0)
+        self.hmax = settings.value('segment/max_height', 1000)
 
         def keyfn(change):
             return (change.frame, change.idx)
@@ -580,10 +580,15 @@ class TrackReader(qc.QObject):
         tracks = self.track_data[self.track_data.frame == frame_no]
         # Filter bboxes violating size constraints
         wh = np.sort(tracks[['w', 'h']].values, axis=1)
+        print('Wmin:', self.wmin,
+              'Wmax:', self.wmax,
+              'Hmin:', self.hmin,
+              'Hmax:', self.hmax)
+        # print('Excluded', tracks.iloc[(
         sel = np.flatnonzero((wh[:, 0] >= self.wmin) &
                              (wh[:, 0] <= self.wmax) &
                              (wh[:, 1] >= self.hmin) &
-                             (wh[:, 0] <= self.hmax))
+                             (wh[:, 1] <= self.hmax))
         tracks = tracks.iloc[sel]
         tracks = self.applyChanges(tracks)
         return tracks
