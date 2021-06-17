@@ -43,9 +43,9 @@ Installation using Anaconda
 
    Alternatively:
    
-     1. Install `MS Visual Studio Build Tools
-        <https://go.microsoft.com/fwlink/?LinkId=691126>`_.  Select
-        Windows XX SDK for your version of Windows.
+     1. Install MS Visual Studio Build Tools. The installer for Visual
+        Studio 2019 Build Tools is available
+        `here <https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019>`_.
      2. Go to ``C:\Program Files (x86)\Microsoft Visual C++ Build
         Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
      3. Install [git](https://git-scm.com/downloads)
