@@ -45,10 +45,9 @@ Installation using Anaconda
    
      1. Install MS Visual Studio Build Tools. The installer for Visual
         Studio 2019 Build Tools is available
-        `here <https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019>`_.
-     2. Go to ``C:\Program Files (x86)\Microsoft Visual C++ Build
-        Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
-     3. Install [git](https://git-scm.com/downloads)
+        here: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
+     2. Go to ``C:\Program Files (x86)\Microsoft Visual C++ Build Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
+     3. Install git(https://git-scm.com/downloads)
      4. In the Anaconda command prompt run::
 		
           pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
