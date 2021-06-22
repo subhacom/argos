@@ -2,8 +2,8 @@ Installation using Anaconda
 ===========================
 
 1. Install `anaconda <https://www.anaconda.com/>`_ python
-   distribution. You can download the free Individual Edition `here
-   <https://www.anaconda.com/products/individual#Downloads>`_.
+   distribution. You can download the free Individual Edition here:
+   https://www.anaconda.com/products/individual#Downloads.
    
 2. Create an environment with required packages (enter this commands
    in Anaconda prompt)::
@@ -38,28 +38,54 @@ Installation using Anaconda
 6. Install ``pycocotools``.
 
    On Windows::
+     
+   1. Install MS Visual Studio Build Tools. The installer for Visual
+      Studio 2019 Build Tools is available here:
+      https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
 
-      pip install pycocotools-windows
+      You can skip this if you have a functioning Visual C++
+      installation with the build tools >= 14.0.
+      
+   2. Install git from here: https://git-scm.com/downloads or enter in the Anaconda command prompt::
 
-   Alternatively:
-   
-     1. Install MS Visual Studio Build Tools. The installer for Visual
-        Studio 2019 Build Tools is available
-        here: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019
-     2. Go to ``C:\Program Files (x86)\Microsoft Visual C++ Build Tools`` on your computer and run ``vcbuildtools_msbuild.bat``
-     3. Install git(https://git-scm.com/downloads)
-     4. In the Anaconda command prompt run::
-		
+	conda install git
+	
+   3. In the Anaconda command prompt run (after `conda activate track`)::
+
+	  "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+      or the appropriate .bat file for your system in the folder "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\".
+
+   4. In the same prompt run::
+	  
           pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
 
-	
-   On Linux/Unix/Mac you need to have ``make`` and ``g++`` installed, and then in 
-   the Anaconda command prompt::
+      If this throws this error::
+
+	fatal: unable to access 'https://github.com/philferriere/cocoapi.git/': SSL certificate problem: unable to get local issuer certificate
+
+      then you may be able to resolve this by entering the following in the Anaconda prompt::
+
+	git config --global http.sslbackend schannel
+
+      and try::
+
+          pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
+
+      again.
+
+   On Linux/Unix/Mac you need to have `make` and `g++` installed, and
+   then in the Anaconda command prompt enter::
 
      pip install pycocotools
 
+.. seealso::
 
-7. Finally, install the argos toolkit including the tracker with these commands::
+      - https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/62381
+      - https://docs.microsoft.com/en-us/answers/questions/136595/error-microsoft-visual-c-140-or-greater-is-require.html
+      - https://stackoverflow.com/questions/23885449/unable-to-resolve-unable-to-get-local-issuer-certificate-using-git-on-windows
+
+7. Finally, install the argos toolkit and the tracker with these commands::
 
        pip install argos-toolkit
        pip install argos-tracker
