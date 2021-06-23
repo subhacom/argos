@@ -54,7 +54,16 @@ Installation using Anaconda
 
 	  "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
-      or the appropriate .bat file for your system in the folder "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\".
+      or the appropriate .bat file for your installation (see
+      https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-160#use-the-developer-tools-in-an-existing-command-window). The
+      exact location of this file can vary between installations. You
+      can run it using the following steps (for 64 bit systems)::
+	
+      1. Go to `Start menu-> Visual Studio 2019`
+      2. Right-click `x64 Native Tools Command Prompt` and in the popup menu select `More->Open File Location`.
+      3. In the folder that opens, right click on the `x64 Native ...` shortcut and select `Properties`.
+      4. Copy the `Target` field and paste it in the Anaconda command
+         prompt and press `Enter`.
 
    4. In the same prompt run::
 	  
