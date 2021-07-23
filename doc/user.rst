@@ -67,6 +67,11 @@ What is significant movement?
   of change bigger than ``--min_area`` pixels, then this is considered
   significant motion.
 
+These parameters will depend on the resolution of the captured video,
+lighting, size of animals etc. One can optimize the parameters by
+trial and error. A starting point could be checking the size of the
+animals in pixels and pass a fraction of that as ``--min_area``.
+
 Not all video formats are available on all platforms. The default is
 MJPG with AVI as container, which is supported natively by OpenCV.
 
