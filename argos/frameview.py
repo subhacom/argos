@@ -9,11 +9,7 @@ import numpy as np
 import cv2
 from typing import Dict, List
 from matplotlib import cm
-from PyQt5 import (
-    QtCore as qc,
-    QtGui as qg,
-    QtWidgets as qw
-)
+from PyQt5 import QtCore as qc, QtGui as qg, QtWidgets as qw
 import sip
 
 import argos.utility as util
@@ -33,6 +29,7 @@ class FrameScene(qw.QGraphicsScene):
 
     def __init__(self, *args, **kwargs):
         super(FrameScene, self).__init__(*args, **kwargs)
+        self.drawingDisabled = False
         self.roi = None
         self.frameno = -1
         self.arena = None
@@ -57,13 +54,11 @@ class FrameScene(qw.QGraphicsScene):
         self.color = qg.QColor(self.color)
         self.selectedColor = settings.value('argos/selected_color', '#0000ff')
         self.selectedColor = qg.QColor(self.selectedColor)
-        self.incompleteColor = settings.value('argos/incomplete_color',
-                                               '#ff00ff')
+        self.incompleteColor = settings.value('argos/incomplete_color', '#ff00ff')
         self.incompleteColor = qg.QColor(self.incompleteColor)
         self.linewidth = settings.value('argos/linewidth', 2.0, type=float)
         self.labelInside = settings.value('argos/labelinside', True, type=bool)
-        self.alphaUnselected = settings.value('argos/alpha_unselected', 255,
-                                            type=int)
+        self.alphaUnselected = settings.value('argos/alpha_unselected', 255, type=int)
         # self.linestyle_selected = qc.Qt.DotLine
         self.showBbox = True
         self.showId = True
@@ -118,8 +113,10 @@ class FrameScene(qw.QGraphicsScene):
                     color = qg.QColor(*make_color(key))
                 elif self.colorMode == ColorMode.cmap:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.maxColors, self.maxColors,
-                                        self.colormap))
+                        *get_cmap_color(
+                            key % self.maxColors, self.maxColors, self.colormap
+                        )
+                    )
                 else:
                     color = qg.QColor(self.selectedColor)
                 # Make the selected item bbox thicker
@@ -132,8 +129,10 @@ class FrameScene(qw.QGraphicsScene):
                     color = qg.QColor(*make_color(key))
                 elif self.colorMode == ColorMode.cmap:
                     color = qg.QColor(
-                        *get_cmap_color(key % self.maxColors, self.maxColors,
-                                        self.colormap))
+                        *get_cmap_color(
+                            key % self.maxColors, self.maxColors, self.colormap
+                        )
+                    )
                 else:
                     color = qg.QColor(self.color)
                     # make the non-selected items transparent
@@ -178,6 +177,10 @@ class FrameScene(qw.QGraphicsScene):
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
+    @qc.pyqtSlot(bool)
+    def disableDrawing(self, disable: bool) -> None:
+        self.drawingDisabled = disable
+
     @qc.pyqtSlot(DrawingGeom)
     def setMode(self, mode: DrawingGeom) -> None:
         self.geom = mode
@@ -201,8 +204,7 @@ class FrameScene(qw.QGraphicsScene):
     def setFrame(self, frame: np.ndarray) -> None:
         self._frame = cv2qimage(frame)
         if self.grayscale:
-            self._frame = self._frame.convertToFormat(
-                qg.QImage.Format_Grayscale8)
+            self._frame = self._frame.convertToFormat(qg.QImage.Format_Grayscale8)
 
     def _addItem(self, item: np.ndarray) -> None:
         index = 0 if len(self.polygons) == 0 else max(self.polygons.keys()) + 1
@@ -216,9 +218,12 @@ class FrameScene(qw.QGraphicsScene):
             pen = qg.QPen(qg.QColor(*make_color(index)))
         elif self.colorMode == ColorMode.cmap:
             pen = qg.QPen(
-                qg.QColor(*get_cmap_color(index % self.maxColors,
-                                          self.maxColors,
-                                          self.colormap)))
+                qg.QColor(
+                    *get_cmap_color(
+                        index % self.maxColors, self.maxColors, self.colormap
+                    )
+                )
+            )
         else:
             pen = qg.QPen(self.color)
         pen.setWidth(self.linewidth)
@@ -234,8 +239,9 @@ class FrameScene(qw.QGraphicsScene):
             text.setPos(bbox.x(), bbox.y())
         else:
             text.setPos(bbox.x(), bbox.y() - text.boundingRect().height())
-        text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
-                     self.textIgnoresTransformation)
+        text.setFlag(
+            qw.QGraphicsItem.ItemIgnoresTransformations, self.textIgnoresTransformation
+        )
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
@@ -261,7 +267,7 @@ class FrameScene(qw.QGraphicsScene):
         self.arenaPolygon = self.addPolygon(self.arena)
         self.sigArena.emit(self.arena)
         self.setSceneRect(self.arena.boundingRect())
-        
+
     @qc.pyqtSlot()
     def resetArena(self):
         logging.debug('Resetting arena')
@@ -323,7 +329,6 @@ class FrameScene(qw.QGraphicsScene):
         self.boldFont.setBold(True)
         self._updateItemDisplay()
         self.update()
-    
 
     @qc.pyqtSlot(qg.QColor)
     def setColor(self, color: qg.QColor) -> None:
@@ -347,7 +352,9 @@ class FrameScene(qw.QGraphicsScene):
 
     @qc.pyqtSlot(int)
     def setAlphaUnselected(self, val: int) -> None:
-        assert (0 <= val) and (255 >= val), f'Alpha must be in [0, 255] range. Got {val}'
+        assert (0 <= val) and (
+            255 >= val
+        ), f'Alpha must be in [0, 255] range. Got {val}'
         settings.setValue('argos/alpha_unselected', val)
         self.alphaUnselected = val
         # If nothing is selected don't dim everything
@@ -355,7 +362,6 @@ class FrameScene(qw.QGraphicsScene):
             return
         self._updateItemDisplay()
         self.update()
-
 
     def _updateItemDisplay(self):
         """Make the selected item's bbox thicker and label font bold.
@@ -472,14 +478,13 @@ class FrameScene(qw.QGraphicsScene):
             return
         for key, item in self.itemDict.items():
             color = qg.QColor(
-                *get_cmap_color(key % self.maxColors, self.maxColors,
-                                self.colormap))
+                *get_cmap_color(key % self.maxColors, self.maxColors, self.colormap)
+            )
             pen = item.pen()
             pen.setColor(color)
             item.setPen(pen)
         self._updateItemDisplay()
         self.update()
-
 
     def setIncompleteColor(self, color: qg.QColor) -> None:
         """Color of rectangles being drawn"""
@@ -522,16 +527,19 @@ class FrameScene(qw.QGraphicsScene):
         for id_, rect in rects.items():
             if self.colorMode == ColorMode.auto:
                 color = qg.QColor(*make_color(id_))
-            elif self.colorMode  == ColorMode.cmap:
+            elif self.colorMode == ColorMode.cmap:
                 color = qg.QColor(
-                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap))
+                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap)
+                )
             else:
                 color = self.color
             item = self.addRect(*rect, qg.QPen(color, self.linewidth))
             self.itemDict[id_] = item
             text = self.addText(str(id_), self.boldFont)
-            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
-                         self.textIgnoresTransformation)
+            text.setFlag(
+                qw.QGraphicsItem.ItemIgnoresTransformations,
+                self.textIgnoresTransformation,
+            )
             text.adjustSize()
             self.labelDict[id_] = text
         self._updateItemDisplay()
@@ -552,7 +560,8 @@ class FrameScene(qw.QGraphicsScene):
                 color = qg.QColor(*make_color(id_))
             elif self.colorMode == ColorMode.cmap:
                 color = qg.QColor(
-                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap))
+                    *get_cmap_color(id_ % self.maxColors, self.maxColors, self.colormap)
+                )
             else:
                 color = self.color
             self.polygons[id_] = poly
@@ -563,8 +572,10 @@ class FrameScene(qw.QGraphicsScene):
             self.itemDict[id_] = item
             text = self.addText(str(id_), self.font)
             self.labelDict[id_] = text
-            text.setFlag(qw.QGraphicsItem.ItemIgnoresTransformations,
-                         self.textIgnoresTransformation)
+            text.setFlag(
+                qw.QGraphicsItem.ItemIgnoresTransformations,
+                self.textIgnoresTransformation,
+            )
         self._updateItemDisplay()
         self._setLabelInside(self.labelInside)
         if self.arena is not None:
@@ -572,14 +583,11 @@ class FrameScene(qw.QGraphicsScene):
         self.sigPolygons.emit(self.polygons)
         self.sigPolygonsSet.emit()
 
-    def keyPressEvent(self, ev: qg.QKeyEvent) -> None:
-        if ev.key() == qc.Qt.Key_Escape:
-            self.points = []
-        super(FrameScene, self).keyPressEvent(ev)
-
     def mouseReleaseEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
         """Start drawing arena"""
         logging.debug(f'Number of items {len(self.items())}')
+        if self.drawingDisabled:
+            return
         if event.button() == qc.Qt.RightButton:
             self.points = []
             self._clearIncomplete()
@@ -588,7 +596,7 @@ class FrameScene(qw.QGraphicsScene):
         pos = np.array((pos.x(), pos.y()), dtype=int)
         if self.geom == DrawingGeom.rectangle:
             if len(self.points) > 0:
-                rect = util.points2rect(self.points[0], pos)                
+                rect = util.points2rect(self.points[0], pos)
                 rect = qg.QPolygonF([qc.QPointF(*p) for p in rect])
                 self.points = []
                 if self.geom == DrawingGeom.arena:
@@ -601,15 +609,14 @@ class FrameScene(qw.QGraphicsScene):
                     # logging.debug('FFFF %r', len(self.items()))
             else:
                 self.points = [pos]
-                logging.debug(f'XXXX Number of items {len(self.items())}\n'
-                              f'pos: {pos}')
+                logging.debug(
+                    f'XXXX Number of items {len(self.items())}\n' f'pos: {pos}'
+                )
                 return
-        elif self.geom == DrawingGeom.polygon or \
-                self.geom == DrawingGeom.arena:
+        elif self.geom == DrawingGeom.polygon or self.geom == DrawingGeom.arena:
             if len(self.points) > 0:
                 dvec = pos - self.points[0]
-                if max(abs(dvec)) < self.snap_dist and \
-                        len(self.points) > 2:
+                if max(abs(dvec)) < self.snap_dist and len(self.points) > 2:
                     if self.geom == DrawingGeom.polygon:
                         self._addItem(np.array(self.points))
                     elif self.geom == DrawingGeom.arena:
@@ -625,11 +632,12 @@ class FrameScene(qw.QGraphicsScene):
                 path.lineTo(qc.QPointF(*point))
             self.addIncompletePath(path)
         else:
-            raise NotImplementedError(
-                f'Drawing geometry {self.geom} not implemented')
+            raise NotImplementedError(f'Drawing geometry {self.geom} not implemented')
         logging.debug(f'ZZZZ Number of items {len(self.items())}')
 
     def mouseMoveEvent(self, event: qw.QGraphicsSceneMouseEvent) -> None:
+        if self.drawingDisabled:
+            return
         pos = event.scenePos()
         self.sigMousePos.emit(pos)
         pos = np.array((pos.x(), pos.y()), dtype=int)
@@ -646,8 +654,7 @@ class FrameScene(qw.QGraphicsScene):
                 # logging.debug('CCCC %r', len(self.items()))
             else:
                 self._clearIncomplete()
-                path = qg.QPainterPath(
-                    qc.QPointF(self.points[0][0], self.points[0][1]))
+                path = qg.QPainterPath(qc.QPointF(self.points[0][0], self.points[0][1]))
                 [path.lineTo(qc.QPointF(p[0], p[1])) for p in self.points[1:]]
                 path.lineTo(qc.QPointF(pos[0], pos[1]))
                 self.addIncompletePath(path)
@@ -661,8 +668,9 @@ class FrameScene(qw.QGraphicsScene):
     def drawBackground(self, painter: qg.QPainter, rect: qc.QRectF) -> None:
         if self._frame is None:
             return
-        if self.arena is None or len(
-                self.arena) == 0:  # When we have reset the arena - and going to open another video
+        if (
+            self.arena is None or len(self.arena) == 0
+        ):  # When we have reset the arena - and going to open another video
             arena = qc.QRectF(0, 0, self._frame.width(), self._frame.height())
             self.setSceneRect(arena)
         else:
@@ -706,6 +714,10 @@ class FrameView(qw.QGraphicsView):
         self.frameScene.sigArena.connect(self.sigArena)
         self.setMouseTracking(True)
         self.resetArenaAction = qw.QAction('Reset arena')
+        self.resetArenaAction.setToolTip(
+            'Reset arena to full frame.'
+            'Selecting an arena excludes all objects outside the area.'
+        )
         self.resetArenaAction.triggered.connect(self.frameScene.resetArena)
         self.zoomInAction = qw.QAction('Zoom in')
         self.zoomInAction.triggered.connect(self.zoomIn)
@@ -733,9 +745,11 @@ class FrameView(qw.QGraphicsView):
         self.setLabelInsideAction.triggered.connect(self.frameScene.setLabelInside)
         self.lineWidthAction = qw.QAction('Line width')
         self.lineWidthAction.triggered.connect(self.setLW)
-        self.fontSizeAction = qw.QAction('Set font size in points')        
+        self.fontSizeAction = qw.QAction('Set font size in points')
         self.fontSizeAction.triggered.connect(self.setFontSize)
-        self.relativeFontSizeAction = qw.QAction('Set font size as % of larger side of image')        
+        self.relativeFontSizeAction = qw.QAction(
+            'Set font size as % of larger side of image'
+        )
         self.relativeFontSizeAction.triggered.connect(self.setRelativeFontSize)
         self.showBboxAction = qw.QAction('Show boundaries')
         self.showBboxAction.setCheckable(True)
@@ -772,27 +786,34 @@ class FrameView(qw.QGraphicsView):
     @qc.pyqtSlot()
     def setLW(self) -> None:
         input_, accept = qw.QInputDialog.getDouble(
-            self, 'Line-width of outline',
+            self,
+            'Line-width of outline',
             'pixels',
-            self.frameScene.linewidth, min=0, max=10)
+            self.frameScene.linewidth,
+            min=0,
+            max=10,
+        )
         if accept:
             self.sigLineWidth.emit(input_)
 
     @qc.pyqtSlot()
     def setFontSize(self) -> None:
         input_, accept = qw.QInputDialog.getInt(
-            self, 'Font size',
+            self,
+            'Font size',
             'points',
-            self.frameScene.font.pointSize(), min=1, max=100)
+            self.frameScene.font.pointSize(),
+            min=1,
+            max=100,
+        )
         if accept:
             self.sigFontSize.emit(input_)
-        
+
     @qc.pyqtSlot()
     def setRelativeFontSize(self) -> None:
         input_, accept = qw.QInputDialog.getDouble(
-            self, 'Font size relative to image size',
-            '%',
-            1, min=0.1, max=10)
+            self, 'Font size relative to image size', '%', 1, min=0.1, max=10
+        )
         if accept:
             self.sigRelativeFontSize.emit(input_)
 
@@ -801,49 +822,58 @@ class FrameView(qw.QGraphicsView):
         if not checked:
             self.sigSetColormap.emit(None, 0)
             return
-        input_, accept = qw.QInputDialog.getItem(self, 'Select colormap',
-                                                'Colormap',
-                                                ['jet',
-                                                 'viridis',
-                                                 'rainbow',
-                                                 'autumn',
-                                                 'summer',
-                                                 'winter',
-                                                 'spring',
-                                                 'cool',
-                                                 'hot',
-                                                 'None'])
+        input_, accept = qw.QInputDialog.getItem(
+            self,
+            'Select colormap',
+            'Colormap',
+            [
+                'jet',
+                'viridis',
+                'rainbow',
+                'autumn',
+                'summer',
+                'winter',
+                'spring',
+                'cool',
+                'hot',
+                'None',
+            ],
+        )
         logging.debug(f'Setting colormap to {input_}')
         if (input_ == 'None') or (not accept):
             self.colormapAction.setChecked(False)
             return
-        max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
-                                                    'Number of colors', 10, 1,
-                                                    20)
+        max_colors, accept = qw.QInputDialog.getInt(
+            self, 'Number of colors', 'Number of colors', 10, 1, 20
+        )
         self.autoColorAction.setChecked(False)
         self.colormapAction.setChecked(True)
         self.sigSetColormap.emit(input_, max_colors)
 
     @qc.pyqtSlot()
     def chooseColor(self):
-        color = qw.QColorDialog.getColor(initial=self.frameScene.color,
-                                         parent=self)
+        color = qw.QColorDialog.getColor(initial=self.frameScene.color, parent=self)
         self.sigSetColor.emit(color)
         self.colormapAction.setChecked(False)
         self.autoColorAction.setChecked(False)
 
     @qc.pyqtSlot()
     def chooseSelectedColor(self):
-        color = qw.QColorDialog.getColor(initial=self.frameScene.selectedColor,
-                                         parent=self)
+        color = qw.QColorDialog.getColor(
+            initial=self.frameScene.selectedColor, parent=self
+        )
         self.sigSetSelectedColor.emit(color)
 
     @qc.pyqtSlot()
     def setAlphaUnselected(self):
-        alpha, accept = qw.QInputDialog.getInt(self, 'Opacity of unselected IDs',
-                                       'Alpha (0=fully transparent, 255=fully opaque)',
-                                       value=self.frameScene.alphaUnselected,
-                                       min=0, max=255)
+        alpha, accept = qw.QInputDialog.getInt(
+            self,
+            'Opacity of unselected IDs',
+            'Alpha (0=fully transparent, 255=fully opaque)',
+            value=self.frameScene.alphaUnselected,
+            min=0,
+            max=255,
+        )
         print('Received', alpha)
         if accept:
             self.sigSetAlphaUnselected.emit(alpha)
@@ -908,7 +938,8 @@ def test_display():
     view = FrameView()
     image = cv2.imread(
         'C:/Users/raysu/analysis/animal_tracking/bugtracking/training_images/'
-        'prefix_1500.png')
+        'prefix_1500.png'
+    )
     view.setFrame(image, 0)
     win = qw.QMainWindow()
     toolbar = win.addToolBar('Zoom')

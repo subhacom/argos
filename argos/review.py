@@ -761,6 +761,7 @@ class ReviewScene(FrameScene):
 
     def __init__(self, *args, **kwargs):
         super(ReviewScene, self).__init__(*args, **kwargs)
+        self.drawingDisabled = True
         self.lineStyleOldTrack = qc.Qt.DashLine
         self.histGradient = 1
         self.trackHist = []
@@ -903,6 +904,10 @@ class TrackView(FrameView):
         if accept:
             self.sigTrackMarkerThickness.emit(input_)
 
+    @qc.pyqtSlot(bool)
+    def enableDraw(self, enable: bool):
+        """Activate arena drawing"""
+        self.frameScene.disableDrawing(not enable)
 
 class TrackList(qw.QListWidget):
     """
@@ -1504,6 +1509,11 @@ class ReviewWidget(qw.QWidget):
             self.rightView.setTrackMarkerThickness)
         self.setRoiAction = qw.QAction('Set polygon ROI')
         self.setRoiAction.triggered.connect(self.rightView.setArenaMode)
+        self.enableDrawArenaAction = qw.QAction('Draw arena')
+        self.enableDrawArenaAction.setCheckable(True)
+        self.enableDrawArenaAction.triggered.connect(self.rightView.enableDraw)
+        self.enableDrawArenaAction.triggered.connect(self.leftView.enableDraw)
+        self.enableDrawArenaAction.setChecked(False)
         self.rightView.resetArenaAction.triggered.connect(self.resetRoi)
         self.rightView.resetArenaAction.triggered.connect(
             self.leftView.resetArenaAction.trigger)
@@ -2394,8 +2404,12 @@ class ReviewWidget(qw.QWidget):
     @qc.pyqtSlot()
     def reset(self):
         """Reset video: reopen video and track file"""
+        print('Reset video ...')
         if self.video_reader is None:
             # Not initialized - do nothing
+            return
+        ret = qw.QMessageBox.question(self, 'Confirm reset', 'This will reset all changes!\nTo save your work, press No and save data first', qw.QMessageBox.Yes | qw.QMessageBox.No)
+        if ret == qw.QMessageBox.No:
             return
         self._wait_cond.set()
         self.playVideo(False)
@@ -2498,7 +2512,7 @@ class ReviewerMain(qw.QMainWindow):
         zoomMenu.addAction(self.reviewWidget.zoomOutLeftAction)
         zoomMenu.addAction(self.reviewWidget.zoomOutRightAction)
 
-        playMenu = self.menuBar().addMenu('Play')
+        playMenu = self.menuBar().addMenu('&Play')
         playMenu.addAction(self.reviewWidget.disableSeekAction)
         playMenu.addAction(self.reviewWidget.playAction)
         playMenu.addAction(self.reviewWidget.speedUpAction)
@@ -2539,6 +2553,7 @@ class ReviewerMain(qw.QMainWindow):
                                self.reviewWidget.deleteTrackAction,
                                self.reviewWidget.deleteTrackCurAction,
                                self.reviewWidget.undoCurrentChangesAction,
+                               self.reviewWidget.enableDrawArenaAction,
                                self.reviewWidget.rightView.resetArenaAction])
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
