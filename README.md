@@ -541,6 +541,18 @@ tracks and correct mistakes.
   Check if you have NVIDIA drivers for CUDA installed. Also note that
   CUDA does not work from Windows Subsystem for Linux (WSL). In
   general it is a good idea to install Argos on the native platform.
+  
+  
+- Trying to train YOLACT raises this RuntimeError: 
+  ```
+  RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'.  
+  ```
+  
+  This is a known bug in pytorch as of version 1.9.0 (see
+  https://github.com/pytorch/pytorch/issues/44714). Try installing the
+  LTS version: `conda install pytorch torchvision cuda=10.2 -c pytorch-lts`.
+  
+  For various other commands to install pytorch see https://pytorch.org
 
 ## Credits
 
