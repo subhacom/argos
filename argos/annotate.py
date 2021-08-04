@@ -470,9 +470,15 @@ class TrainingWidget(qw.QMainWindow):
         dirlayout = qw.QFormLayout()
         self.outDirLabel = qw.QLabel('Output directory for training data')
         self.outDirName = qw.QLabel(self.outputDir)
+        self.outDirName.setMinimumWidth(0)
+        self.outDirName.setSizePolicy(qw.QSizePolicy.MinimumExpanding,
+                                      qw.QSizePolicy.Preferred)
         dirlayout.addRow(self.outDirLabel, self.outDirName)
         self.imageDirLabel = qw.QLabel('Input image directory')
         self.imageDirName = qw.QLabel(self.imageDir)
+        self.imageDirName.setMinimumWidth(0)
+        self.imageDirName.setSizePolicy(qw.QSizePolicy.MinimumExpanding,
+                                        qw.QSizePolicy.Preferred)
         dirlayout.addRow(self.imageDirLabel, self.imageDirName)
         self.dirWidget = qw.QWidget()
         self.dirWidget.setLayout(dirlayout)
@@ -592,10 +598,11 @@ class TrainingWidget(qw.QMainWindow):
         self.showActionsDockAction.setCheckable(True)
         self.showActionsDockAction.setChecked(True)
 
-        self.hideIntermediateAction = qw.QAction('Hide intermediate result')
-
-        self.hideIntermediateAction.triggered.connect(
-            self.segWidget.hideIntermediateOutput)
+        self.showIntermediateAction = qw.QAction('Show intermediate result')
+        self.showIntermediateAction.setCheckable(True)
+        self.showIntermediateAction.setChecked(False)
+        self.showIntermediateAction.triggered.connect(
+            self.segWidget.showIntermediateOutput)
 
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
@@ -630,8 +637,8 @@ class TrainingWidget(qw.QMainWindow):
 
         self.clearCurrentImageKey = qw.QShortcut(qg.QKeySequence('C'), self)
         self.clearCurrentImageKey.activated.connect(self.clearCurrent)
-        self.resegmentCUrrentImageKey = qw.QShortcut(qg.QKeySequence('R'), self)
-        self.resegmentCUrrentImageKey.activated.connect(self.resegmentCurrent)
+        self.resegmentCurrentImageKey = qw.QShortcut(qg.QKeySequence('R'), self)
+        self.resegmentCurrentImageKey.activated.connect(self.resegmentCurrent)
 
         self.saveKey = qw.QShortcut(qg.QKeySequence('Ctrl+S'), self)
         self.saveKey.activated.connect(
@@ -677,7 +684,7 @@ class TrainingWidget(qw.QMainWindow):
                                   self.displayWidget.fontSizeAction,
                                   self.displayWidget.relativeFontSizeAction,
                                   self.displayWidget.setLabelInsideAction,
-                                  self.hideIntermediateAction])
+                                  self.showIntermediateAction])
         self.docksMenu = self.viewMenu.addMenu('Dock widgets')
         self.docksMenu.addActions([self.showFileDockAction,
                                   self.showSegDockAction,

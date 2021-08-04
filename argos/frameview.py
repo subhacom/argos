@@ -698,6 +698,7 @@ class FrameView(qw.QGraphicsView):
     sigFontSize = qc.pyqtSignal(int)
     sigRelativeFontSize = qc.pyqtSignal(float)
     sigSetAlphaUnselected = qc.pyqtSignal(int)
+    sigClosed = qc.pyqtSignal()
 
     def __init__(self, *args, **kwargs):
         super(FrameView, self).__init__(*args, **kwargs)
@@ -931,6 +932,9 @@ class FrameView(qw.QGraphicsView):
             super(FrameView, self).wheelEvent(a0)
             # a0.ignore()
 
+    def closeEvent(self, event: qg.QCloseEvent) -> None:
+        """Send other widgets a signal that this widget is closed"""
+        self.sigClosed.emit()
 
 def test_display():
     util.init()

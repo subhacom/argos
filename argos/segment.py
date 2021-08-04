@@ -215,17 +215,18 @@ def extract_valid(points_list, pmin, pmax, wmin, wmax, hmin, hmax, roi=None):
         where The length of the smaller side of the minimum bounding
         rotated-rectangle is considered width and the larger as height.
     """
-    # logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
-    #               f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
+    # ut.logging.debug(f'Parameters: pmin {pmin}, pmax {pmax}, wmin {wmin}, '
+    #                  f'wmax {wmax}, hmin {hmin}, hmax {hmax}')
     minrects = [cv2.minAreaRect(points) for points in points_list]
     mr_size = np.array([mr[1] for mr in minrects])
     if len(mr_size) == 0:
         return []
     mr_size.sort(axis=1)
-    p_size = np.array([cv2.contourArea(points) for points in points_list])
-    good = (p_size >= pmin) & (p_size < pmax) \
-           & (mr_size[:, 0] >= wmin) & (mr_size[:, 0] < wmax) \
-           & (mr_size[:, 1] >= hmin) & (mr_size[:, 1] < hmax) \
+    # p_size = np.array([cv2.contourArea(points) for points in points_list])
+    p_size = np.array([len(points) for points in points_list])
+    good = ((p_size >= pmin) & (p_size < pmax) 
+            & (mr_size[:, 0] >= wmin) & (mr_size[:, 0] < wmax) 
+            & (mr_size[:, 1] >= hmin) & (mr_size[:, 1] < hmax))
 
     good = np.flatnonzero(good)
     if roi is not None:

@@ -58,19 +58,30 @@ class LimitsWidget(qw.QWidget):
         self._hmax_edit.setValue(value)
         layout.addRow(self._hmax_label, self._hmax_edit)
         self.setLayout(layout)
-        self._hmax_edit.valueChanged.connect(self.sigHmax)
-        self._hmin_edit.valueChanged.connect(self.sigHmin)
-        self._wmax_edit.valueChanged.connect(self.sigWmax)
-        self._wmin_edit.valueChanged.connect(self.sigWmin)
-        self.sigQuit.connect(self.saveSettings)
+        self._hmax_edit.valueChanged.connect(self.setHmax)
+        self._hmin_edit.valueChanged.connect(self.setHmin)
+        self._wmax_edit.valueChanged.connect(self.setWmax)
+        self._wmin_edit.valueChanged.connect(self.setWmin)
 
-    @qc.pyqtSlot()
-    def saveSettings(self):
-        """Save the worker parameters"""
-        settings.setValue('segment/min_width', self._wmin_edit.value())
-        settings.setValue('segment/max_width', self._wmax_edit.value())
-        settings.setValue('segment/min_height', self._hmin_edit.value())
+    @qc.pyqtSlot(int)
+    def setHmax(self, val):
         settings.setValue('segment/max_height', self._hmax_edit.value())
+        self.sigHmax.emit(val)
+
+    @qc.pyqtSlot(int)
+    def setHmin(self, val):
+        settings.setValue('segment/min_height', self._hmin_edit.value())
+        self.sigHmin.emit(val)
+
+    @qc.pyqtSlot(int)
+    def setWmin(self, val):
+        settings.setValue('segment/min_width', self._wmin_edit.value())
+        self.sigWmin.emit(val)
+
+    @qc.pyqtSlot(int)
+    def setWmax(self, val):
+        settings.setValue('segment/max_width', self._wmax_edit.value())
+        self.sigWmax.emit(val)
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF):
@@ -103,3 +114,4 @@ class LimitsWidget(qw.QWidget):
             if np.any(contained):
                 vidx.append(ii)
         self.sigProcessed.emit(valid[vidx].copy(), pos)
+

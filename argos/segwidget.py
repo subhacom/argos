@@ -30,7 +30,6 @@ from argos.segment import (
 settings = ut.init()
 
 segstep_dict = OrderedDict([
-    ('Final', consts.SegStep.final),
     ('Blurred', consts.SegStep.blur),
     ('Thresholded', consts.SegStep.threshold),
     ('Segmented', consts.SegStep.segmented),
@@ -109,8 +108,7 @@ class SegWorker(qc.QObject):
         See extract_valid function above.
     intermediate: argos.utility.SegStep
         Intermediate step whose output should be emitted via
-        ``sigIntermediate``. If ``argos.utility.SegStep.final``, then
-        intermediate result is not emitted. Otherwise this can be used for
+        ``sigIntermediate``. This can be used for
         deciding best parameters for various steps in the segmentation process.
 
     cmap: int, cv2 colormap
@@ -326,21 +324,35 @@ class SegWorker(qc.QObject):
                                     self.dbscan_min_samples)
         elif self.seg_method == consts.SegmentationMethod.watershed:
             seg = segment_by_watershed(binary, image,
-                                                  self.wdist_thresh)
+                                       self.wdist_thresh)
         if self.intermediate == consts.SegStep.segmented:
             for ii, points in enumerate(seg):
                 binary[points[:, 1], points[:, 0]] = ii + 1
-            self.sigIntermediate.emit(
-                cv2.applyColorMap(binary, self.cmap),
-                pos)
+            colored = cv2.applyColorMap(binary, self.cmap)
+            for ii, points in enumerate(seg):
+                mr = cv2.minAreaRect(points)[1]
+                width = min(mr)
+                height = max(mr)
+                label = f'{len(points)}px{width:.1f}x{height:.1f}'
+                cv2.putText(colored, label,
+                            (max(points[:, 0]), max(points[:, 1])),
+                            cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 0, 0))
+            self.sigIntermediate.emit(colored, pos)
         seg = extract_valid(seg, self.pmin, self.pmax, self.wmin, self.wmax,
                             self.hmin, self.hmax, roi=self.roi)
         if self.intermediate == consts.SegStep.filtered:
             for ii, points in enumerate(seg):
                 binary[points[:, 1], points[:, 0]] = ii + 1
-            self.sigIntermediate.emit(
-                cv2.applyColorMap(binary, self.cmap),
-                pos)
+            filtered = cv2.applyColorMap(binary, self.cmap)
+            for ii, points in enumerate(seg):
+                mr = cv2.minAreaRect(points)[1]
+                width = min(mr)
+                height = max(mr)
+                label = f'{len(points)}px{width:.1f}x{height:.1f}'
+                cv2.putText(filtered, label,
+                            (max(points[:, 0]), max(points[:, 1])),
+                            cv2.FONT_HERSHEY_PLAIN, 0.5, (255, 0, 0))
+            self.sigIntermediate.emit(filtered, pos)
         bboxes = [cv2.boundingRect(points) for points in seg]
         if self.outline_style == ut.OutlineStyle.bbox:
             self.sigProcessed.emit(np.array(bboxes), pos)
@@ -361,9 +373,11 @@ class SegWorker(qc.QObject):
         elif self.outline_style == ut.OutlineStyle.fill:
             filled = {ii: points for ii, points in enumerate(seg)}
             self.sigSegPolygons.emit(filled, pos)
+
         _dt = time.perf_counter() - _ts
         logging.debug(f'{__name__}.{self.__class__.__name__}.process: Runtime: {_dt}s')
 
+        
 class SegWidget(qw.QWidget):
     """Widget for classical segmentation.
 
@@ -381,7 +395,7 @@ class SegWidget(qw.QWidget):
     sigThreshMethod = qc.pyqtSignal(int)
     sigSegMethod = qc.pyqtSignal(consts.SegmentationMethod)
     sigIntermediateOutput = qc.pyqtSignal(consts.SegStep)
-
+    sigIntermediateWindowClosed = qc.pyqtSignal()
     sigQuit = qc.pyqtSignal()
 
     setWmin = qc.pyqtSignal(int)
@@ -568,10 +582,11 @@ class SegWidget(qw.QWidget):
                                ' each pixel from a zero-valued pixel in the'
                                ' thresholded image.')
         layout.addRow(self._wdist_label, self._wdist)
-        self._intermediate_label = qw.QLabel('Show intermediate steps')
+        self._intermediate_button = qw.QPushButton('Show intermediate result')
+        self._intermediate_button.setCheckable(True)
         self._intermediate_combo = qw.QComboBox()
         self._intermediate_combo.addItems(segstep_dict.keys())
-        layout.addRow(self._intermediate_label, self._intermediate_combo)
+        layout.addRow(self._intermediate_button, self._intermediate_combo)
 
         self._outline_label = qw.QLabel('Boundary style')
         self.outlineCombo = qw.QComboBox()
@@ -581,13 +596,16 @@ class SegWidget(qw.QWidget):
 
         self.setLayout(layout)
 
-        self._intermediate_win = FrameView()
+        self._intermediate_win = FrameView()        
+        self._intermediate_win.scene().disableDrawing(True)
         self.resetRoi.connect(self._intermediate_win.resetArenaAction.trigger)
         flags = qc.Qt.WindowFlags(qc.Qt.CustomizeWindowHint +
-            qc.Qt.WindowStaysOnTopHint +
-            qc.Qt.WindowTitleHint +
-            qc.Qt.WindowMinMaxButtonsHint)
+                                  qc.Qt.WindowStaysOnTopHint +
+                                  qc.Qt.WindowTitleHint +
+                                  qc.Qt.WindowMinMaxButtonsHint +
+                                  qc.Qt.WindowCloseButtonHint)
         self._intermediate_win.setWindowFlags(flags)
+        self._intermediate_win.sigClosed.connect(self._intermediate_button.toggle)
         self._intermediate_win.hide()
 
         # Housekeeping - widgets to be shown or hidden based on choice of method
@@ -640,6 +658,7 @@ class SegWidget(qw.QWidget):
         self._intermediate_combo.currentTextChanged.connect(
             self.setIntermediateOutput)
         self.sigIntermediateOutput.connect(self.worker.setIntermediateOutput)
+        self._intermediate_button.clicked.connect(self.showIntermediateOutput)
         self.sigProcess.connect(self.worker.process)
         self.sigSetOutlineStyle.connect(self.worker.setOutlineStyle)
         self.worker.sigProcessed.connect(self.sigProcessed)
@@ -682,16 +701,24 @@ class SegWidget(qw.QWidget):
 
     @qc.pyqtSlot(str)
     def setIntermediateOutput(self, text: str) -> None:
-        if segstep_dict[text] == consts.SegStep.final:
-            self._intermediate_win.hide()
-        else:
-            self._intermediate_win.setWindowTitle(text)
-            self._intermediate_win.show()
         self.sigIntermediateOutput.emit(segstep_dict[text])
+        self._intermediate_win.setWindowTitle(text)
+
+    @qc.pyqtSlot(bool)
+    def showIntermediateOutput(self, checked):
+        if checked:
+            step = self._intermediate_combo.currentText()
+            self._intermediate_win.setWindowTitle(step)
+            self._intermediate_win.show()
+            self.sigIntermediateOutput.emit(segstep_dict[step])
+        else:
+            self.sigIntermediateOutput.emit(consts.SegStep.final)
+            self._intermediate_win.hide()
 
     @qc.pyqtSlot()
     def hideIntermediateOutput(self):
-        self.setIntermediateOutput('Final')
+        self.showIntermediateOutput(False)
+        self._intermediate_button.setChecked(False)        
 
     @qc.pyqtSlot()
     def saveSettings(self):

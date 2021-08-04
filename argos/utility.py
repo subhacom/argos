@@ -539,7 +539,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
     if metric == DistanceMetric.euclidean:
         max_dist *= max_dist
-    result = [(row, col, (labels[col], row))
+    result = [(row, labels[col], (labels[col], row))
               for row, col in zip(row_ind, col_ind)
               if dist_matrix[row, col] < max_dist]
     if len(result) > 0:
@@ -549,6 +549,7 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         matched = dict(matched)
         new_unmatched = set(range(len(new_bboxes))) - good_rows
         old_unmatched = set(id_bboxes.keys()) - good_cols
+        # print('Old unmatched', old_unmatched)
     else:
         matched = {}
         new_unmatched = set(range(len(new_bboxes)))
