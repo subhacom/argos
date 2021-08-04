@@ -17,3 +17,4 @@ max_iter: 200000
 max_size: 550
 name: locust_weights
 num_classes: 2
+eval_mask_branch: false

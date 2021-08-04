@@ -545,7 +545,7 @@ tracks and correct mistakes.
   
 - Trying to train YOLACT raises this RuntimeError: 
   ```
-  RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'.  
+  RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'.
   ```
   
   This is a known bug in pytorch as of version 1.9.0 (see

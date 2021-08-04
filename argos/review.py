@@ -465,10 +465,30 @@ class TrackReader(qc.QObject):
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
         self.data_path = data_file
-        if data_file.endswith('csv'):
-            self.track_data = pd.read_csv(self.data_path)
-        else:
+        if data_file.endswith('.hdf') or data_file.endswith('.h5'):
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
+        else:  # assume text file
+            has_header = False
+            col_count = -1
+            # MOT format
+            names = ['frame', 'trackid', 'x', 'y', 'w', 'h',
+                     'confidence', 'xc', 'yc', 'zc']
+            with open(self.data_path, 'r') as fd:
+                reader = csv.reader(fd)                
+                row = reader.__next__()
+                col_count = len(row)
+                try:
+                    _ = float(row[0])
+                    has_header = False
+                except ValueError:
+                    has_header = True
+            
+                if has_header:
+                    self.track_data = pd.read_csv(self.data_path)
+                else:
+                    names = names[:col_count]
+                    self.track_data = pd.read_csv(self.data_path, names=names)
+                    
         self.track_data = self.track_data.astype({'frame': int,
                                                   'trackid': int})
         self.last_frame = self.track_data.frame.max()
@@ -2068,7 +2088,7 @@ class ReviewWidget(qw.QWidget):
         if self.trackReader is None:
             return
         fname, _ = qw.QFileDialog.getOpenFileName(self, 'Load list of changes',
-                                                  filter='Text (*.csv)')
+                                                  filter='Text (*.csv *.txt)')
         if len(fname) > 0:
             self.trackReader.loadChangeList(fname)
 
@@ -2236,7 +2256,7 @@ class ReviewWidget(qw.QWidget):
         track_filename, filter = qw.QFileDialog.getOpenFileName(
             self,
             'Open tracked data',
-            datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv)')
+            datadir, filter='HDF5 (*.h5 *.hdf);; Text (*.csv *.txt);; All files (*)')
         logging.debug(f'filename:{track_filename}\nselected filter:{filter}')
         if len(track_filename) == 0:
             return

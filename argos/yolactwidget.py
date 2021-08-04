@@ -32,7 +32,7 @@ from PyQt5 import (
 )
 
 from yolact import Yolact
-from yolact.data import config as yconfig
+from yolact.data import config as yconfig, get_label_map
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
@@ -71,6 +71,8 @@ class YolactWorker(qc.QObject):
         self.weights_file = ''
         self.config_file = ''
         self.video_file = None
+        self.name_label_map = {v: k for k, v in get_label_map().items()}        
+        self.include_classes = set()
 
     def setWaitCond(self, waitCond: threading.Event) -> None:
         _ = qc.QMutexLocker(self.mutex)
@@ -107,13 +109,13 @@ class YolactWorker(qc.QObject):
         if filename == '':
             return
         self.config_file = filename
-        with open(filename, 'r') as cfg_file:
-            config = yaml.safe_load(cfg_file)
-            for key, value in config.items():
-                logging.debug('%r \n%r %r', key, type(value), value)
-                self.config.__setattr__(key, value)
-            if 'mask_proto_debug' not in config:
-                self.config.mask_proto_debug = False
+        yconfig.set_cfg(filename)
+        self.config = yconfig.cfg
+        if hasattr(self.config, 'include_classes'):
+            self.include_classes = set(self.config.include_classes)
+        else:
+            self.include_classes = set()
+        print('Use classes', self.include_classes)
         logging.debug(yaml.dump(self.config))
 
     @qc.pyqtSlot(str)
@@ -174,6 +176,15 @@ class YolactWorker(qc.QObject):
                 visualize_lincomb=False,
                 crop_masks=True,
                 score_threshold=self.score_threshold)
+
+            if len(self.include_classes) > 0:
+                idx = np.where([(self.config.dataset.class_names[c]
+                                 in self.include_classes)
+                                for c in classes])
+                print('All Classes', set(classes.cpu().numpy()))
+                classes, scores, boxes = [x[idx]
+                                          for x in (classes, scores, boxes)]
+                print('Kept', set(classes.cpu().numpy()))
             idx = scores.argsort(0, descending=True)[:self.top_k]
             # if self.config.eval_mask_branch:
             #     masks = masks[idx]

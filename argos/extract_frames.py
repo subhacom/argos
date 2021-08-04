@@ -13,6 +13,7 @@ arguments.
 
 """
 
+import sys
 import os
 import cv2
 import argparse
@@ -45,13 +46,23 @@ def make_parser():
                         help='factor by which to scale the images')
     parser.add_argument('-r', dest='random', action='store_true',
                         help='extract random frames')
-    parser.add_argument('-n', dest='num', default=1, type=int,
-                        help='number of frames to extract. for use with '
-                        '`-r` option.')
+    parser.add_argument('-n', dest='num', default=-1, type=int,
+                        help='number of frames to extract.')
     parser.add_argument('-o', dest='outdir', default='.', type=str,
                         help='output directory')
     return parser
 
+
+def convert_and_write(frame, scale, cmap, outfile):
+    image = cv2.cvtColor(frame, cmap) if cmap is not None else frame
+    size = (int(frame.shape[1] * scale),
+            int(frame.shape[0] * scale))
+    if scale < 1:
+        image = cv2.resize(image, size, cv2.INTER_AREA)
+    elif scale > 1:
+        image = cv2.resize(image, size, cv2.INTER_CUBIC)
+    cv2.imwrite(outfile, image)
+    
 
 if __name__ == '__main__':
     parser = make_parser()
@@ -61,26 +72,51 @@ if __name__ == '__main__':
     prefix = fname.rpartition('.')[0]
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cmap = COLORMAPS.get(args.cmap, None)
-    if args.random:
-        if args.num < frame_count:
-            frames = random.sample(range(frame_count), args.num)
-        else:
-            frames = range(frame_count)
+    if args.num < 0:
+        end = frame_count
     else:
-        frames = range(args.start, frame_count, args.stride)
-    for frame_no in frames:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
-        ret, frame = cap.read()
-        if frame is None:
-            print('Could not read frame no:', frame_no)
-            break
-        image = cv2.cvtColor(frame, cmap) if cmap is not None else frame
-        size = (int(frame.shape[1] * args.scale),
-                int(frame.shape[0] * args.scale))
-        if args.scale < 1:
-            image = cv2.resize(image, size, cv2.INTER_AREA)
-        elif args.scale > 1:
-            image = cv2.resize(image, size, cv2.INTER_CUBIC)
-        cv2.imwrite(os.path.join(args.outdir,
-                                 f'{prefix}_{int(frame_no):06d}.png'), image)
+        end = args.start + args.num * args.stride
+    if end > frame_count:
+        print(f'The last frame no {end} is'
+              f' greater than frame count {frame_count}.'
+              f' (start + num * stride) must be less than frame count.')
+        sys.exit(1)
+        
+    if args.random:
+        frames = random.sample(range(args.start, end), args.num)
+    else:
+        frames = range(args.start, end, args.stride)
+    frames = set(frames)
+    print(f'Going to extract {len(frames)} frames from {fname}'
+          f' with total {frame_count} frames', end=' ')
+    if args.random and args.num < frame_count:
+        print('randomly selected')
+    else:
+        print(f'sequentially, starting at '
+              f'{args.start} with {args.stride} stride')
+    
+    cap.set(cv2.CAP_PROP_POS_FRAMES, args.start)
+    if int(cap.get(cv2.CAP_PROP_POS_FRAMES)) != args.start:
+        cap.release()
+        cv2.VideoCapture(args.fname)
+        print('Cannot seek randomly in video. Reading sequentially')
+        for frame_no in range(frame_count):
+            ret, frame = cap.read()
+            if frame is None:
+                print('Could not read frame no:', frame_no)
+                break
+            if frame_no in frames:
+                outfile = os.path.join(args.outdir,
+                                       f'{prefix}_{int(frame_no):06d}.png')
+                convert_and_write(frame, args.scale, cmap, outfile)
+    else:
+        for frame_no in frames:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+            ret, frame = cap.read()
+            if frame is None:
+                print('Could not read frame no:', frame_no)
+                break
+            outfile = os.path.join(args.outdir,
+                                 f'{prefix}_{int(frame_no):06d}.png')
+            convert_and_write(frame, args.scale, cmap, outfile)
     cap.release()
