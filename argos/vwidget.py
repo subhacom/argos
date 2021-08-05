@@ -94,6 +94,8 @@ class VideoWidget(qw.QWidget):
         self.resetAction = qw.QAction('Reset')
         self.resetAction.setToolTip('Go back to the start and reset the'
                                     ' tracker')
+        self.refreshAction = qw.QAction('Refresh current frame')
+        self.refreshAction.triggered.connect(self.refreshFrame)
         self.showFrameNumAction = qw.QAction('Show frame #')
         self.showFrameNumAction.setCheckable(True)
         self.zoomInAction = qw.QAction('Zoom in')
@@ -433,6 +435,16 @@ class VideoWidget(qw.QWidget):
         self.sigReset.emit()
         self.startTime = None
         self.sigGotoFrame.emit(0)
+
+    @qc.pyqtSlot()
+    def refreshFrame(self):
+        self.sigGotoFrame.emit(self.currentFrame)
+        self.slider.blockSignals(True)
+        self.slider.setValue(self.currentFrame)
+        self.slider.blockSignals(False)
+        self.spinbox.blockSignals(True)
+        self.spinbox.setValue(self.currentFrame)
+        self.spinbox.blockSignals(False)
 
     @qc.pyqtSlot()
     def quit(self):

@@ -598,12 +598,6 @@ class TrainingWidget(qw.QMainWindow):
         self.showActionsDockAction.setCheckable(True)
         self.showActionsDockAction.setChecked(True)
 
-        self.showIntermediateAction = qw.QAction('Show intermediate result')
-        self.showIntermediateAction.setCheckable(True)
-        self.showIntermediateAction.setChecked(False)
-        self.showIntermediateAction.triggered.connect(
-            self.segWidget.showIntermediateOutput)
-
         self.debugAction = qw.QAction('Debug')
         self.debugAction.setCheckable(True)
         v = settings.value('ytrainer/debug', logging.INFO)
@@ -684,7 +678,7 @@ class TrainingWidget(qw.QMainWindow):
                                   self.displayWidget.fontSizeAction,
                                   self.displayWidget.relativeFontSizeAction,
                                   self.displayWidget.setLabelInsideAction,
-                                  self.showIntermediateAction])
+                                  self.segWidget.showIntermediateAction])
         self.docksMenu = self.viewMenu.addMenu('Dock widgets')
         self.docksMenu.addActions([self.showFileDockAction,
                                   self.showSegDockAction,
@@ -847,11 +841,8 @@ class TrainingWidget(qw.QMainWindow):
                 self.setSegmented)
         except TypeError:
             logging.error('Failed to disconnect: setSegmented')
-        print('AAA. Polygon receivers', self.displayWidget.receivers(self.displayWidget.sigPolygons))
         self.displayWidget.sigPolygons.connect(
             self.sendAndWaitSegmentation)
-        print('BBB. Polygon receivers',
-              self.displayWidget.receivers(self.displayWidget.sigPolygons))
         self.imageIndex = -1
         self.sendAndWaitSegmentation({})
 

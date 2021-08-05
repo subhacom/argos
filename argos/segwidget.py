@@ -395,7 +395,7 @@ class SegWidget(qw.QWidget):
     sigThreshMethod = qc.pyqtSignal(int)
     sigSegMethod = qc.pyqtSignal(consts.SegmentationMethod)
     sigIntermediateOutput = qc.pyqtSignal(consts.SegStep)
-    sigIntermediateWindowClosed = qc.pyqtSignal()
+    # sigIntermediateWindowClosed = qc.pyqtSignal()
     sigQuit = qc.pyqtSignal()
 
     setWmin = qc.pyqtSignal(int)
@@ -582,8 +582,10 @@ class SegWidget(qw.QWidget):
                                ' each pixel from a zero-valued pixel in the'
                                ' thresholded image.')
         layout.addRow(self._wdist_label, self._wdist)
-        self._intermediate_button = qw.QPushButton('Show intermediate result')
-        self._intermediate_button.setCheckable(True)
+        self.showIntermediateAction = qw.QAction('Show intermediate result')
+        self.showIntermediateAction.setCheckable(True)
+        self._intermediate_button = qw.QToolButton(self)
+        self._intermediate_button.setDefaultAction(self.showIntermediateAction)
         self._intermediate_combo = qw.QComboBox()
         self._intermediate_combo.addItems(segstep_dict.keys())
         layout.addRow(self._intermediate_button, self._intermediate_combo)
@@ -658,7 +660,7 @@ class SegWidget(qw.QWidget):
         self._intermediate_combo.currentTextChanged.connect(
             self.setIntermediateOutput)
         self.sigIntermediateOutput.connect(self.worker.setIntermediateOutput)
-        self._intermediate_button.clicked.connect(self.showIntermediateOutput)
+        self.showIntermediateAction.triggered.connect(self.showIntermediateOutput)
         self.sigProcess.connect(self.worker.process)
         self.sigSetOutlineStyle.connect(self.worker.setOutlineStyle)
         self.worker.sigProcessed.connect(self.sigProcessed)
@@ -702,7 +704,8 @@ class SegWidget(qw.QWidget):
     @qc.pyqtSlot(str)
     def setIntermediateOutput(self, text: str) -> None:
         self.sigIntermediateOutput.emit(segstep_dict[text])
-        self._intermediate_win.setWindowTitle(text)
+        if text != 'Final':
+            self._intermediate_win.setWindowTitle(text)
 
     @qc.pyqtSlot(bool)
     def showIntermediateOutput(self, checked):
@@ -712,6 +715,7 @@ class SegWidget(qw.QWidget):
             self._intermediate_win.show()
             self.sigIntermediateOutput.emit(segstep_dict[step])
         else:
+            self._intermediate_combo.setCurrentText('Final')
             self.sigIntermediateOutput.emit(consts.SegStep.final)
             self._intermediate_win.hide()
 
