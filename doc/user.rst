@@ -416,6 +416,41 @@ and the split of training and validation set.
    Screenshot of suggested command line after exporting annotations.
 
 
+.. _Train-backbone-network-with-YOLACT:
+
+Train YOLACT backbone network
+=============================
+
+After exporting the data to desired destination, you will find two
+folders: ``training`` and ``validation``, and a configuration file in YAML
+format with the extension ``.yaml``.
+
+Modify this configuration file to fit your requirements. Two
+parameters that may need tweaking are:
+
+- ``max_iter``: the maximum number of training iterations in this
+  configuration file.
+
+- ``batch_size``: the number of images to use in each batch of
+  training data. If the system has multiple GPUs or large enough
+  dedicated video memory, increasing this can make the training
+  faster. If the training script crashes because CUDA could not
+  allocate enough memory, then reducing this number may reduce memory
+  requirements.
+
+To train in the destination folder, use ``cd`` command in the command prompt
+to switch to this folder, create a ``weights`` folder, copy the backbone network
+(e.g. ``resnet101_reducedfc.pth`` for resnet101) to this folder and run the
+training with:
+::
+   python -m yolact.train --config=yolact_config.yaml --save_folder=weights
+
+   
+To find out various options available in the training script, try:
+::
+   python -m yolact.train -h
+
+
 .. _Track-interactively:   
    
 ****************************
