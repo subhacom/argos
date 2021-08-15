@@ -115,6 +115,7 @@ import time
 from datetime import datetime, timedelta
 import csv
 import cv2
+import numpy as np
 from matplotlib import colors
 
 from argos import caputil
@@ -122,8 +123,7 @@ from argos import caputil
 has_ccapture = False
 
 try:
-    from argos.ccapture import vcapture
-
+    from argos.ccapture import vcapture as cvcapture
     has_ccapture = True
     print('Loaded C-function for video capture.')
 except ImportError as err:
@@ -132,193 +132,197 @@ except ImportError as err:
     print(err)
 
 
-    def check_motion(current, prev, threshold, min_area, kernel_width=21,
-                     show_diff=False):
-        gray_cur = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
-        gray_cur = cv2.GaussianBlur(gray_cur, (kernel_width,
-                                               kernel_width), 0)
-        gray_prev = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
-        gray_prev = cv2.GaussianBlur(gray_prev, (kernel_width,
-                                                 kernel_width), 0)
-        frame_delta = cv2.absdiff(gray_cur, gray_prev)
-        ret, thresh_img = cv2.threshold(frame_delta, threshold, 255,
-                                        cv2.THRESH_BINARY)
-        thresh_img = cv2.dilate(thresh_img, None, iterations=2)
-        # with opencv >= 3 findContours leaves the original image is
-        # unmodified
-        contour_info = cv2.findContours(thresh_img, cv2.RETR_EXTERNAL,
-                                        cv2.CHAIN_APPROX_SIMPLE)
-        if caputil.CV2_MAJOR == 3:
-            _, contours, hierarchy = contour_info
-        elif caputil.CV2_MAJOR == 4:
-            contours, hierarchy = contour_info
-        # Useful for debugging and for exploring motion detection parameters
-        if show_diff:
-            win_diff_name = 'DEBUG - absdiff between frames'
-            cv2.namedWindow(win_diff_name, cv2.WINDOW_NORMAL)
-            win_thresh_name = 'DEBUG - thresholded absdiff'
-            cv2.namedWindow(win_thresh_name, cv2.WINDOW_NORMAL)
-            frame = cv2.applyColorMap(frame_delta, cv2.COLORMAP_JET)
-            cv2.drawContours(frame, contours, -1, -1)
-            cv2.imshow(win_diff_name, frame)
-            cv2.imshow(win_thresh_name, thresh_img)
-        moving_contours = [contour for contour in contours
-                           if cv2.contourArea(contour) > min_area]
-        return len(moving_contours) > 0
+def check_motion(current, blurred_prev, blurred_cur,
+                 threshold, min_area, kernel_width=21,
+                 show_diff=False):
+    """As a side effect, save the current blurred image in blurred_prev to
+    reduce memory allocation overhead and match cython
+    implementation
+
+    """
+    gray_cur = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
+    blurred_cur[:, :] = cv2.GaussianBlur(gray_cur, (kernel_width,
+                                                    kernel_width), 0)
+    frame_delta = cv2.absdiff(blurred_cur, blurred_prev)
+    ret, thresh_img = cv2.threshold(frame_delta, threshold, 255,
+                                    cv2.THRESH_BINARY)
+    thresh_img = cv2.dilate(thresh_img, None, iterations=2)
+    # with opencv >= 3 findContours leaves the original image is
+    # unmodified
+    contour_info = cv2.findContours(thresh_img, cv2.RETR_EXTERNAL,
+                                    cv2.CHAIN_APPROX_SIMPLE)
+    if caputil.CV2_MAJOR == 3:
+        _, contours, hierarchy = contour_info
+    elif caputil.CV2_MAJOR == 4:
+        contours, hierarchy = contour_info
+    # Useful for debugging and for exploring motion detection parameters
+    if show_diff:
+        win_diff_name = 'DEBUG - absdiff between frames'
+        cv2.namedWindow(win_diff_name, cv2.WINDOW_NORMAL)
+        win_thresh_name = 'DEBUG - thresholded absdiff'
+        cv2.namedWindow(win_thresh_name, cv2.WINDOW_NORMAL)
+        frame = cv2.applyColorMap(frame_delta, cv2.COLORMAP_JET)
+        cv2.drawContours(frame, contours, -1, -1)
+        cv2.imshow(win_diff_name, frame)
+        cv2.imshow(win_thresh_name, thresh_img)
+    moving_contours = [contour for contour in contours
+                       if cv2.contourArea(contour) > min_area]
+    if len(moving_contours) > 0:
+        blurred_prev[:, :] = blurred_cur
+    return len(moving_contours) > 0
 
 
-    def vcapture(params):
-        try:
-            input_ = int(params['input'])
-        except ValueError:
-            input_ = params['input']
-        win_name = f'Input: {input_}'
-        if params['interactive']:
-            cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
-        print(f'Opening input: {input_} of type '
-              f'{"DEVICE" if isinstance(input_, int) else "VIDEOFILE"}')
-        if (sys.platform == 'win32') and isinstance(input_, int):
-            cap = cv2.VideoCapture(input_, cv2.CAP_DSHOW)
-        else:
-            cap = cv2.VideoCapture(input_)
-        assert cap.isOpened(), f'Could not open input {input_}'
-        out = None
-        tsout = None
-        tswriter = None
-        timestamp_file = None
-        prev_frame = None
-        if isinstance(input_, int):
-            tstart = datetime.now()
-            if params['width'] > 0:
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, params['width'])
-            if params['height'] > 0:
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, params['height'])
-            print(f'Suggested size: {params["width"]}x{params["height"]}')
-            print(f'Actual size: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x'
-                  f'{cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}')
-            if params['config']:
-                cap.set(cv2.CAP_PROP_SETUP, 1)
-        else:
-            tstart = datetime.fromtimestamp(time.mktime(time.localtime(
-                os.path.getmtime(input_))))
-        ret, frame = cap.read()
-        if frame is None:
-            raise Exception('Could not get frame')
-        if not isinstance(input_, int):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        save = True
-        t_prev = None
-        contours = []
-        file_count = 0
-        read_frames = 0
-        writ_frames = 0
-        roi_x = params['roi_x']
-        roi_y = params['roi_y']
-        roi_w = params['roi_w']
-        roi_h = params['roi_h']
-        try:
-            while True:
-                ret, frame = cap.read()
-                if frame is None:
-                    print('Empty frame')
-                    break
-                frame = frame[roi_y: roi_y + roi_h, roi_x: roi_x + roi_w].copy()
-                # For camera capture, use system timestamp.  For exisiting
-                # video file, add frame delay to file modification timestamp.
-                if isinstance(input_, int):
-                    ts = datetime.now()
-                else:
-                    ts = tstart + timedelta(days=0,
-                                            seconds=read_frames / params['fps'])
-                read_frames += 1
-                if writ_frames == 0:
-                    fname, _, ext = params['output'].rpartition('.')
-                    output_file = f'{fname}_{file_count:03d}.{ext}' \
-                        if params['max_frames'] > 0 else params['output']
-                    while os.path.exists(output_file):
-                        file_count += 1
-                        output_file = f'{fname}_{file_count:03d}.{ext}'
+def vcapture(params):
+    try:
+        input_ = int(params['input'])
+    except ValueError:
+        input_ = params['input']
+    win_name = f'Input: {input_}'
+    if params['interactive']:
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+    print(f'Opening input: {input_} of type '
+          f'{"DEVICE" if isinstance(input_, int) else "VIDEOFILE"}')
+    if (sys.platform == 'win32') and isinstance(input_, int):
+        cap = cv2.VideoCapture(input_, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(input_)
+    assert cap.isOpened(), f'Could not open input {input_}'
+    out = None
+    tsout = None
+    tswriter = None
+    timestamp_file = None
+    blurred_prev = None
+    blurred = None
+    if isinstance(input_, int):
+        tstart = datetime.now()
+        if params['width'] > 0:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, params['width'])
+        if params['height'] > 0:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, params['height'])
+        print(f'Suggested size: {params["width"]}x{params["height"]}')
+        print(f'Actual size: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)}x'
+              f'{cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}')
+        if params['config']:
+            cap.set(cv2.CAP_PROP_SETUP, 1)
+    else:
+        tstart = datetime.fromtimestamp(time.mktime(time.localtime(
+            os.path.getmtime(input_))))
+    ret, frame = cap.read()
+    if frame is None:
+        raise Exception('Could not get frame')
+    if not isinstance(input_, int):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    save = True
+    t_prev = None
+    contours = []
+    file_count = 0
+    read_frames = 0
+    writ_frames = 0
+    roi_x = params['roi_x']
+    roi_y = params['roi_y']
+    roi_w = params['roi_w']
+    roi_h = params['roi_h']
+    try:
+        while True:
+            ret, frame = cap.read()
+            if frame is None:
+                print('Empty frame')
+                break
+            frame = frame[roi_y: roi_y + roi_h, roi_x: roi_x + roi_w].copy()
+            # For camera capture, use system timestamp.  For exisiting
+            # video file, add frame delay to file modification timestamp.
+            if isinstance(input_, int):
+                ts = datetime.now()
+            else:
+                ts = tstart + timedelta(days=0,
+                                        seconds=read_frames / params['fps'])
+            read_frames += 1
+            if writ_frames == 0:
+                fname, _, ext = params['output'].rpartition('.')
+                output_file = f'{fname}_{file_count:03d}.{ext}' \
+                    if params['max_frames'] > 0 else params['output']
+                while os.path.exists(output_file):
                     file_count += 1
-                    timestamp_file = f'{output_file}.csv'
-                    print('Creating output file', output_file)
-                    t_prev = ts
-                    prev_frame = frame.copy()
-                    # if isinstance(input_, int):
-                    #     tstart = ts
-                    print(f'Original frame shape: '
-                          f'Width: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)} '
-                          f'Height: {cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}\n'
-                          f'ROI width: {width}, height: {height}')
+                    output_file = f'{fname}_{file_count:03d}.{ext}'
+                file_count += 1
+                timestamp_file = f'{output_file}.csv'
+                print('Creating output file', output_file)
+                t_prev = ts
+                # if isinstance(input_, int):
+                #     tstart = ts
+                print(f'Original frame shape: '
+                      f'Width: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)} '
+                      f'Height: {cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}\n'
+                      f'ROI width: {width}, height: {height}')
 
-                    fourcc = cv2.VideoWriter_fourcc(*params['format'])
-                    out = cv2.VideoWriter(output_file, fourcc, params['fps'],
-                                          (roi_w, roi_h))
-                    tsout = open(timestamp_file, 'w', newline='')
-                    tswriter = csv.writer(tsout)
-                    tswriter.writerow(['inframe', 'outframe', 'timestamp'])
-                    writ_frames = 1
-                    continue
+                fourcc = cv2.VideoWriter_fourcc(*params['format'])
+                out = cv2.VideoWriter(output_file, fourcc, params['fps'],
+                                      (roi_w, roi_h))
+                tsout = open(timestamp_file, 'w', newline='')
+                tswriter = csv.writer(tsout)
+                tswriter.writerow(['inframe', 'outframe', 'timestamp'])
+                writ_frames = 1
 
-                # Check if current time is more than specified duration since start.
-                # If so, stop recording.
-                time_from_start = ts - tstart
-                time_from_start = time_from_start.total_seconds()
-                time_delta = ts - t_prev
-                time_delta = time_delta.total_seconds()
-                # print(f'Time from start {time_from_start}, specified duration {params["duration"]} s')
-                if (params['duration'] > 0) and (
-                        time_from_start > params['duration']):
-                    break
+            # Check if current time is more than specified duration since start.
+            # If so, stop recording.
+            time_from_start = ts - tstart
+            time_from_start = time_from_start.total_seconds()
+            time_delta = ts - t_prev
+            time_delta = time_delta.total_seconds()
+            # print(f'Time from start {time_from_start}, specified duration {params["duration"]} s')
+            if (params['duration'] > 0) and (
+                    time_from_start > params['duration']):
+                break
 
-                if params['motion_based']:
-                    save = check_motion(frame, prev_frame,
-                                        params['threshold'],
-                                        params['min_area'],
-                                        kernel_width=params['kernel_width'],
-                                        show_diff=params['show_diff'])
-                elif params['interval'] > 0:
-                    save = time_delta >= params['interval']
+            if params['motion_based']:
+                if blurred is None:
+                    blurred = np.zeros(frame.shape[:2], dtype=np.uint8)
+                    blurred_prev = np.zeros(frame.shape[:2], dtype=np.uint8)
+                save = check_motion(frame, blurred_prev, blurred,
+                                    params['threshold'],
+                                    params['min_area'],
+                                    kernel_width=params['kernel_width'],
+                                    show_diff=params['show_diff'])
+            elif params['interval'] > 0:
+                save = time_delta >= params['interval']
 
-                if save:
-                    prev_frame = frame.copy()
-                    tstring = ts.isoformat()
-                    if params['timestamp']:
-                        if params['tb'] is not None:
-                            (w, h), baseline = cv2.getTextSize(
-                                tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                            cv2.rectangle(frame, (params['tx'], params['ty']),
-                                          (params['tx'] + w, params['ty'] - h),
-                                          params['tb'], cv2.FILLED)
-                        cv2.putText(frame, tstring,
-                                    (params['tx'], params['ty']),
-                                    cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
-                                    params['tc'], 2, cv2.LINE_AA)
-                    out.write(frame)
-                    if params['show_contours'] and (len(contours) > 0):
-                        print('Color:', params['tc'])
-                        cv2.drawContours(frame, contours, -1, params['tc'], 2)
-                    tswriter.writerow(
-                        [read_frames - 1, writ_frames - 1, tstring])
-                    # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
-                    writ_frames = ((writ_frames + 1) % params['max_frames']) \
-                        if params['max_frames'] > 0 else (writ_frames + 1)
-                    t_prev = ts
+            if save:
+                tstring = ts.isoformat()
+                if params['timestamp']:
+                    if params['tb'] is not None:
+                        (w, h), baseline = cv2.getTextSize(
+                            tstring, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                        cv2.rectangle(frame, (params['tx'], params['ty']),
+                                      (params['tx'] + w, params['ty'] - h),
+                                      params['tb'], cv2.FILLED)
+                    cv2.putText(frame, tstring,
+                                (params['tx'], params['ty']),
+                                cv2.FONT_HERSHEY_SIMPLEX, params['fs'],
+                                params['tc'], 2, cv2.LINE_AA)
+                out.write(frame)
+                tswriter.writerow(
+                    [read_frames - 1, writ_frames - 1, tstring])
+                # logger.debug(f'{read_frames}\t{writ_frames}\t{tstring}')
+                writ_frames = ((writ_frames + 1) % params['max_frames']) \
+                    if params['max_frames'] > 0 else (writ_frames + 1)
+                t_prev = ts
                 if params['interactive']:
                     cv2.imshow(win_name, frame)
-                key = cv2.waitKey(1) & 0xFF
-                # if `q` or ESCAPE is pressed, break from the loop
-                if key == ord('q') or key == 27:
-                    break
-        except KeyboardInterrupt:
-            print('Caught keyboard interrupt')
-        finally:
-            print('Closing')
-            cap.release()
-            if out is not None:
-                out.release()
-            if tsout is not None:
-                tsout.close()
-            cv2.destroyAllWindows()
+            key = cv2.waitKey(1) & 0xFF
+            # if `q` or ESCAPE is pressed, break from the loop
+            if key == ord('q') or key == 27:
+                break
+    except KeyboardInterrupt:
+        print('Caught keyboard interrupt')
+    finally:
+        print('Closing')
+        cap.release()
+        if out is not None:
+            out.release()
+        if tsout is not None:
+            tsout.close()
+        cv2.destroyAllWindows()
+    return read_frames
 
 
 def parse_interval(tstr):
@@ -396,7 +400,7 @@ def check_params(args):
         r, g, b = [int(val) * 255 for val in colors.to_rgb(params['tb'])]
         params['tb'] = (b, g, r)
     else:
-        params['tb'] = None
+        params['tb'] = (0, 0, 0)
 
     return params
 
@@ -436,9 +440,9 @@ def make_parser():
                                    ' order to consider it actual movement as'
                                    'opposed to noise.'
                                    ' Works with --motion_based option')
-    motion_group.add_argument('--show_contours', action='store_true',
-                              help='Draw the contours exceeding `min_area`.'
-                                   ' Useful for debugging')
+    # motion_group.add_argument('--show_contours', action='store_true',
+    #                           help='Draw the contours exceeding `min_area`.'
+    #                                ' Useful for debugging')
     motion_group.add_argument('--show_diff', action='store_true',
                               help='Show the absolute difference between'
                                    ' successive frames and the thresholded '
@@ -498,8 +502,8 @@ def make_parser():
                               help='Frame height')
     parser.add_argument('--config', action='store_true',
                         help='Show dialog to configure camera.')
-    # parser.add_argument('--logbuf', action='store_true',
-    #                     help='Buffer the log messages to improve speed')
+    parser.add_argument('--use_c', action='store_true',
+                        help='Try to use Cython implementation')
     return parser
 
 
@@ -521,24 +525,37 @@ if __name__ == '__main__':
                    'roi_h': roi_h,
                    'width': width,
                    'height': height})
-
-    if has_ccapture:
-        vcapture(params['input'], params['output'], params['format'],
-                 params['fps'],
-                 params['interactive'],
-                 params['width'], params['height'],
-                 params['roi_x'], params['roi_y'],
-                 params['roi_w'], params['roi_h'],
-                 params['interval'],
-                 params['duration'],
-                 params['max_frames'],
-                 params['motion_based'],
-                 params['config'],
-                 params['threshold'],
-                 params['min_area'],
-                 params['kernel_width'])
+    read_frames = 0
+    start = time.perf_counter()
+    if has_ccapture and params['use_c']:
+        read_frames = cvcapture(
+            params['input'], params['output'], params['format'],
+            params['fps'],
+            params['interactive'],
+            params['width'], params['height'],
+            params['roi_x'], params['roi_y'],
+            params['roi_w'], params['roi_h'],
+            params['interval'],
+            params['duration'],
+            params['max_frames'],
+            params['motion_based'],
+            params['config'],
+            params['threshold'],
+            params['min_area'],
+            params['kernel_width'],
+            params['timestamp'],                 
+            params['show_diff'],
+            np.array(params['tb'], dtype=int),
+            np.array(params['tc'], dtype=int),
+            params['tx'],
+            params['ty'],
+            params['fs']
+        )
     else:
-        vcapture(params)
+        read_frames = vcapture(params)
+    end = time.perf_counter()
+    dt = end - start
+    print(f'Read {read_frames} frames in {dt} seconds')
 
 #
 # capture.py ends here
