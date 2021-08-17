@@ -188,7 +188,7 @@ class RandomSaturation(object):
         assert self.lower >= 0, "contrast lower must be non-negative."
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if random.randint(2):
+        if random.randint(0, 1):
             image[:, :, 1] *= random.uniform(self.lower, self.upper)
 
         return image, masks, boxes, labels
@@ -200,7 +200,7 @@ class RandomHue(object):
         self.delta = delta
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if random.randint(2):
+        if random.randint(0, 1):
             image[:, :, 0] += random.uniform(-self.delta, self.delta)
             image[:, :, 0][image[:, :, 0] > 360.0] -= 360.0
             image[:, :, 0][image[:, :, 0] < 0.0] += 360.0
@@ -216,7 +216,7 @@ class RandomLightingNoise(object):
     def __call__(self, image, masks=None, boxes=None, labels=None):
         # Don't shuffle the channels please, why would you do this
 
-        # if random.randint(2):
+        # if random.randint(0, 1):
         #     swap = self.perms[random.randint(len(self.perms))]
         #     shuffle = SwapChannels(swap)  # shuffle channels
         #     image = shuffle(image)
@@ -247,7 +247,7 @@ class RandomContrast(object):
 
     # expects float image
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if random.randint(2):
+        if random.randint(0, 1):
             alpha = random.uniform(self.lower, self.upper)
             image *= alpha
         return image, masks, boxes, labels
@@ -260,7 +260,7 @@ class RandomBrightness(object):
         self.delta = delta
 
     def __call__(self, image, masks=None, boxes=None, labels=None):
-        if random.randint(2):
+        if random.randint(0, 1):
             delta = random.uniform(-self.delta, self.delta)
             image += delta
         return image, masks, boxes, labels
@@ -327,8 +327,8 @@ class RandomSampleCrop(object):
                 if h / w < 0.5 or h / w > 2:
                     continue
 
-                left = random.uniform(width - w)
-                top = random.uniform(height - h)
+                left = random.uniform(0, width - w)
+                top = random.uniform(0, height - h)
 
                 # convert to integer rect x1,y1,x2,y2
                 rect = np.array([int(left), int(top), int(left+w), int(top+h)])
@@ -410,7 +410,7 @@ class Expand(object):
         self.mean = mean
 
     def __call__(self, image, masks, boxes, labels):
-        if random.randint(2):
+        if random.randint(0, 1):
             return image, masks, boxes, labels
 
         height, width, depth = image.shape
@@ -443,7 +443,7 @@ class Expand(object):
 class RandomMirror(object):
     def __call__(self, image, masks, boxes, labels):
         _, width, _ = image.shape
-        if random.randint(2):
+        if random.randint(0, 1):
             image = image[:, ::-1]
             masks = masks[:, :, ::-1]
             boxes = boxes.copy()
@@ -454,7 +454,7 @@ class RandomMirror(object):
 class RandomFlip(object):
     def __call__(self, image, masks, boxes, labels):
         height , _ , _ = image.shape
-        if random.randint(2):
+        if random.randint(0, 1):
             image = image[::-1, :]
             masks = masks[:, ::-1, :]
             boxes = boxes.copy()
@@ -465,8 +465,8 @@ class RandomFlip(object):
 class RandomRot90(object):
     def __call__(self, image, masks, boxes, labels):
         old_height , old_width , _ = image.shape
-        k = random.randint(4)
-        image = np.rot90(image,k)
+        k = random.randint(0, 3)
+        image = np.rot90(image, k)
         masks = np.array([np.rot90(mask,k) for mask in masks])
         boxes = boxes.copy()
         for _ in range(k):
@@ -517,7 +517,7 @@ class PhotometricDistort(object):
     def __call__(self, image, masks, boxes, labels):
         im = image.copy()
         im, masks, boxes, labels = self.rand_brightness(im, masks, boxes, labels)
-        if random.randint(2):
+        if random.randint(0, 1):
             distort = Compose(self.pd[:-1])
         else:
             distort = Compose(self.pd[1:])
