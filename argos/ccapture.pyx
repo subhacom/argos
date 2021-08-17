@@ -251,9 +251,9 @@ cpdef int vcapture(str input_, str output, str fmt, int fps,
                     writ_frames += 1
                 if interactive:
                     cv2.imshow(outfname, roi)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:
-                break
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord('q') or key == 27:
+                       break
     except KeyboardInterrupt:
         print('Caught keyboard interrupt')
     except FileNotFoundError:

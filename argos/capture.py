@@ -308,10 +308,10 @@ def vcapture(params):
                 t_prev = ts
                 if params['interactive']:
                     cv2.imshow(win_name, frame)
-            key = cv2.waitKey(1) & 0xFF
-            # if `q` or ESCAPE is pressed, break from the loop
-            if key == ord('q') or key == 27:
-                break
+                    key = cv2.waitKey(1) & 0xFF
+                    # if `q` or ESCAPE is pressed, break from the loop
+                    if key == ord('q') or key == 27:
+                        break
     except KeyboardInterrupt:
         print('Caught keyboard interrupt')
     finally:
