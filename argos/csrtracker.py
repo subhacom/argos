@@ -114,7 +114,7 @@ class CSRMultiTracker(qc.QObject):
         # Now do the checks for trackers that are off target
 
         self.age += 1
-        if len(self.trackers) == 0:
+        if len(self.trackers) == 0 and bboxes.size > 0:
             valid = self.find_nonoverlapping(bboxes)
             ret = {self._add_tracker(frame, valid[ii]): valid[ii]
                    for ii in range(valid.shape[0])}

@@ -3,7 +3,7 @@ from torchvision import transforms
 import cv2
 import numpy as np
 import types
-from numpy import random
+import random
 from math import sqrt
 
 from yolact.data import cfg, MEANS, STD
