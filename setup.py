@@ -59,7 +59,7 @@ ext_modules = [
 ]
 setup(
     name='argos_toolkit',
-    version='0.1.0-22',
+    version='0.1.1',
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
     description='Software utility for tracking multiple objects (animals) in a video.',
