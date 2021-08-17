@@ -450,6 +450,15 @@ To find out various options available in the training script, try:
 ::
    python -m yolact.train -h
 
+**Valid backbones**: YOLACT defines some configurations based on certain backbones (defined in ``yolact/data/config.py``). These are (along with the filename for imagenet-pretrained weights): ResNet50 (``resnet50-19c8e357.pth``) and ResNet101  (``resnet101_reducedfc.pth``), and DarkNet53 (``darknet53.pth``). The configurations are:
+
+- ``yolact_base_config``: resnet101, maxsize: 550
+- ``yolact_im400_config``: resnet101, maxsize: 400
+- ``yolact_im700_config``: resnet101, maxsize: 700
+- ``yolact_resnet50_config``: resnet50, maxsize: 550
+- ``yolact_resnet50_pascal_config``: resnet50 for training with Pascal SBD dataset
+
+When training with a custom dataset, use one of the above as ``base`` in the annotation tool when exporting training data.
 
 .. _Track-interactively:   
    

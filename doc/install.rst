@@ -149,3 +149,27 @@ If you have Mac with Intel CPU, and encounter an error after the command above, 
 After this, try running the review tool::
 
     python -m argos.review
+
+
+Installing DCNv2 for YOLACT++
+=============================
+
+YOLACT++ is an improved version of YOLACT that uses DCNv2 library for
+Deformable Convolution Network. This library comes with YOLACT source
+code (``yoact/external/DCNv2``). 
+
+To build this library you need CUDA toolkit from NVidia
+installed. Also, you need the Visual Studio Build Tools described
+above. After that 
+
+- First activate your conda environment where YOLACT and Argos are
+installed.
+
+- Change directory to ``yoact/external/DCNv2``.
+  
+- Run ``python setup.py build develop``
+
+- Run ``pip install .``
+
+
+You can find some details in the YOLACT README file.
