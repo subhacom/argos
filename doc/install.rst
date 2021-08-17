@@ -156,11 +156,13 @@ Installing DCNv2 for YOLACT++
 
 YOLACT++ is an improved version of YOLACT that uses DCNv2 library for
 Deformable Convolution Network. This library comes with YOLACT source
-code (``yoact/external/DCNv2``). 
+code (``yoact/external/DCNv2``). You can install it with pip:
 
-To build this library you need CUDA toolkit from NVidia
+``pip install DCNv2``.
+
+To build this library on your own you need CUDA toolkit from NVidia
 installed. Also, you need the Visual Studio Build Tools described
-above. After that 
+above. After that
 
 - First activate your conda environment where YOLACT and Argos are
 installed.
