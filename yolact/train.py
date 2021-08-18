@@ -326,7 +326,9 @@ def train(args):
     net = CustomDataParallel(NetLoss(net, criterion))
     if args.cuda:
         net = net.cuda()
-
+        generator = torch.Generator(device='cuda')
+    else:
+        generator = torch.Generator()
     # Initialize everything
     if not cfg.freeze_bn:
         yolact_net.freeze_bn()  # Freeze bn so we don't kill our means
@@ -345,7 +347,6 @@ def train(args):
 
     # Which learning rate adjustment step are we on? lr' = lr * gamma ^ step_index
     step_index = 0
-
     data_loader = data.DataLoader(
         dataset,
         args.batch_size,
@@ -353,7 +354,7 @@ def train(args):
         shuffle=True,
         collate_fn=detection_collate,
         pin_memory=True,
-        generator=torch.Generator(device='cuda')
+        generator=generator
     )
 
     time_avg = MovingAverage()
