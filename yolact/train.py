@@ -353,6 +353,7 @@ def train(args):
         shuffle=True,
         collate_fn=detection_collate,
         pin_memory=True,
+        generator=torch.Generator(device='cuda')
     )
 
     time_avg = MovingAverage()
