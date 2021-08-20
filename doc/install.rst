@@ -161,8 +161,8 @@ code (``yoact/external/DCNv2``). You can install it with pip:
 ``pip install DCNv2``.
 
 To build this library on your own you need CUDA toolkit from NVidia
-installed. Also, you need the Visual Studio Build Tools described
-above. After that
+installed. Also, on MS Windows you need the Visual Studio Build Tools
+described above. After that
 
 - First activate your conda environment where YOLACT and Argos are
 installed.
