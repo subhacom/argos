@@ -31,7 +31,7 @@ https://stackoverflow.com/questions/27532112/how-to-handle-python-packages-with-
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 import numpy
-
+import argos
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
@@ -59,7 +59,7 @@ ext_modules = [
 ]
 setup(
     name='argos_toolkit',
-    version='0.1.1',
+    version=argos.__version__,
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
     description='Software utility for tracking multiple objects (animals) in a video.',

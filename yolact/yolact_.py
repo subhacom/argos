@@ -21,7 +21,7 @@ from .utils.functions import MovingAverage, make_net
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
 try:
     torch.cuda.current_device()
-except AssertionError:
+except (AssertionError, RuntimeError):
     print('WARNING: CUDA not supported in this installation of PyTorch')
 
 # As of March 10, 2019, Pytorch DataParallel still doesn't support JIT Script Modules
