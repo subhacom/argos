@@ -18,11 +18,13 @@ from math import floor
 
 # Data type for rotated rectangle array
 from PyQt5 import QtCore as qc, QtGui as qg, QtWidgets as qw
+import qdarkstyle
 from scipy import optimize
 from sklearn.utils.murmurhash import murmurhash3_32
 
-from argos.constants import OutlineStyle, DistanceMetric
+# import pkgutil
 
+from argos.constants import OutlineStyle, DistanceMetric
 
 
 class WaitingSpinner(qw.QWidget):
@@ -38,7 +40,13 @@ class WaitingSpinner(qw.QWidget):
     mCurrentCounter = 0
     mIsSpinning = False
 
-    def __init__(self, centerOnParent=True, disableParentWhenSpinning=True, *args, **kwargs):
+    def __init__(
+        self,
+        centerOnParent=True,
+        disableParentWhenSpinning=True,
+        *args,
+        **kwargs,
+    ):
         super(WaitingSpinner, self).__init__(*args, **kwargs)
         self.mCenterOnParent = centerOnParent
         self.mDisableParentWhenSpinning = disableParentWhenSpinning
@@ -63,13 +71,16 @@ class WaitingSpinner(qw.QWidget):
         self.setFixedSize(size, size)
 
     def updateTimer(self):
-        self.timer.setInterval(1000 / (self.mNumberOfLines *
-                                       self.mRevolutionsPerSecond))
+        self.timer.setInterval(
+            1000 / (self.mNumberOfLines * self.mRevolutionsPerSecond)
+        )
 
     def updatePosition(self):
         if self.parentWidget() and self.mCenterOnParent:
-            self.move(self.parentWidget().width() / 2 - self.width() / 2,
-                      self.parentWidget().height() / 2 - self.height() / 2)
+            self.move(
+                self.parentWidget().width() / 2 - self.width() / 2,
+                self.parentWidget().height() / 2 - self.height() / 2,
+            )
 
     def lineCountDistanceFromPrimary(self, current, primary, totalNrOfLines):
         distance = primary - current
@@ -77,14 +88,17 @@ class WaitingSpinner(qw.QWidget):
             distance += totalNrOfLines
         return distance
 
-    def currentLineColor(self, countDistance, totalNrOfLines, trailFadePerc,
-                         minOpacity, color):
+    def currentLineColor(
+        self, countDistance, totalNrOfLines, trailFadePerc, minOpacity, color
+    ):
         if countDistance == 0:
             return color
 
         minAlphaF = minOpacity / 100.0
 
-        distanceThreshold = np.ceil((totalNrOfLines - 1) * trailFadePerc / 100.0)
+        distanceThreshold = np.ceil(
+            (totalNrOfLines - 1) * trailFadePerc / 100.0
+        )
         if countDistance > distanceThreshold:
             color.setAlphaF(minAlphaF)
 
@@ -107,22 +121,34 @@ class WaitingSpinner(qw.QWidget):
 
         for i in range(self.mNumberOfLines):
             painter.save()
-            painter.translate(self.mInnerRadius + self.mLineLength,
-                              self.mInnerRadius + self.mLineLength)
+            painter.translate(
+                self.mInnerRadius + self.mLineLength,
+                self.mInnerRadius + self.mLineLength,
+            )
             rotateAngle = 360.0 * i / self.mNumberOfLines
             painter.rotate(rotateAngle)
             painter.translate(self.mInnerRadius, 0)
-            distance = self.lineCountDistanceFromPrimary(i,
-                                                         self.mCurrentCounter,
-                                                         self.mNumberOfLines)
-            color = self.currentLineColor(distance, self.mNumberOfLines,
-                                          self.mTrailFadePercentage,
-                                          self.mMinimumTrailOpacity,
-                                          self.mColor)
+            distance = self.lineCountDistanceFromPrimary(
+                i, self.mCurrentCounter, self.mNumberOfLines
+            )
+            color = self.currentLineColor(
+                distance,
+                self.mNumberOfLines,
+                self.mTrailFadePercentage,
+                self.mMinimumTrailOpacity,
+                self.mColor,
+            )
             painter.setBrush(color)
-            painter.drawRoundedRect(qg.QRect(0, -self.mLineWidth // 2,
-                                             self.mLineLength, self.mLineLength),
-                                    self.mRoundness, qc.Qt.RelativeSize)
+            painter.drawRoundedRect(
+                qg.QRect(
+                    0,
+                    -self.mLineWidth // 2,
+                    self.mLineLength,
+                    self.mLineLength,
+                ),
+                self.mRoundness,
+                qc.Qt.RelativeSize,
+            )
             painter.restore()
 
     def start(self):
@@ -149,6 +175,24 @@ class WaitingSpinner(qw.QWidget):
             self.mCurrentCounter = 0
 
 
+def setStyleSheet(stylesheetname):
+    """Set stylesheet from the _stylesheets resource (from https://github.com/Alexhuszagh/BreezeStyleSheets).
+
+    NOT USED BECAUSE THIS IS UNUSABLE!
+    """
+    # ss = pkgutil.get_data(__package__, f'_stylesheets/{stylesheetname}/stylesheet.qss')
+    # ss = ss.decode('utf-8')
+    if stylesheetname == 'dark':
+        ss = qdarkstyle.load_stylesheet(palette=qdarkstyle.DarkPalette)
+    elif stylesheetname == 'light':
+        ss = qdarkstyle.load_stylesheet(palette=qdarkstyle.LightPalette)
+    else:
+        ss = ''
+    qw.QApplication.instance().setStyleSheet(ss)
+    settings = qc.QSettings()
+    settings.setValue('theme', stylesheetname)
+
+
 def init():
     """Initialize logging and Qt settings."""
     qc.QCoreApplication.setOrganizationName('NIH')
@@ -156,22 +200,23 @@ def init():
     qc.QCoreApplication.setApplicationName('Argos')
 
     settings = qc.QSettings()
-    logging.basicConfig(stream=sys.stdout,
-                        format='%(asctime)s '
-                               'p=%(processName)s[%(process)d] '
-                               't=%(threadName)s[%(thread)d] '
-                               '%(filename)s#%(lineno)d:%(funcName)s: '
-                               '%(message)s',
-                        level=logging.DEBUG)
+    logging.basicConfig(
+        stream=sys.stdout,
+        format='%(asctime)s '
+        'p=%(processName)s[%(process)d] '
+        't=%(threadName)s[%(thread)d] '
+        '%(filename)s#%(lineno)d:%(funcName)s: '
+        '%(message)s',
+        level=logging.DEBUG,
+    )
     return settings
 
 
 def to_qpolygon(points, scale=1.0):
-    """Convert a sequence of (x, y) points into a `qg.QPolygonF`.
-
-    """
+    """Convert a sequence of (x, y) points into a `qg.QPolygonF`."""
     return qg.QPolygonF(
-        [qc.QPointF(p0 * scale, p1 * scale) for p0, p1 in points])
+        [qc.QPointF(p0 * scale, p1 * scale) for p0, p1 in points]
+    )
 
 
 def cond_bbox_overlap(ra, rb, min_iou):
@@ -249,7 +294,7 @@ def cond_proximity(points_a, points_b, min_dist):
 
 def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
     """Convert BGR/gray/bw frame from array into QImage".
-    
+
     OpenCV reads images into 2D or 3D matrix. This function converts it into
     Qt QImage.
 
@@ -272,8 +317,9 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
         qimg = qg.QImage(img.tobytes(), w, h, w * c, qg.QImage.Format_RGB888)
     elif len(frame.shape) == 2:  # grayscale
         h, w = frame.shape
-        qimg = qg.QImage(frame.tobytes(), w, h, w * 1,
-                         qg.QImage.Format_Grayscale8)
+        qimg = qg.QImage(
+            frame.tobytes(), w, h, w * 1, qg.QImage.Format_Grayscale8
+        )
     if copy:
         return qimg.copy()
     return qimg
@@ -286,11 +332,15 @@ try:
 
     # pyximport.install(setup_args={"include_dirs": np.get_include()},
     #                  reload_support=True)
-    from argos.cutility import (rect2points, tlwh2xyrh, xyrh2tlwh,
-                                rect_intersection,
-                                rect_iou,
-                                rect_ios,
-                                pairwise_distance)
+    from argos.cutility import (
+        rect2points,
+        tlwh2xyrh,
+        xyrh2tlwh,
+        rect_intersection,
+        rect_iou,
+        rect_ios,
+        pairwise_distance,
+    )
 
     logging.info('Loaded C-utilities with pyximport')
     print('Loaded C-utilities with pyximport')
@@ -298,9 +348,9 @@ except ImportError as err:
     print('Could not load C-utilities with pyximport. Using pure Python.')
     print(err)
     logging.info(
-        'Could not load C-utilities with pyximport. Using pure Python.')
+        'Could not load C-utilities with pyximport. Using pure Python.'
+    )
     logging.info(f'{err}')
-
 
     def points2rect(p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
         """Convert diagonally opposite vertices into (x, y, w, h) format
@@ -322,30 +372,36 @@ except ImportError as err:
         h = max(y) - ytop
         return np.array((xleft, ytop, w, h))
 
-
     def rect2points(rect: np.ndarray) -> np.ndarray:
         """Convert topleft, width, height format rectangle into four anti-clockwise
         vertices"""
-        return np.vstack([rect[:2],
-                          (rect[0], rect[1] + rect[3]),
-                          rect[:2] + rect[2:],
-                          (rect[0] + rect[2], rect[1])])
-
+        return np.vstack(
+            [
+                rect[:2],
+                (rect[0], rect[1] + rect[3]),
+                rect[:2] + rect[2:],
+                (rect[0] + rect[2], rect[1]),
+            ]
+        )
 
     def tlwh2xyrh(rect):
         """Convert top-left, width, height into center, aspect ratio, height"""
-        return np.array((rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0,
-                         rect[2] / float(rect[3]), rect[3]))
-
+        return np.array(
+            (
+                rect[0] + rect[2] / 2.0,
+                rect[1] + rect[3] / 2.0,
+                rect[2] / float(rect[3]),
+                rect[3],
+            )
+        )
 
     def xyrh2tlwh(rect: np.ndarray) -> np.ndarray:
         """Convert centre, aspect ratio, height into top-left, width, height
         format"""
         w = rect[2] * rect[3]
-        return np.asanyarray((rect[0] - w / 2.0, rect[1] - rect[3] / 2.0,
-                              w, rect[3]),
-                             dtype=int)
-
+        return np.asanyarray(
+            (rect[0] - w / 2.0, rect[1] - rect[3] / 2.0, w, rect[3]), dtype=int
+        )
 
     def rect_intersection(ra: np.ndarray, rb: np.ndarray) -> np.ndarray:
         """Find if two axis-aligned rectangles intersect.
@@ -377,7 +433,6 @@ except ImportError as err:
             ret[:] = (x, y, dx, dy)
         return ret
 
-
     def rect_iou(ra: np.ndarray, rb: np.ndarray) -> float:
         """Compute Intersection over Union of two axis-aligned rectangles.
 
@@ -406,14 +461,13 @@ except ImportError as err:
             raise ValueError('Invalid intersection')
         return ret
 
-
     def rect_ios(ra: np.ndarray, rb: np.ndarray) -> float:
         """Compute intersection over area of smaller of two axis-aligned
         rectangles.
 
         This is the ratio of the area of intersection to the area of the smaller
         of the two rectangles.
-        
+
         Parameters
         ----------
         ra: np.ndarray
@@ -437,10 +491,12 @@ except ImportError as err:
             raise ValueError('Invalid intersection')
         return ret
 
-
-    def pairwise_distance(new_bboxes: np.ndarray, bboxes: np.ndarray,
-                          boxtype: OutlineStyle,
-                          metric: DistanceMetric) -> np.ndarray:
+    def pairwise_distance(
+        new_bboxes: np.ndarray,
+        bboxes: np.ndarray,
+        boxtype: OutlineStyle,
+        metric: DistanceMetric,
+    ) -> np.ndarray:
         """Computes the distance between all pairs of rectangles.
 
         Parameters
@@ -463,7 +519,7 @@ except ImportError as err:
         np.ndarray
             Row ``ii``, column ``jj`` contains the computed distance between
             ``new_bboxes[ii]`` and ``bboxes[jj]``.
-         """
+        """
         dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]), dtype=np.float)
         if metric == DistanceMetric.euclidean:
             centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
@@ -475,26 +531,29 @@ except ImportError as err:
             if boxtype == OutlineStyle.bbox:  # This can be handled efficiently
                 for ii in range(len(new_bboxes)):
                     for jj in range(len(bboxes)):
-                        dist[ii, jj] = 1.0 - rect_iou(bboxes[jj],
-                                                      new_bboxes[ii])
+                        dist[ii, jj] = 1.0 - rect_iou(
+                            bboxes[jj], new_bboxes[ii]
+                        )
             else:
                 raise NotImplementedError(
-                    'Only handling axis-aligned bounding boxes')
+                    'Only handling axis-aligned bounding boxes'
+                )
         elif metric == DistanceMetric.ios and boxtype == OutlineStyle.bbox:
             for ii in range(len(new_bboxes)):
                 for jj in range(len(bboxes)):
-                    dist[ii, jj] = 1.0 - rect_ios(bboxes[jj],
-                                                  new_bboxes[ii])
+                    dist[ii, jj] = 1.0 - rect_ios(bboxes[jj], new_bboxes[ii])
         else:
             raise NotImplementedError(f'Unknown metric {metric}')
         return dist
 
 
-def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
-                 boxtype: OutlineStyle,
-                 metric: DistanceMetric = DistanceMetric.euclidean,
-                 max_dist: float = 10000
-                 ) -> Tuple[Dict[int, int], Set[int], Set[int]]:
+def match_bboxes(
+    id_bboxes: dict,
+    new_bboxes: np.ndarray,
+    boxtype: OutlineStyle,
+    metric: DistanceMetric = DistanceMetric.euclidean,
+    max_dist: float = 10000,
+) -> Tuple[Dict[int, int], Set[int], Set[int]]:
     """Match the rectangular bounding boxes in `new_bboxes` to the closest
     object in the `id_bboxes` dictionary.
 
@@ -534,14 +593,17 @@ def match_bboxes(id_bboxes: dict, new_bboxes: np.ndarray,
         return ({}, set(range(len(new_bboxes))), {})
     labels = list(id_bboxes.keys())
     bboxes = np.array(np.rint(list(id_bboxes.values())), dtype=np.int_)
-    dist_matrix = pairwise_distance(new_bboxes, bboxes, boxtype=boxtype,
-                                    metric=metric)
+    dist_matrix = pairwise_distance(
+        new_bboxes, bboxes, boxtype=boxtype, metric=metric
+    )
     row_ind, col_ind = optimize.linear_sum_assignment(dist_matrix)
     if metric == DistanceMetric.euclidean:
         max_dist *= max_dist
-    result = [(row, labels[col], (labels[col], row))
-              for row, col in zip(row_ind, col_ind)
-              if dist_matrix[row, col] < max_dist]
+    result = [
+        (row, labels[col], (labels[col], row))
+        for row, col in zip(row_ind, col_ind)
+        if dist_matrix[row, col] < max_dist
+    ]
     if len(result) > 0:
         good_rows, good_cols, matched = zip(*result)
         good_rows = set(good_rows)
@@ -640,14 +702,14 @@ def extract_frames(vidfile, nframes, scale=1.0, outdir='.', random=False):
         if frame is None:
             break
         if idx[jj] == ii:
-            size = (int(frame.shape[1] * scale),
-                int(frame.shape[0] * scale))
+            size = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
             if scale < 1:
                 frame = cv2.resize(frame, size, cv2.INTER_AREA)
             elif scale > 1:
                 frame = cv2.resize(frame, size, cv2.INTER_CUBIC)
-            cv2.imwrite(os.path.join(outdir,
-                                     f'{prefix}_{idx[jj]:06d}.png'), frame)
+            cv2.imwrite(
+                os.path.join(outdir, f'{prefix}_{idx[jj]:06d}.png'), frame
+            )
             jj += 1
         ii += 1
     cap.release()

@@ -15,17 +15,18 @@ class OutlineStyle(enum.Enum):
 
     Attributes
     ----------
-    bbox: 
+    bbox:
         Axis-aligned bounding box.
-    minrect: 
+    minrect:
         Minimum area bounding rectangle, this is a tighter
         rectangle than bbox, and can be at an angle.
-    contour: 
-        Contour of the object.    
-    fill: 
+    contour:
+        Contour of the object.
+    fill:
         Color-filled contour of the object
 
     """
+
     bbox = enum.auto()
     minrect = enum.auto()
     contour = enum.auto()
@@ -37,7 +38,7 @@ class SegmentationMethod(enum.Enum):
 
     Attributes
     ----------
-    threshold: 
+    threshold:
         Use thresholding and then bounding boxes of the blobs.
     contour:
         Use thresholding and then filled-contours of the blobs.
@@ -47,6 +48,7 @@ class SegmentationMethod(enum.Enum):
     watershed:
         Use watershed algorithm for segmentation.
     """
+
     threshold = enum.auto()
     contour = enum.auto()
     dbscan = enum.auto()
@@ -72,6 +74,7 @@ class SegStep(enum.Enum):
         Final segmentation. This is a placeholder to avoid showing any
         separate window for the results of the intermediate steps.
     """
+
     blur = enum.auto()
     threshold = enum.auto()
     segmented = enum.auto()
@@ -97,13 +100,15 @@ class DistanceMetric(enum.Enum):
        segmentation, we want to merge such objects, and a large IoS
        suggests merge.
     """
+
     iou = enum.auto()
     euclidean = enum.auto()
-    ios = enum.auto()   # intersection over smaller
+    ios = enum.auto()  # intersection over smaller
 
 
 class TrackState(enum.Enum):
     """Possible tracking states of an object."""
+
     tentative = enum.auto()
     confirmed = enum.auto()
     deleted = enum.auto()
@@ -123,7 +128,7 @@ class DrawingGeom(enum.Enum):
     ----------
     rectangle:
         Rectangle (use ``(x, y, w, h)`` format)
-    
+
     polygon:
         Polygon defined by sequence of vertices like ``((x0, y0), (x1,
         y1), (x2, y2), ...)``
@@ -133,11 +138,12 @@ class DrawingGeom(enum.Enum):
         the image.
 
     """
+
     rectangle = enum.auto()
     polygon = enum.auto()
     arena = enum.auto()
 
-    
+
 class ColorMode(enum.Enum):
     """Coloring scheme to be used when drawing object boundaries and IDs.
 
@@ -151,6 +157,7 @@ class ColorMode(enum.Enum):
         Pick a random color for each object.
 
     """
+
     single = enum.auto()
     cmap = enum.auto()
     auto = enum.auto()
@@ -183,18 +190,18 @@ idx:
 class ChangeCode(enum.Enum):
     """Code for user defined track changes.
     These are:
-       
+
     In this and all future frames:
 
     Attributes
     ----------
-    op_swap: 
+    op_swap:
         Swap IDs (``new`` becomes ``orig`` and ``orig`` becomes ``new``).
-    op_assign: 
+    op_assign:
         Assign ``new`` ID to ``orig`` ID.
-    op_delete: 
+    op_delete:
         Delete ``orig`` (``new`` not required)
-    op_merge:         
+    op_merge:
         Merge ``new`` into ``orig``, this is kept for possible future
         extension.
 
@@ -208,6 +215,7 @@ class ChangeCode(enum.Enum):
     op_delete_cur
 
     """
+
     op_swap = enum.auto()
     op_swap_cur = enum.auto()
     op_assign = enum.auto()
@@ -224,10 +232,14 @@ change_name = {
     ChangeCode.op_delete: 'delete',
     ChangeCode.op_assign_cur: 'assign at current',
     ChangeCode.op_swap_cur: 'swap at current',
-    ChangeCode.op_delete_cur: 'delete at current'}
+    ChangeCode.op_delete_cur: 'delete at current',
+}
 """
 Dict mapping the change codes to their human readable names.
 """
 
 #: number of frames to extract by default
 EXTRACT_FRAMES = 200
+
+
+STYLE_SHEETS = ['default', 'light', 'dark']
