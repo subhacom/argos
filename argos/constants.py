@@ -241,5 +241,5 @@ Dict mapping the change codes to their human readable names.
 #: number of frames to extract by default
 EXTRACT_FRAMES = 200
 
-
+#: styles
 STYLE_SHEETS = ['default', 'light', 'dark']

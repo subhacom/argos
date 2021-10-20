@@ -1,0 +1,12 @@
+*.pyc
+*.pyd
+*.pth
+*.h5
+*.avi
+*.log
+*.png
+*~
+doc/build/
+/dist/
+/build/
+/*egg-info/
