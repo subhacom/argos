@@ -655,7 +655,6 @@ class TrackReader(qc.QObject):
         self._change_idx += 1
         self.changeList.add(change)
         self.sigChangeList.emit(self.changeList)
-        self.sigDataFile.emit(self.track_filename, True)
         logging.debug(
             f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}'
         )
@@ -2011,6 +2010,8 @@ class ReviewWidget(qw.QWidget):
             items = widget.selectedItems()
         else:
             return
+        if len(items) == 0:
+            return
         selected = [int(item.text()) for item in items]
         self.rightView.scene().setSelected(selected)
         self.rightView.scene().removeSelected()
@@ -2038,6 +2039,7 @@ class ReviewWidget(qw.QWidget):
             )
             for item in right_items:
                 self.right_list.takeItem(self.right_list.row(item))
+        self.sigDataFile.emit(self.track_filename, True)
 
     @qc.pyqtSlot()
     def deleteSelectedFut(self) -> None:
@@ -2719,6 +2721,7 @@ class ReviewWidget(qw.QWidget):
         self.sigRightTrackList.emit(list(tracks.keys()))
         self.right_tracks = self._flag_tracks({}, tracks)
         self.sigRightTracks.emit(self.right_tracks)
+        self.sigDataFile.emit(self.track_filename, True)
 
     @qc.pyqtSlot()
     def videoEnd(self):
@@ -2794,13 +2797,15 @@ class ReviewerMain(qw.QMainWindow):
         viewMenu.addAction(self.reviewWidget.vidinfoAction)
         themeGroup = qw.QActionGroup(self.reviewWidget)
         themeGroup.setExclusive(True)
+        selected = settings.value('theme', 'dark')
         for theme in STYLE_SHEETS:
             action = themeGroup.addAction(theme.capitalize())
             action.setCheckable(True)
             action.triggered.connect(
                 lambda chk, name=theme: ut.setStyleSheet(name)
             )
-        selected = settings.value('theme', 'dark')
+            if theme == selected:
+                action.setChecked(True)
         ut.setStyleSheet(selected)
         themeMenu = viewMenu.addMenu('&Theme')
         themeMenu.addActions(themeGroup.actions())
@@ -2900,7 +2905,7 @@ class ReviewerMain(qw.QMainWindow):
         settings.sync()
         logging.debug('Saved settings')
 
-    @qc.pyqtSlot(str)
+    @qc.pyqtSlot(str, bool)
     def updateTitle(self, filename: str, changed: bool) -> None:
         if changed:
             self.setWindowTitle(f'* {filename}: Argos:Review')
