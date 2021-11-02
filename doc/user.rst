@@ -762,9 +762,12 @@ Here you notice that trackid ``4`` is spurious. So you select it by
 clicking on the entry in ``Right tracks`` list. As you select the
 enetry, its bbox and ID on the image change color (and line style)
 (:numref:`review_select`). If the ``Show track position`` button is
-checked, like in the screenshot, then you will also see some points
-turning from dark purple to light yellow, indicating all the position
-this object takes across the video.
+checked, like in the screenshot, then you will also see the path this 
+ID takes in color turning from dark purple at the start to light yellow
+at the end. Note that this path only takes into account what is already
+saved in the file, and not any unsaved changes you made to the track ID.
+In order to update the path to include all the changes you made, save
+the data file first.
 
 .. _review_select:
 .. figure:: ../doc/images/review_02.png
@@ -1027,16 +1030,33 @@ that frame.
   temporary use it is safe to use negative numbers and it will not
   conflict with any existing track numbers.
 
-  To apply this only in the current frame keep the ``Shift`` key pressed while
-  drag-n-dropping.
+  Try not to use small positive integers unless you are sure that this
+  number does not come up later as an ID. This will result in two
+  different objects getting assigned the same ID, and thus erroneous
+  tracks. Since the Track utility assignes IDs as positive integers in
+  increasing order, it is safer to use very large positive integers
+  when renaming so that there no ID collisions.
 
+  Sometimes an object may be lost and found later and assigned a
+  new ID. In this case renaming it to its original ID is equivalent to
+  assigning (see above) the original ID.
+
+  To apply this only in the current frame keep the ``Shift`` key
+  pressed while drag-n-dropping.
+
+  To apply this from the current frame until a specific frame, keep
+  the ``Alt`` key pressed while drag-n-dropping and specify the last
+  frame (inclusive) in the popup dialog.
+  
 All these actions, however, are not immediately made permanent. This
 allows you to undo changes that have been made by mistake. You can see
 the list of changes you suggested by selecting ``Show list of
 changes`` in the view menu, or by using the ``Alt+C`` keyboard
 shortcut (:numref:`review_track_changes`). To undo a change, go to the
 frame on which it was suggested, and press ``Ctrl+Z``, or select
-``Undo changes in current frame`` in the ``Action`` menu.
+``Undo changes in current frame`` in the ``Action`` menu. If you made
+multiple changes in this frame, this operation will revert all of
+them.
 
 .. _review_track_changes:
 .. figure:: ../doc/images/review_10.png
@@ -1155,7 +1175,7 @@ The HDF5 data is saved and read as Pandas DataFrame in Python under
 the name ``/tracked`` for track data and ``/segmented`` for raw
 instance segmentation. You can read these into Pandas DataFrames as
 `pd.read_hdf(filename, 'tracked')` and `pd.read_hdf(filename, 'segmented')`
-respectively.
+respectively (assuming you first imported pandas with `import pandas as pd`).
 
 The ``tracked`` dataframe has these columns: ``frame, trackid, x, y,
 w, h`` where ``frame`` is the video frame number, ``trackid`` is a
@@ -1167,7 +1187,57 @@ coordinate of top left corner of the bounding box, ``w`` its width and
 In addition, when you make changes in the Review tool, it saves the
 changes you made in the group ``changes``. There will be a subgroup
 for each save with its timestamp, and you can load these as Pandas
-DataFrames.
+DataFrames. The timestamp informs you about when each set of changes
+was saved, i.e., the order of operations. Here is a code snippet
+demonstrating how you can check the changes:
+::
+    import pandas as pd
+    
+    fd = pd.HDFStore('mytrackfile.h5', 'r')
+    
+    for ch in fd.walk('/changes'):  # traverse recursively under this group
+        print('#', ch)              # this prints a single line 
+        change_nodes = ch[-1]       # the last entry is the list of leaf nodes
+        for node in change_nodes:   # go through each changelist
+            changelist = fd[f'/changes/{node}']   # recover the changes
+            print(node)
+            print(changelist)
+    fd.close()
+
+
+This shows something like the following:
+.. code-block:: text
+      # ('/changes', [], ['changelist_20211102_055038', 'changelist_20211102_070504'])
+      changelist_20211102_055038
+          frame  end     change  code  orig  new  idx
+      0      68   -1  op_delete     5     2   -1    0
+      1     150   -1  op_assign     3     6    1    1
+      2     250   -1  op_assign     3     9    8    2
+      3     273   -1  op_assign     3    10    8    3
+      4     508   -1  op_delete     5    11   -1    4
+      5     679   -1  op_assign     3    12    8    5
+      6     740  746  op_assign     3     8   16    8
+      7     745   -1  op_assign     3    14    5    6
+      8     757   -1  op_assign     3    16    8    7
+      9     768   -1  op_assign     3    17   16    9
+      10    772   -1  op_assign     3    20    8   10
+      11    811   -1  op_assign     3    21    5   11
+      12    823   -1  op_assign     3    22   19   12
+      13    889   -1  op_assign     3    23    5   13
+      changelist_20211102_070504
+           frame  end     change  code  orig  new  idx
+      0      888   -1  op_delete     5    23   -1    1
+      1      923   -1  op_assign     3    24    7    0
+      2      956   -1  op_assign     3    25    7    2
+      3     1043   -1  op_assign     3    26    5    3
+      4     1045   -1  op_assign     3    28    5    4
+      ..     ...  ...        ...   ...   ...  ...  ...
+      122   9037   -1  op_assign     3   127   16  123
+      
+    [127 rows x 7 columns]
+
+
+Here the first column is just the pandas dataframe index, then we have the frame number from which this change was applied. The ``end`` column specifies the frame till which (inclusive) this change was applied. An entry of -1 indicates the end is the last frame of the video. The ``change`` column specifies a string describing the change, and ``code`` the numeric code for the same. ``orig`` specifies the original ID and ``new`` the new ID. In case of ``delete`` operation, the new ID is -1. Finally, the last columns, ``idx`` specifies an index to maintain the order in which the operations were specified by the user.
 
 
 .. _Utility-to-display-the-tracks:

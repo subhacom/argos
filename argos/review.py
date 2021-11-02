@@ -450,7 +450,28 @@ from argos.vreader import VideoReader
 from argos.limitswidget import LimitsWidget
 from argos.vwidget import VidInfo
 
+
 settings = ut.init()
+
+
+def displayAbout():
+    qw.QMessageBox.about(
+        None,
+        'About Argos Review tool',
+        """
+        Argos Review tool for correcting tracks detected from videos.
+
+        Argos is a toolkit for tracking multiple objects from videos.
+
+        Author: Subhasis Ray (lastname dot firstname at gmail dot com)
+
+        """,
+    )
+
+
+def displayDoc():
+    DOC_LINK = 'https://argos.readthedocs.io/en/latest/'
+    qg.QDesktopServices.openUrl(qc.QUrl(DOC_LINK))
 
 
 class TrackReader(qc.QObject):
@@ -620,16 +641,6 @@ class TrackReader(qc.QObject):
         tracks = self.track_data[self.track_data.frame == frame_no]
         # Filter bboxes violating size constraints
         wh = np.sort(tracks[['w', 'h']].values, axis=1)
-        print(
-            'Wmin:',
-            self.wmin,
-            'Wmax:',
-            self.wmax,
-            'Hmin:',
-            self.hmin,
-            'Hmax:',
-            self.hmax,
-        )
         # print('Excluded', tracks.iloc[(
         sel = np.flatnonzero(
             (wh[:, 0] >= self.wmin)
@@ -1187,6 +1198,8 @@ class ChangeWindow(qw.QMainWindow):
         self.table = qw.QTableWidget()
         self.table.setColumnCount(len(self.cols))
         self.table.setHorizontalHeaderLabels(self.cols)
+        self.table.setSizeAdjustPolicy(qw.QAbstractScrollArea.AdjustToContents)
+        self.setWindowTitle('Argos: change list')
         header = self.table.horizontalHeader()
         for ii in range(len(self.cols)):
             # header.setSectionResizeMode(0, qw.QHeaderView.Stretch)
@@ -1205,6 +1218,7 @@ class ChangeWindow(qw.QMainWindow):
             )
             self.table.setItem(ii, 3, qw.QTableWidgetItem(str(change.orig)))
             self.table.setItem(ii, 4, qw.QTableWidgetItem(str(change.new)))
+        self.table.resizeColumnsToContents()
 
 
 class ReviewWidget(qw.QWidget):
@@ -1803,64 +1817,73 @@ class ReviewWidget(qw.QWidget):
             'Swap tracks in current frame only'
         )
         self.swapTracksAction.setToolTip(
-            'Ddrag and drop with right mouse ' 'button with Shift-key pressed'
+            'Keep Shift-key pressed and using right mouse button drag track ID'
+            ' from Previous/All list and drop over target ID in right list'
         )
         self.swapTracksCurAction.triggered.connect(self.swapTracksCur)
         self.swapTracksRangeAction = qw.QAction(
             'Swap tracks up to a specific frame'
         )
         self.swapTracksRangeAction.setToolTip(
-            'Drag and drop with right mouse ' 'button with Alt-key pressed'
+            'Drag and drop with right mouse button with Alt-key pressed'
         )
         self.swapTracksRangeAction.triggered.connect(self.swapTracksRange)
         self.replaceTrackAction = qw.QAction('Replace track')
         self.replaceTrackAction.setToolTip(
-            'Drag and drop with left mouse button'
+            'Using left mouse button drag track ID from left or middle list and'
+            ' drop on target track ID in right pane'
         )
         self.replaceTrackAction.triggered.connect(self.replaceTrack)
-        self.replaceTrackCurAction = qw.QAction(
-            'Replace track in current frame only'
-        )
+        self.replaceTrackCurAction = qw.QAction('Replace in current frame')
         self.replaceTrackCurAction.setToolTip(
-            'Drag and drop with left mouse ' 'button with Shift-key pressed'
+            'Keep Shift-key pressed and using left mouse button drag track ID'
+            ' from left/middle list and drop over target track ID in right pane'
         )
         self.replaceTrackCurAction.triggered.connect(self.replaceTrackCur)
         self.replaceTracksRangeAction = qw.QAction(
             'Replace track up to a specific frame'
         )
         self.replaceTrackAction.setToolTip(
-            'Drag n drop with left mouse ' 'button with Alt-key pressed'
+            'Keep Alt-key and using left mouse button to drag ID from'
+            ' left/middle list and drop over targte ID in right list'
         )
         self.swapTracksRangeAction.triggered.connect(self.replaceTracksRange)
         self.renameTrackAction = qw.QAction('Rename track (r)')
-        self.renameTrackAction.setToolTip('Press r key')
+        self.renameTrackAction.setToolTip(
+            'Rename selected track (shortcut: r key)'
+        )
         self.renameTrackAction.triggered.connect(self.renameTrack)
         self.renameTrackCurAction = qw.QAction('Rename track in current frame')
-        self.renameTrackCurAction.setToolTip('Press Shift+r key')
-        self.renameTrackCurAction.triggered.connect(self.renameTrackCur)
-        self.deleteTrackAction = qw.QAction('Delete track')
-        self.deleteTrackAction.setToolTip('Press Delete or x.')
-        self.deleteTrackAction.triggered.connect(self.deleteSelected)
-        self.deleteTrackCurAction = qw.QAction(
-            'Delete track only in current frame'
+        self.renameTrackCurAction.setToolTip(
+            'Rename selected track in current frame only (shortcut: Shift+r key)'
         )
+        self.renameTrackCurAction.triggered.connect(self.renameTrackCur)
+        self.deleteTrackAction = qw.QAction('Delete track (x or Del)')
+        self.deleteTrackAction.setToolTip(
+            'Delete selected track (shortcut: Delete or x key)'
+        )
+        self.deleteTrackAction.triggered.connect(self.deleteSelected)
+        self.deleteTrackCurAction = qw.QAction('Delete only in current frame')
         self.deleteTrackCurAction.setToolTip(
-            'Press Shift+Delete or Shift+x key'
+            'Shortcut: Shift+Delete or Shift+x key'
         )
         self.deleteTrackCurAction.triggered.connect(self.deleteSelectedCur)
         self.deleteTrackRangeAction = qw.QAction(
             'Delete track up to a specific frame'
         )
-        self.deleteTrackRangeAction.setToolTip('Press Alt+Delete or Alt+x')
+        self.deleteTrackRangeAction.setToolTip('Shortcut: Alt+Delete or Alt+x')
         self.deleteTrackRangeAction.triggered.connect(self.deleteSelectedRange)
         self.undoCurrentChangesAction = qw.QAction(
             'Undo changes in current frame'
         )
-        self.undoCurrentChangesAction.setToolTip('Press Ctrl+z')
+        self.undoCurrentChangesAction.setToolTip('Shortcut: Ctrl+z')
         self.undoCurrentChangesAction.triggered.connect(
             self.undoCurrentChanges
         )
-        self.showLimitsAction = qw.QAction('Size limits')
+        self.showLimitsAction = qw.QAction('Set size limits')
+        self.showLimitsAction.setToolTip(
+            'Set size limits on bboxes of tracks to be displayed'
+        )
         self.showLimitsAction.setCheckable(True)
         self.showLimitsAction.setChecked(False)
         self.lim_win.setVisible(False)
@@ -1877,6 +1900,17 @@ class ReviewWidget(qw.QWidget):
         self.loadChangeListAction.triggered.connect(self.loadChangeList)
         self.saveChangeListAction = qw.QAction('Save list of changes')
         self.saveChangeListAction.triggered.connect(self.saveChangeList)
+        self.toggleSideBySideAction = qw.QAction('View side-by-side')
+        self.toggleSideBySideAction.setToolTip(
+            'Show previous and current frame side by side'
+        )
+        self.toggleSideBySideAction.setCheckable(True)
+        checked = settings.value('review/sidebyside', True, type=bool)
+        self.toggleSideBySideAction.setChecked(checked)
+        self.toggleSideBySideAction.triggered.connect(
+            self.toggleSideBySideView
+        )
+        self.toggleSideBySideView(checked)
         self.vidinfoAction = qw.QAction('Video information')
         self.vidinfoAction.triggered.connect(self.vid_info.show)
 
@@ -2303,12 +2337,17 @@ class ReviewWidget(qw.QWidget):
         if len(fname) > 0:
             self.trackReader.loadChangeList(fname)
 
+    @qc.pyqtSlot(bool)
+    def toggleSideBySideView(self, checked: bool) -> None:
+        self.leftView.setVisible(checked)
+        settings.setValue('review/sidebyside', checked)
+
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF) -> None:
         self.roi = roi
 
     @qc.pyqtSlot()
-    def resetRoi(self):
+    def resetRoi(self) -> None:
         self.roi = None
 
     @qc.pyqtSlot()
@@ -2685,7 +2724,7 @@ class ReviewWidget(qw.QWidget):
         if self.video_reader is None:
             # Not initialized - do nothing
             return
-        if len(self.changeList) > 0:
+        if len(self.trackReader.changeList) > 0:
             ret = qw.QMessageBox.question(
                 self,
                 'Confirm reset',
@@ -2693,8 +2732,8 @@ class ReviewWidget(qw.QWidget):
                 '\nTo save your work, press No and save data first',
                 qw.QMessageBox.Yes | qw.QMessageBox.No,
             )
-        if ret == qw.QMessageBox.No:
-            return
+            if ret == qw.QMessageBox.No:
+                return
         self._wait_cond.set()
         self.playVideo(False)
         self.play_button.setChecked(False)
@@ -2761,6 +2800,7 @@ class ReviewerMain(qw.QMainWindow):
         diffMenu = self.menuBar().addMenu('&Diff settings')
         diffMenu.addAction(self.reviewWidget.overlayAction)
         diffMenu.addAction(self.reviewWidget.invertOverlayColorAction)
+        diffMenu.addAction(self.reviewWidget.toggleSideBySideAction)
         diffgrp = qw.QActionGroup(self)
         diffgrp.addAction(self.reviewWidget.showDifferenceAction)
         diffgrp.addAction(self.reviewWidget.showNewAction)
@@ -2779,22 +2819,23 @@ class ReviewerMain(qw.QMainWindow):
         viewMenu.addAction(self.reviewWidget.pathCmapAction)
         viewMenu.addAction(self.reviewWidget.keepSelectionAction)
         viewMenu.addSeparator()
-        viewMenu.addAction(self.reviewWidget.labelInsideAction)
         viewMenu.addAction(self.reviewWidget.fontSizeAction)
         viewMenu.addAction(self.reviewWidget.relativeFontSizeAction)
         viewMenu.addAction(self.reviewWidget.lineWidthAction)
         viewMenu.addAction(self.reviewWidget.setPathDiaAction)
         viewMenu.addAction(self.reviewWidget.setMarkerThicknessAction)
-        viewMenu.addAction(self.reviewWidget.showBboxAction)
+        viewMenu.addSeparator()
         viewMenu.addAction(self.reviewWidget.showIdAction)
+        viewMenu.addAction(self.reviewWidget.showBboxAction)
+        viewMenu.addAction(self.reviewWidget.labelInsideAction)
         viewMenu.addAction(self.reviewWidget.showOldTracksAction)
         viewMenu.addAction(self.reviewWidget.showHistoryAction)
+        viewMenu.addSeparator()
         viewMenu.addAction(self.reviewWidget.showLimitsAction)
         viewMenu.addAction(self.reviewWidget.histlenAction)
         viewMenu.addAction(self.reviewWidget.histGradientAction)
 
         viewMenu.addAction(self.reviewWidget.showChangeListAction)
-        viewMenu.addAction(self.reviewWidget.vidinfoAction)
         themeGroup = qw.QActionGroup(self.reviewWidget)
         themeGroup.setExclusive(True)
         selected = settings.value('theme', 'dark')
@@ -2809,6 +2850,7 @@ class ReviewerMain(qw.QMainWindow):
         ut.setStyleSheet(selected)
         themeMenu = viewMenu.addMenu('&Theme')
         themeMenu.addActions(themeGroup.actions())
+
         zoomMenu = self.menuBar().addMenu('&Zoom')
         zoomMenu.addAction(self.reviewWidget.zoomInLeftAction)
         zoomMenu.addAction(self.reviewWidget.zoomInRightAction)
@@ -2869,6 +2911,14 @@ class ReviewerMain(qw.QMainWindow):
         self.debugAction.setChecked(v == logging.DEBUG)
         self.debugAction.triggered.connect(self.setDebug)
         actionMenu.addAction(self.debugAction)
+
+        helpMenu = self.menuBar().addMenu('Help')
+        aboutAction = helpMenu.addAction('&About')
+        aboutAction.triggered.connect(displayAbout)
+        docAction = helpMenu.addAction('Documentation')
+        docAction.triggered.connect(displayDoc)
+        helpMenu.addAction(self.reviewWidget.vidinfoAction)
+
         toolbar = self.addToolBar('View')
         toolbar.addActions(
             [
@@ -2883,6 +2933,12 @@ class ReviewerMain(qw.QMainWindow):
         )
 
         toolbar.addActions(actionMenu.actions())
+
+        toggleToolbarAction = viewMenu.addAction('Show toolbar')
+        toggleToolbarAction.setCheckable(True)
+        toggleToolbarAction.triggered.connect(toolbar.setVisible)
+        toggleToolbarAction.setChecked(True)
+
         self.reviewWidget.sigDataFile.connect(self.updateTitle)
         self.sigQuit.connect(self.reviewWidget.doQuit)
         self.statusLabel = qw.QLabel()

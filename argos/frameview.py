@@ -759,30 +759,49 @@ class FrameView(qw.QGraphicsView):
         self.showGrayscaleAction.triggered.connect(
             self.frameScene.setGrayScale
         )
-        self.setColorAction = qw.QAction('Set color')
+        self.setColorAction = qw.QAction('Set ID/bbox color')
+        self.setColorAction.setToolTip(
+            'Set the display color of IDs and bboxes'
+        )
         self.setColorAction.triggered.connect(self.chooseColor)
-        self.setSelectedColorAction = qw.QAction('Set color of selected ID')
+        self.setSelectedColorAction = qw.QAction('Set selection color')
+        self.setSelectedColorAction.setToolTip('Set color of selected IDs')
         self.setSelectedColorAction.triggered.connect(self.chooseSelectedColor)
-        self.setAlphaUnselectedAction = qw.QAction(
-            'Set opacity of non-selected IDs'
+        self.setAlphaUnselectedAction = qw.QAction('Set ID/bbox opacity')
+        self.setAlphaUnselectedAction.setToolTip(
+            'Set the opacity of all ID/bboxes except the selected ones.'
+            '\nThis helps selected IDs stand out.'
         )
         self.setAlphaUnselectedAction.triggered.connect(
             self.setAlphaUnselected
         )
         self.autoColorAction = qw.QAction('Autocolor')
+        self.autoColorAction.setToolTip(
+            'Set color of each ID/bbox automatically,'
+            ' trying to make them as different as possible'
+        )
         self.autoColorAction.setCheckable(True)
         self.autoColorAction.triggered.connect(self.setAutoColor)
         self.autoColorAction.triggered.connect(self.frameScene.setAutoColor)
         self.colormapAction = qw.QAction('Colormap')
+        self.colormapAction.setToolTip(
+            'Set colors of IDs/bboxes based on specified colorap'
+        )
         self.colormapAction.triggered.connect(self.setColormap)
         self.colormapAction.setCheckable(True)
-        self.setLabelInsideAction = qw.QAction('Label inside bbox')
+        self.setLabelInsideAction = qw.QAction('ID label inside bbox')
+        self.setLabelInsideAction.setToolTip(
+            'Display ID label inside bounding box'
+        )
         self.setLabelInsideAction.setCheckable(True)
         self.setLabelInsideAction.setChecked(self.frameScene.labelInside)
         self.setLabelInsideAction.triggered.connect(
             self.frameScene.setLabelInside
         )
         self.lineWidthAction = qw.QAction('Line width')
+        self.lineWidthAction.setToolTip(
+            'Set linewidth of bounding-box display'
+        )
         self.lineWidthAction.triggered.connect(self.setLW)
         self.fontSizeAction = qw.QAction('Set font size in points')
         self.fontSizeAction.triggered.connect(self.setFontSize)
@@ -791,10 +810,16 @@ class FrameView(qw.QGraphicsView):
         )
         self.relativeFontSizeAction.triggered.connect(self.setRelativeFontSize)
         self.showBboxAction = qw.QAction('Show boundaries')
+        self.showBboxAction.setToolTip(
+            'Display the detected object bounding boxes'
+        )
         self.showBboxAction.setCheckable(True)
         self.showBboxAction.setChecked(True)
         self.showBboxAction.triggered.connect(self.frameScene.setShowBbox)
-        self.showIdAction = qw.QAction('Show Ids')
+        self.showIdAction = qw.QAction('Show IDs')
+        self.showIdAction.setToolTip(
+            'Display track ID associated with each object'
+        )
         self.showIdAction.setCheckable(True)
         self.showIdAction.setChecked(True)
         self.showIdAction.triggered.connect(self.frameScene.setShowId)
