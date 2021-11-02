@@ -1025,21 +1025,7 @@ that frame.
 
   To rename a track with a different, nonexistent Id, select the track
   in one of the ``Current tracks`` list and then press the ``R`` key, or
-  use the ``Action`` menu to get a prompt for the new Id number. Note
-  that normally Argos does not use negative track Id numbers, so for
-  temporary use it is safe to use negative numbers and it will not
-  conflict with any existing track numbers.
-
-  Try not to use small positive integers unless you are sure that this
-  number does not come up later as an ID. This will result in two
-  different objects getting assigned the same ID, and thus erroneous
-  tracks. Since the Track utility assignes IDs as positive integers in
-  increasing order, it is safer to use very large positive integers
-  when renaming so that there no ID collisions.
-
-  Sometimes an object may be lost and found later and assigned a
-  new ID. In this case renaming it to its original ID is equivalent to
-  assigning (see above) the original ID.
+  use the ``Action`` menu to get a prompt for the new Id number. 
 
   To apply this only in the current frame keep the ``Shift`` key
   pressed while drag-n-dropping.
@@ -1047,6 +1033,21 @@ that frame.
   To apply this from the current frame until a specific frame, keep
   the ``Alt`` key pressed while drag-n-dropping and specify the last
   frame (inclusive) in the popup dialog.
+
+  Argos does not use negative track Id numbers, so to rename a track
+  temporarily it is safe to use negative numbers as they will not
+  conflict with any existing track numbers.
+
+  Try not to use small positive integers unless you are sure that this
+  number does not come up later as an ID. This will result in two
+  different objects getting assigned the same ID, and thus erroneous
+  tracks. Since the Track utility assigns IDs as positive integers in
+  increasing order, you can also avoid ID collisions by using very
+  large positive integers when renaming.
+
+  Sometimes an object may be lost and found later and assigned a
+  new ID. In this case renaming it to its original ID is equivalent to
+  assigning (see above) the original ID.
   
 All these actions, however, are not immediately made permanent. This
 allows you to undo changes that have been made by mistake. You can see
