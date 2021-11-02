@@ -33,6 +33,7 @@ Usage:
 ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
+    
 To see a list of all options try ``python -m argos.capture -h``
 
 The above command will take a snapshot with the default camera on your
@@ -94,18 +95,21 @@ Examples
       python -m argos.capture -i myvideo.mpg -o myvideo_motion_cap.avi  \\
       --format=DIVX -m --threshold=20 -a 10
 
+      
 The recording will stop when the user presses ``Escape`` or ``Q`` key.
 
 2. Record from camera# 0 into the file ``myvideo_motion_cap.avi``:
    ::
     python -m argos.capture -i 0 -o myvideo_motion_cap.avi
 
+    
 3. Record from camera# 0 for 24 hours, saving every 10,000 frames into a
    separate file:
    ::
       python -m argos.capture -i 0 -o myvideo_motion_cap.avi \\
       --duration=24:00:00 --max_frames=10000
 
+      
    This will produce files with names ``myvideo_motion_cap_000.avi``,
    ``myvideo_motion_cap_001.avi``, etc. along with the timestamps in files named
    ``myvideo_motion_cap_000.avi.csv``, ``myvideo_motion_cap_001.avi.csv``. The
@@ -141,6 +145,7 @@ Usage:
 ::
     python -m argos.annotate
 
+    
 This program helps you annotate a set of images and export the images and
 annotation in a way that YOLACT can process for training. Note that this is for
 a single category of objects.
@@ -1206,40 +1211,39 @@ demonstrating how you can check the changes:
     fd.close()
 
 
-This shows something like the following:
+This shows something like the following::
 
-.. code-block:: text
-      # ('/changes', [], ['changelist_20211102_055038', 'changelist_20211102_070504'])
-      changelist_20211102_055038
-          frame  end     change  code  orig  new  idx
-      0      68   -1  op_delete     5     2   -1    0
-      1     150   -1  op_assign     3     6    1    1
-      2     250   -1  op_assign     3     9    8    2
-      3     273   -1  op_assign     3    10    8    3
-      4     508   -1  op_delete     5    11   -1    4
-      5     679   -1  op_assign     3    12    8    5
-      6     740  746  op_assign     3     8   16    8
-      7     745   -1  op_assign     3    14    5    6
-      8     757   -1  op_assign     3    16    8    7
-      9     768   -1  op_assign     3    17   16    9
-      10    772   -1  op_assign     3    20    8   10
-      11    811   -1  op_assign     3    21    5   11
-      12    823   -1  op_assign     3    22   19   12
-      13    889   -1  op_assign     3    23    5   13
-      changelist_20211102_070504
-           frame  end     change  code  orig  new  idx
-      0      888   -1  op_delete     5    23   -1    1
-      1      923   -1  op_assign     3    24    7    0
-      2      956   -1  op_assign     3    25    7    2
-      3     1043   -1  op_assign     3    26    5    3
-      4     1045   -1  op_assign     3    28    5    4
-      ..     ...  ...        ...   ...   ...  ...  ...
-      122   9037   -1  op_assign     3   127   16  123
-      
-    [127 rows x 7 columns]
+    # ('/changes', [], ['changelist_20211102_055038', 'changelist_20211102_070504'])
+    changelist_20211102_055038
+        frame  end     change  code  orig  new  idx
+    0      68   -1  op_delete     5     2   -1    0
+    1     150   -1  op_assign     3     6    1    1
+    2     250   -1  op_assign     3     9    8    2
+    3     273   -1  op_assign     3    10    8    3
+    4     508   -1  op_delete     5    11   -1    4
+    5     679   -1  op_assign     3    12    8    5
+    6     740  746  op_assign     3     8   16    8
+    7     745   -1  op_assign     3    14    5    6
+    8     757   -1  op_assign     3    16    8    7
+    9     768   -1  op_assign     3    17   16    9
+    10    772   -1  op_assign     3    20    8   10
+    11    811   -1  op_assign     3    21    5   11
+    12    823   -1  op_assign     3    22   19   12
+    13    889   -1  op_assign     3    23    5   13
+    changelist_20211102_070504
+         frame  end     change  code  orig  new  idx
+    0      888   -1  op_delete     5    23   -1    1
+    1      923   -1  op_assign     3    24    7    0
+    2      956   -1  op_assign     3    25    7    2
+    3     1043   -1  op_assign     3    26    5    3
+    4     1045   -1  op_assign     3    28    5    4
+    ..     ...  ...        ...   ...   ...  ...  ...
+    122   9037   -1  op_assign     3   127   16  123
+    
+  [127 rows x 7 columns]
 
 
-Here the first column is just the pandas dataframe index, then we have the frame number from which this change was applied. The ``end`` column specifies the frame till which (inclusive) this change was applied. An entry of -1 indicates the end is the last frame of the video. The ``change`` column specifies a string describing the change, and ``code`` the numeric code for the same. ``orig`` specifies the original ID and ``new`` the new ID. In case of ``delete`` operation, the new ID is -1. Finally, the last columns, ``idx`` specifies an index to maintain the order in which the operations were specified by the user.
+This shows that we saved change lists at two time points. For each, the first column is just the pandas dataframe index, then we have the frame number from which this change was applied. The ``end`` column specifies the frame till which (inclusive) this change was applied. An entry of -1 indicates the end is the last frame of the video. The ``change`` column specifies a string describing the change, and ``code`` the numeric code for the same. ``orig`` specifies the original ID and ``new`` the new ID. In case of ``delete`` operation, the new ID is -1. Finally, the last columns, ``idx`` specifies an index to maintain the order in which the operations were specified by the user.
 
 
 .. _Utility-to-display-the-tracks:

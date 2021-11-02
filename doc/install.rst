@@ -37,7 +37,7 @@ Installation using Anaconda
 
 6. Install ``pycocotools``.
 
-   On Windows::
+   On Windows:
      
    1. Install MS Visual Studio Build Tools. The installer for Visual
       Studio 2019 Build Tools is available here:
@@ -57,7 +57,7 @@ Installation using Anaconda
       or the appropriate .bat file for your installation (see
       https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-160#use-the-developer-tools-in-an-existing-command-window). The
       exact location of this file can vary between installations. You
-      can run it using the following steps (for 64 bit systems)::
+      can run it using the following steps (for 64 bit systems):
 	
       1. Go to `Start menu-> Visual Studio 2019`
       2. Right-click `x64 Native Tools Command Prompt` and in the popup menu select `More->Open File Location`.
@@ -165,7 +165,7 @@ installed. Also, on MS Windows you need the Visual Studio Build Tools
 described above. After that
 
 - First activate your conda environment where YOLACT and Argos are
-installed.
+  installed.
 
 - Change directory to ``yoact/external/DCNv2``.
   
