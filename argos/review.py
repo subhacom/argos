@@ -1405,35 +1405,70 @@ class ReviewWidget(qw.QWidget):
     def mousePosMessage(self, point: qc.QPointF) -> None:
         self.sigMousePosMessage.emit(f'X:{point.x():.02f},Y:{point.y():.02f}')
 
+    @qc.pyqtSlot()
+    def toggleShowTrackHistory(self) -> None:
+        if self.showHistoryAction.isChecked():
+            self._projectTrackHist([], 'left')
+            self._projectTrackHist([], 'right')
+            self.showHistoryAction.setChecked(False)
+            return
+
+        if self.left_list.currentItem() is None:
+            self._projectTrackHist([], 'left')
+        else:
+            self._projectTrackHist(
+                [int(self.left_list.currentItem().text())], 'left'
+            )
+        if self.right_list.currentItem() is None:
+            self._projectTrackHist([], 'right')
+        else:
+            self._projectTrackHist(
+                [int(self.right_list.currentItem().text())], 'right'
+            )
+
+        self.showHistoryAction.setChecked(True)
+
+    def _projectTrackHist(self, selected: list, side: str) -> None:
+        """Inner function to send signal to show track on either view.
+
+        Parameters
+        ----------
+        selected: list
+            List containing a single integer (trackid) or an empty list.
+        side: str
+            Side of the view to display track on, ``left`` or `right``.
+        """
+        if len(selected) == 0:
+            track = None
+        else:
+            # For both side, bring up full history
+            track = self.trackReader.getTrackId(selected[0], None)
+        if track is None:
+            track = np.empty(0)
+        else:
+            track.loc[:, 'x'] += track.w / 2.0
+            track.loc[:, 'y'] += track.h / 2.0
+            track = track[['x', 'y']].values
+        # print('Track', track)
+        if side == 'left':
+            self.sigProjectTrackHistAll.emit(track)
+        else:
+            self.sigProjectTrackHist.emit(track)
+
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
         if not self.showHistoryAction.isChecked():
-            return
-        if len(selected) == 0:
-            track = np.empty(0)
-            if self.sender() == self.right_list:
-                self.sigProjectTrackHist.emit(track)
-            else:
-                self.sigProjectTrackHistAll.emit(track)
+            if len(self.leftView.frameScene.trackHist) > 0:
+                self.sigProjectTrackHistAll.emit(np.empty(0))
+            if len(self.rightView.frameScene.trackHist) > 0:
+                self.sigProjectTrackHist.emit(np.empty(0))
             return
 
-        for sel in selected:
-            if self.sender() == self.right_list:
-                track = self.trackReader.getTrackId(
-                    sel, self.frame_no, self.history_length
-                )
-            else:
-                track = self.trackReader.getTrackId(sel, None)
-            if track is None:
-                track = np.empty(0)
-            else:
-                track.loc[:, 'x'] += track.w / 2.0
-                track.loc[:, 'y'] += track.h / 2.0
-                track = track[['x', 'y']].values
-            if self.sender() == self.right_list:
-                self.sigProjectTrackHist.emit(track)
-            else:
-                self.sigProjectTrackHistAll.emit(track)
+        if self.sender() == self.right_list:
+            self._projectTrackHist(selected, 'right')
+        else:
+            self._projectTrackHist(selected, 'left')
+            return
 
     @qc.pyqtSlot(Exception)
     def catchSeekError(self, err: Exception) -> None:
@@ -1810,6 +1845,7 @@ class ReviewWidget(qw.QWidget):
         self.showHistoryAction = qw.QAction('Show track positions (t)')
         self.showHistoryAction.setCheckable(True)
         self.showHistoryAction.setChecked(True)
+        self.showHistoryAction.triggered.connect(self.toggleShowTrackHistory)
         self.swapTracksAction = qw.QAction('Swap tracks')
         self.swapTracksAction.setToolTip('Drag n drop with right mouse button')
         self.swapTracksAction.triggered.connect(self.swapTracks)
@@ -1970,7 +2006,7 @@ class ReviewWidget(qw.QWidget):
         self.sc_old_tracks = qw.QShortcut(qg.QKeySequence('O'), self)
         self.sc_old_tracks.activated.connect(self.showOldTracksAction.toggle)
         self.sc_hist = qw.QShortcut(qg.QKeySequence('T'), self)
-        self.sc_hist.activated.connect(self.showHistoryAction.toggle)
+        self.sc_hist.activated.connect(self.toggleShowTrackHistory)
         self.sc_keepsel = qw.QShortcut(qg.QKeySequence('S'), self)
         self.sc_keepsel.activated.connect(self.keepSelectionAction.toggle)
         self.sc_next = qw.QShortcut(qg.QKeySequence(qc.Qt.Key_PageDown), self)

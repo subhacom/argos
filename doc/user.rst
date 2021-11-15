@@ -783,7 +783,8 @@ the data file first.
 
 Now delete object ``4`` by pressing ``x`` or ``Delete`` on keyboard,
 or selecting ``Delete track`` from ``Action`` in menubar
-(:numref:`review_delete`). On macos, the ``delete`` key is actually ``backspace``, and you have to use ``fn+delete`` to delete an object.
+(:numref:`review_delete`). On MacOS, the ``delete`` key is actually
+``backspace``, and you have to use ``fn+delete`` to delete an object.
 
 .. _review_delete:
 .. figure:: ../doc/images/review_03.png
@@ -794,7 +795,7 @@ or selecting ``Delete track`` from ``Action`` in menubar
 
 Once you delete ``4``, selection will change to the next object
 (``# 5``) and the path taken by it over time will be displayed in the
-same purple-to-yellow color code (:numref:`review_post_delete`) [#]_.
+same purple-to-yellow color code (:numref:`review_post_delete`) [#]_. Also notice that the window title now has a ``*`` before it, indicating that you have unsaved changes.
 
 .. [#] Changing the frame will clear the selection and the path
        display. If you want the selection (and the path-display of the
@@ -809,9 +810,9 @@ same purple-to-yellow color code (:numref:`review_post_delete`) [#]_.
    Screenshot of review tool after deleting object, as the next object
    is selected.
 
-Now to play the video, click the ``play`` button at bottom. The right
-frame will be transferred to the left pane, and the next frame will
-appear in the right pane.
+Now to play the video, click the ``play`` button at bottom (or press
+``Space bar`` on the keyboard). The right frame will be transferred to
+the left pane, and the next frame will appear in the right pane.
 
 You will notice the spinbox on bottom right updates the current frame
 number as we go forward in the video. Instead of playing the video,
@@ -861,7 +862,9 @@ previous frame are different from those on the current frame, the video will
 be paused with a popup message.
 
 If you want to just watch the video without interruption, select ``No
-popup message for tracks``.
+popup message for tracks``. Whenever there is a left-right mismatch,
+there will still be a status message so that you can see the what and
+where of the last mismatch.
 
 The other option ``Overlay previous frame``, if selected, will overlay
 the previous frame on the right pane in a different color. This may be
@@ -879,13 +882,70 @@ and right display is not good enough (:numref:`review_overlay`).
    more red or blue in pixels where they mismatch.
 
 
+The default view showing the previous and the current frame side by
+side can result in rather small area for each side. You can dedicate
+the entire visualization area to the current frame by turning off
+side-by-side view from the ``Diff settings`` menu
+(:numref:`review_toggle_side_by_side`).
+
+.. _review_toggle_side_by_side:
+.. figure:: ../doc/images/review_08.1.png
+   :width: 100%
+   :alt: Toggle side-by-side view
+
+   Menu option to switch between side-by-side view and single-frame view.
+
+This will keep the three lists, but remove the previous frame view
+(:numref:`review_single_frame_view`). A drawback of this is that
+now you can see the path for objects only in the current frame. But
+you can quickly go back and forth in frames by pressing the ``PgUp``
+and ``PgDn`` keys.
+
+.. _review_single_frame_view:
+.. figure:: ../doc/images/review_08.2.png
+   :width: 100%
+   :alt: Single frame view
+
+   Turning off side-by-side view gives the maximum screen area to the
+   current frame, allowing closer inspection of the video.
+
+   
+.. _review_select_roi:   
+   
 Selecting a region of interest (ROI)
 ====================================
-If you want to process only a certain part of the frames, you can draw an ROI
-by clicking the left mouse-button to set the vertices of a polygon. Click on
-the first vertex to close the polygon. If you want to cancel it half-way, click
-the right mouse-button.
 
+It can be tricky to fit the behavioral arena perfectly inside the
+camera frame. Thus one may end up including some area outside the
+arena when recording behavior videos. This can include clutter that is
+incorrectly identified as objects by the Argos Tracking tool. To
+exclude anything detcted outside your region of interest (ROI), you
+can draw a polygon to outline the ROI. To do this, first enable ROI
+selection mode by checking the ``Action->Draw arena`` item in the
+menubar (:numref:`review_arena`).  Then click left mouse-button at desired vertex positions in
+the frame to draw a polygon that best reflects your desired
+region. Click on the first vertex to close the polygon. If you want to
+cancel it half-way, click the right mouse-button.
+
+When finished, you can uncheck the ``Draw arena`` menu item to avoid
+unintended edits. When you save the corrected data, all IDs outside
+the arena will be excluded for all frames starting with the one on
+which you drew the arena.
+
+To reset the ROI to the full frame, click ``Reset
+arena`` in the ``Action`` menu.
+
+.. _review_arena:
+.. figure:: ../doc/images/review_09.png
+   :width: 100%
+   :alt: Selecting the arena / region of interest in review tool.
+
+   Drawing a polygon (magenta lines) to specify the arena/region of
+   interest to include only objects detected (partially) within this
+   area.
+
+   
+.. _review_track_lists:   
 
 The track lists 
 ===============
@@ -912,7 +972,7 @@ later).
   overlayed on the current frame in the right pane.
 
 .. _review_track_hist:
-.. figure:: ../doc/images/review_09.png
+.. figure:: ../doc/images/review_10.png
    :width: 100%
    :alt: Track of the selected object
 
@@ -921,6 +981,7 @@ later).
    object in the ``Current tracks`` is displayed on the right pane.
 
 
+.. _review_moving_around:   
 
 Moving around and break points
 ==============================
@@ -963,6 +1024,8 @@ then you can jump to the frame corresponding to the next change (after
 current frame) by pressing ``C`` and to the last change (before
 current frame) by pressing ``Shift + C`` on the keyboard.
 
+
+.. _review_correcting_tracks:
 
 Correcting tracks
 =================
@@ -1065,7 +1128,7 @@ multiple changes in this frame, this operation will revert all of
 them.
 
 .. _review_track_changes:
-.. figure:: ../doc/images/review_10.png
+.. figure:: ../doc/images/review_11.png
    :width: 100%
    :alt: List of changes suggested to tracks
 
@@ -1078,9 +1141,12 @@ You can save the list of changes into a text file with comma separated
 values and load them later using entries in the ``File`` menu. The
 changes will become permanent once you save the data (``File->Save
 reviewed data``). However, the resulting HDF5 file will include the
-list of changes in a time-stamped table
-:``changes/changelist_YYYYmmdd_HHMMSS``, so you can refer back to past
-changes applied to the data
+list of changes in a time-stamped table:
+``changes/changelist_YYYYmmdd_HHMMSS``, so you can refer back to past
+changes applied to the data (see :ref:`review_note_data_format`).
+
+
+.. _review_tips:
 
 Tips 
 ==== 
@@ -1144,17 +1210,7 @@ any changes you made during a session. To show the updated path, you
 have to first save the data so that all your changes are consolidated.
 
 
-
-Selecting a region of interest
-==============================
-
-You can exclude some spurious detections by defining a region of interest
-in the review tool. Click on the right frame with left-mouse button in order
-to start drawing a polygon. Keep clicking to add a vertex at current mouse
-cursor position. To close the polygon, click as close to the starting point 
-as possible. This will crop the frame to polygon and fit it within the view.
-As you move forward, any detection outside the polygon will be excluded.
-
+.. _review_note_video_format:
 
 Note on video format 
 ====================
@@ -1169,6 +1225,7 @@ review tool will disable ``seek`` when it detects this. To enable seek
 when the video format permits it, uncheck the ``Disable seek`` item
 in the ``Play`` menu.
 
+.. _review_note_data_format:
 
 Note on data format
 ===================
