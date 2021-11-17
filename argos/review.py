@@ -455,18 +455,22 @@ settings = ut.init()
 
 
 def displayAbout():
-    qw.QMessageBox.about(
-        None,
-        'About Argos Review tool',
+    msgBox = qw.QMessageBox()
+    msgBox.setWindowTitle('About Argos Review tool')
+    msgBox.setTextFormat(qc.Qt.RichText)
+    msgBox.setText(
         """
-        Argos Review tool for correcting tracks detected from videos.
-
-        Argos is a toolkit for tracking multiple objects from videos.
-
-        Author: Subhasis Ray (lastname dot firstname at gmail dot com)
-
+        Argos tool for reviewing and correcting tracks detected from videos.
+        <p>
+        Argos is a toolkit for tracking multiple objects from videos. You can get the source-code at <a href='https://github.com/subhacom/argos'>https://github.com/subhacom/argos</a> and the documentation at <a href='https://argos.readthedocs.io/en/latest/'>https://argos.readthedocs.io/en/latest/</a>.
+        <p>
+        <hr>
+        Author: Subhasis Ray
+        <br>
+        Author-email: lastname dot firstname at gmail dot com
         """,
     )
+    msgBox.exec_()
 
 
 def displayDoc():
@@ -2935,12 +2939,18 @@ class ReviewerMain(qw.QMainWindow):
                 self.reviewWidget.renameTrackCurAction,
                 self.reviewWidget.deleteTrackAction,
                 self.reviewWidget.deleteTrackCurAction,
+            ]
+        )
+        actionMenu.addSeparator()
+        actionMenu.addActions(
+            [
                 self.reviewWidget.undoCurrentChangesAction,
                 self.reviewWidget.enableDrawArenaAction,
                 self.reviewWidget.rightView.resetArenaAction,
             ]
         )
         self.debugAction = qw.QAction('Debug')
+        self.debugAction.setToolTip('Enable debug print to console')
         self.debugAction.setCheckable(True)
         v = settings.value('review/debug', logging.INFO)
         self.setDebug(v == logging.DEBUG)
