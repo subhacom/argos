@@ -26,13 +26,11 @@ import yaml
 import torch
 import torch.backends.cudnn as cudnn
 
-from PyQt5 import (
-    QtCore as qc,
-    QtWidgets as qw
-)
+from PyQt5 import QtCore as qc, QtWidgets as qw
 
 from yolact import Yolact
 from yolact.data import config as yconfig, get_label_map
+
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
@@ -71,7 +69,7 @@ class YolactWorker(qc.QObject):
         self.weights_file = ''
         self.config_file = ''
         self.video_file = None
-        self.name_label_map = {v: k for k, v in get_label_map().items()}        
+        self.name_label_map = {v: k for k, v in get_label_map().items()}
         self.include_classes = set()
 
     def setWaitCond(self, waitCond: threading.Event) -> None:
@@ -167,29 +165,40 @@ class YolactWorker(qc.QObject):
                 image = torch.from_numpy(image).float()
             batch = FastBaseTransform()(image.unsqueeze(0))
             preds = self.net(batch)
-            image_gpu = image / 255.0
+            # image_gpu = image / 255.0
             h, w, _ = image.shape
-            save = self.config.rescore_bbox
+            # save = self.config.rescore_bbox
             self.config.rescore_bbox = True
             classes, scores, boxes, masks = oututils.postprocess(
-                preds, w, h,
+                preds,
+                w,
+                h,
                 visualize_lincomb=False,
                 crop_masks=True,
-                score_threshold=self.score_threshold)
+                score_threshold=self.score_threshold,
+            )
 
             if len(self.include_classes) > 0:
-                idx = np.where([(self.config.dataset.class_names[c]
-                                 in self.include_classes)
-                                for c in classes])
+                idx = np.where(
+                    [
+                        (
+                            self.config.dataset.class_names[c]
+                            in self.include_classes
+                        )
+                        for c in classes
+                    ]
+                )
                 print('All Classes', set(classes.cpu().numpy()))
-                classes, scores, boxes = [x[idx]
-                                          for x in (classes, scores, boxes)]
+                classes, scores, boxes = [
+                    x[idx] for x in (classes, scores, boxes)
+                ]
                 print('Kept', set(classes.cpu().numpy()))
-            idx = scores.argsort(0, descending=True)[:self.top_k]
+            idx = scores.argsort(0, descending=True)[: self.top_k]
             # if self.config.eval_mask_branch:
             #     masks = masks[idx]
-            classes, scores, boxes = [x[idx].cpu().numpy()
-                                      for x in (classes, scores, boxes)]
+            classes, scores, boxes = [
+                x[idx].cpu().numpy() for x in (classes, scores, boxes)
+            ]
             # This is probably not required, `postprocess` uses
             # `score_thresh` already
             num_dets_to_consider = min(self.top_k, classes.shape[0])
@@ -206,22 +215,32 @@ class YolactWorker(qc.QObject):
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
             boxes = np.asanyarray(boxes, dtype=np.int_)
             if self.overlap_thresh < 1:
-                dist_matrix = pairwise_distance(new_bboxes=boxes, bboxes=boxes,
-                                                boxtype=OutlineStyle.bbox,
-                                                metric=DistanceMetric.ios)
-                bad_idx = [jj for ii in range(dist_matrix.shape[0] - 1) \
-                             for jj in range(ii+1, dist_matrix.shape[1]) \
-                              if dist_matrix[ii, jj] < 1 - self.overlap_thresh]
+                dist_matrix = pairwise_distance(
+                    new_bboxes=boxes,
+                    bboxes=boxes,
+                    boxtype=OutlineStyle.bbox,
+                    metric=DistanceMetric.ios,
+                )
+                bad_idx = [
+                    jj
+                    for ii in range(dist_matrix.shape[0] - 1)
+                    for jj in range(ii + 1, dist_matrix.shape[1])
+                    if dist_matrix[ii, jj] < 1 - self.overlap_thresh
+                ]
                 good_idx = list(set(range(boxes.shape[0])) - set(bad_idx))
                 boxes = boxes[good_idx].copy()
 
             toc = time.perf_counter_ns()
-            logging.debug('Time to process single _image: %f s',
-                          1e-9 * (toc - tic))            
+            logging.debug(
+                'Time to process single _image: %f s', 1e-9 * (toc - tic)
+            )
             self.sigProcessed.emit(boxes, pos)
             logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
         _dt = time.perf_counter() - _ts
-        logging.debug(f'{__name__}.{self.__class__.__name__}.process: Runtime: {_dt}s')
+        logging.debug(
+            f'{__name__}.{self.__class__.__name__}.process: Runtime: {_dt}s'
+        )
+
 
 class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker
@@ -243,14 +262,21 @@ class YolactWidget(qw.QWidget):
         self.initialized = False
         self.indicator = None
         self.load_config_action = qw.QAction('Load YOLACT configuration', self)
-        self.load_config_action.setToolTip('Load YOLACT configuration. This '
-                                           'should be a YAML (.yml) file '
-                                           'containing key value pairs for '
-                                           'various parameters for YOLACT')
+        self.load_config_action.setToolTip(
+            'Load YOLACT configuration. This '
+            'should be a YAML (.yml) file '
+            'containing key value pairs for '
+            'various parameters for YOLACT'
+        )
+        self.config_label = qw.QLabel('Config file')
+        self.config_label.setToolTip('Config file path will appear here')
         self.load_weights_action = qw.QAction('Load YOLACT weights', self)
         self.load_weights_action.setToolTip(
             'Load the trained connection weights'
-            ' for the YOLACT neural network.')
+            ' for the YOLACT neural network.'
+        )
+        self.weights_label = qw.QLabel('Weights file')
+        self.weights_label.setToolTip('Weights file path will appear here')
         self.load_config_action.triggered.connect(self.loadConfig)
         self.load_weights_action.triggered.connect(self.loadWeights)
         self.cuda_action = qw.QAction('Use CUDA')
@@ -263,8 +289,9 @@ class YolactWidget(qw.QWidget):
         else:
             self.cuda_action.setEnabled(False)
             settings.setValue('yolact/cuda', False)
-            self.cuda_action.setToolTip('PyTorch on this system does not '
-                                        'support CUDA')
+            self.cuda_action.setToolTip(
+                'PyTorch on this system does not ' 'support CUDA'
+            )
         self.top_k_edit = qw.QSpinBox()
         self.top_k_edit.setRange(1, 1000)
         saved_val = settings.value('yolact/top_k', 10, type=int)
@@ -272,9 +299,11 @@ class YolactWidget(qw.QWidget):
         self.worker.top_k = int(saved_val)
 
         self.top_k_edit.valueChanged.connect(self.setTopK)
-        self.top_k_edit.setToolTip('Include only this many objects'
-                                   ' from all that are detected, ordered'
-                                   ' by their classification score')
+        self.top_k_edit.setToolTip(
+            'Include only this many objects'
+            ' from all that are detected, ordered'
+            ' by their classification score'
+        )
         self.top_k_label = qw.QLabel('Number of objects to include')
         self.top_k_label.setToolTip(self.top_k_edit.toolTip())
         self.score_thresh_edit = qw.QDoubleSpinBox()
@@ -282,32 +311,38 @@ class YolactWidget(qw.QWidget):
         self.score_thresh_edit.setRange(0.01, 1.0)
         try:
             self.score_thresh_edit.setStepType(
-                qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+                qw.QDoubleSpinBox.AdaptiveDecimalStepType
+            )
         except AttributeError:
-            pass     # older versions of Qt don't support this
+            pass  # older versions of Qt don't support this
         self.score_thresh_edit.setSingleStep(0.05)
         self.score_thresh_edit.setValue(float(saved_val))
         self.worker.score_threshold = float(saved_val)
 
         self.score_thresh_edit.valueChanged.connect(self.setScoreThresh)
-        self.score_thresh_edit.setToolTip('a number > 0 and < 1. Higher score'
-                                          ' is more stringent criterion for'
-                                          ' classifying objects')
+        self.score_thresh_edit.setToolTip(
+            'a number > 0 and < 1. Higher score'
+            ' is more stringent criterion for'
+            ' classifying objects'
+        )
         self.score_thresh_label = qw.QLabel('Detection score minimum')
         self.score_thresh_label.setToolTip(self.score_thresh_edit.toolTip())
 
         self.overlap_thresh_label = qw.QLabel('Merge overlaps more than')
         self.overlap_thresh_edit = qw.QDoubleSpinBox()
         self.overlap_thresh_edit.setRange(0.01, 1.1)
-        self.overlap_thresh_edit.setToolTip('a number > 0 and < 1. If the '
-                                            'ratio of overlap between two objects '
-                                            'and the bounding rectangle of the '
-                                            'smaller object more than this, merge '
-                                            'them into a single object ')
+        self.overlap_thresh_edit.setToolTip(
+            'a number > 0 and < 1. If the '
+            'ratio of overlap between two objects '
+            'and the bounding rectangle of the '
+            'smaller object more than this, merge '
+            'them into a single object '
+        )
         # self.overlap_thresh_edit.setSingleStep(0.01)
         try:
             self.overlap_thresh_edit.setStepType(
-                qw.QDoubleSpinBox.AdaptiveDecimalStepType)
+                qw.QDoubleSpinBox.AdaptiveDecimalStepType
+            )
         except AttributeError:
             pass  # older Qt versions
         saved_val = settings.value('yolact/overlap_thresh', 1.0, type=float)
@@ -324,11 +359,11 @@ class YolactWidget(qw.QWidget):
         button = qw.QToolButton()
         button.setDefaultAction(self.load_config_action)
         button.setToolTip(self.load_config_action.toolTip())
-        layout.addRow(button)
+        layout.addRow(button, self.config_label)
         button = qw.QToolButton()
         button.setDefaultAction(self.load_weights_action)
         button.setToolTip(self.load_weights_action.toolTip())
-        layout.addRow(button)
+        layout.addRow(button, self.weights_label)
         button = qw.QToolButton()
         button.setDefaultAction(self.cuda_action)
         button.setToolTip(self.cuda_action.toolTip())
@@ -381,21 +416,26 @@ class YolactWidget(qw.QWidget):
         filename, ok = qw.QFileDialog.getOpenFileName(
             self,
             'Open YOLACT configuration file',
-            directory=directory, filter='YAML file (*.yml *.yaml)')
+            directory=directory,
+            filter='YAML file (*.yml *.yaml)',
+        )
         if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
         settings.setValue('yolact/configfile', filename)
 
         self.sigConfigFile.emit(filename)
+        self.config_label.setToolTip(filename)
 
     @qc.pyqtSlot()
     def loadWeights(self):
         directory = settings.value('yolact/configdir', '.')
-        filename, ok = qw.QFileDialog.getOpenFileName(self,
-                                                      'Open trained model',
-                                                      directory=directory,
-                                                      filter='Weights file (*.pth)')
+        filename, ok = qw.QFileDialog.getOpenFileName(
+            self,
+            'Open trained model',
+            directory=directory,
+            filter='Weights file (*.pth)',
+        )
         if len(filename) == 0 or not ok:
             return
         settings.setValue('yolact/configdir', os.path.dirname(filename))
@@ -403,8 +443,9 @@ class YolactWidget(qw.QWidget):
         self.initialized = False
         self.sigWeightsFile.emit(filename)
         if self.indicator is None:
-            self.indicator = qw.QProgressDialog('Setting up neural net',
-                                                'Cancel', 0, 0, self)
+            self.indicator = qw.QProgressDialog(
+                'Setting up neural net', 'Cancel', 0, 0, self
+            )
             self.indicator.setWindowModality(qc.Qt.WindowModal)
         try:
             self.worker.sigInitialized.disconnect()
@@ -413,6 +454,7 @@ class YolactWidget(qw.QWidget):
         self.worker.sigInitialized.connect(self.indicator.reset)
         self.worker.sigInitialized.connect(self.setInitialized)
         self.indicator.show()
+        self.weights_label.setToolTip(filename)
 
     @qc.pyqtSlot()
     def setInitialized(self):

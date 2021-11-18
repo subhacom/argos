@@ -9,10 +9,7 @@ import os
 import time
 from datetime import timedelta
 
-from PyQt5 import (
-    QtWidgets as qw,
-    QtCore as qc,
-    QtGui as qg)
+from PyQt5 import QtWidgets as qw, QtCore as qc, QtGui as qg
 
 from argos import utility
 from argos.frameview import FrameView
@@ -58,13 +55,16 @@ class VideoWidget(qw.QWidget):
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)
     sigQuit = qc.pyqtSignal()
-    sigClose = qc.pyqtSignal()  # separate out closing the video reader and files from thread end
+    sigClose = (
+        qc.pyqtSignal()
+    )  # separate out closing the video reader and files from thread end
     sigThreadQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
     sigSetColormap = qc.pyqtSignal(str, int)
     sigArena = qc.pyqtSignal(qg.QPolygonF)
     sigVideoFile = qc.pyqtSignal(str)
     sigStatusMsg = qc.pyqtSignal(str)
+    sigOutFilename = qc.pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super(VideoWidget, self).__init__(*args, **kwargs)
@@ -92,8 +92,9 @@ class VideoWidget(qw.QWidget):
         self.playAction = qw.QAction('Play')
         self.playAction.setCheckable(True)
         self.resetAction = qw.QAction('Reset')
-        self.resetAction.setToolTip('Go back to the start and reset the'
-                                    ' tracker')
+        self.resetAction.setToolTip(
+            'Go back to the start and reset the' ' tracker'
+        )
         self.refreshAction = qw.QAction('Refresh current frame')
         self.refreshAction.triggered.connect(self.refreshFrame)
         self.showFrameNumAction = qw.QAction('Show frame #')
@@ -121,7 +122,8 @@ class VideoWidget(qw.QWidget):
         self.setLabelInsideAction.setCheckable(True)
         self.fontSizeAction = qw.QAction('Set font size in points')
         self.relativeFontSizeAction = qw.QAction(
-            'Set font size as % of larger side of image')
+            'Set font size as % of larger side of image'
+        )
         self.lineWidthAction = qw.QAction('Line width')
         self.infoAction = qw.QAction('Video information')
         self.infoAction.triggered.connect(self.vid_info.show)
@@ -133,41 +135,48 @@ class VideoWidget(qw.QWidget):
     @qc.pyqtSlot()
     def openCamera(self):
         self.pauseVideo()
-        cam_idx, accept = qw.QInputDialog.getInt(self, 'Open webcam input',
-                                                 'Webcam no.', 0)
+        cam_idx, accept = qw.QInputDialog.getInt(
+            self, 'Open webcam input', 'Webcam no.', 0
+        )
         if not accept:
             return
-        width, accept = qw.QInputDialog.getInt(self, 'Frame width',
-                                               'Frame width (pixels)', -1)
+        width, accept = qw.QInputDialog.getInt(
+            self, 'Frame width', 'Frame width (pixels)', -1
+        )
         if not accept:
             width = -1
-        height, accept = qw.QInputDialog.getInt(self, 'Frame height',
-                                                'Frame height (pixels)', -1)
+        height, accept = qw.QInputDialog.getInt(
+            self, 'Frame height', 'Frame height (pixels)', -1
+        )
         if not accept:
             height = -1
-        fps, accept = qw.QInputDialog.getDouble(self, 'Frames per second',
-                                                'Frames per second', 30)
+        fps, accept = qw.QInputDialog.getDouble(
+            self, 'Frames per second', 'Frames per second', 30
+        )
         if not accept:
             fps = 30
         self.video_filename = str(cam_idx)
         directory = settings.value('video/directory', '.')
         fourcc, accept = qw.QInputDialog.getText(
-            self, 'Enter video format',
+            self,
+            'Enter video format',
             'FOURCC code (see http://www.fourcc.org/codecs.php)',
-            text='MJPG')
+            text='MJPG',
+        )
         if not accept:
             return
-        fname, _ = qw.QFileDialog.getSaveFileName(self, 'Save video as',
-                                                  directory,
-                                                  filter='AVI (*.avi)')
+        fname, _ = qw.QFileDialog.getSaveFileName(
+            self, 'Save video as', directory, filter='AVI (*.avi)'
+        )
         self._initIO(fname, fourcc, width=width, height=height, fps=fps)
 
     @qc.pyqtSlot()
     def openVideo(self):
         self.pauseVideo()
         directory = settings.value('video/directory', '.')
-        fname, filter_ = qw.QFileDialog.getOpenFileName(self, 'Open video',
-                                                        directory=directory)
+        fname, filter_ = qw.QFileDialog.getOpenFileName(
+            self, 'Open video', directory=directory
+        )
         logging.debug(f'Opening file "{fname}"')
         if len(fname) == 0:
             return
@@ -183,27 +192,31 @@ class VideoWidget(qw.QWidget):
     def setColormap(self, check):
         if not check:
             return
-        input, accept = qw.QInputDialog.getItem(self,
-                                                'Colormap for track display',
-                                                'Colormap',
-                                                ['jet',
-                                                 'viridis',
-                                                 'rainbow',
-                                                 'autumn',
-                                                 'summer',
-                                                 'winter',
-                                                 'spring',
-                                                 'cool',
-                                                 'hot',
-                                                 'None'])
+        input, accept = qw.QInputDialog.getItem(
+            self,
+            'Colormap for track display',
+            'Colormap',
+            [
+                'jet',
+                'viridis',
+                'rainbow',
+                'autumn',
+                'summer',
+                'winter',
+                'spring',
+                'cool',
+                'hot',
+                'None',
+            ],
+        )
         if input == 'None':
             self.colormapAction.setChecked(False)
             return
         if not accept:
             return
-        max_colors, accept = qw.QInputDialog.getInt(self, 'Number of colors',
-                                                    'Number of colors', 10, 1,
-                                                    20)
+        max_colors, accept = qw.QInputDialog.getInt(
+            self, 'Number of colors', 'Number of colors', 10, 1, 20
+        )
         if not accept:
             return
         self.autoColorAction.setChecked(False)
@@ -213,15 +226,21 @@ class VideoWidget(qw.QWidget):
     def _initIO(self, outfpath=None, codec=None, width=-1, height=-1, fps=30):
         # Open input
         try:
-            self.video_reader = VideoReader(self.video_filename, width=width,
-                                            height=height, fps=fps)
-            if self.video_reader.is_webcam and \
-                    outfpath is not None and codec is not None:
+            self.video_reader = VideoReader(
+                self.video_filename, width=width, height=height, fps=fps
+            )
+            if (
+                self.video_reader.is_webcam
+                and outfpath is not None
+                and codec is not None
+            ):
                 self.video_reader.setVideoOutFile(outfpath, codec)
             logging.debug(
-                f'Opened {self.video_filename} with {self.video_reader.frame_count} frames')
-            settings.setValue('video/directory',
-                              os.path.dirname(self.video_filename))
+                f'Opened {self.video_filename} with {self.video_reader.frame_count} frames'
+            )
+            settings.setValue(
+                'video/directory', os.path.dirname(self.video_filename)
+            )
             self.currentFrame = -1
             self.startTime = None
         except IOError as err:
@@ -232,28 +251,37 @@ class VideoWidget(qw.QWidget):
         directory = os.path.dirname(self.video_filename)
         filename = writer.makepath(directory, self.video_filename)
         self.outfile, _ = qw.QFileDialog.getSaveFileName(
-            self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf);;Text (*.csv)')
+            self, 'Save data as', filename, 'HDF5 (*.h5 *.hdf);;Text (*.csv)'
+        )
         logging.info(f'Output file "{self.outfile}"')
         if len(self.outfile.strip()) == 0:
-            qw.QMessageBox.critical(self, 'No output file',
-                                    'Output file not specified. Closing video')
+            qw.QMessageBox.critical(
+                self,
+                'No output file',
+                'Output file not specified. Closing video',
+            )
             self.video_reader = None
             self.writer = None
             return
         if self.outfile.endswith('.csv'):
             self.writer = writer.CSVWriter(self.outfile, mode='w')
-            qw.QMessageBox.information(self,
-                                       'Data will be saved in',
-                                       f'{self.writer.seg_filename} and'
-                                       f' {self.writer.track_filename}')
-            self.vid_info.outfile.setText(f'{self.writer.seg_filename} and '
-                                          f'{self.writer.track_filename}')
+            qw.QMessageBox.information(
+                self,
+                'Data will be saved in',
+                f'{self.writer.seg_filename} and'
+                f' {self.writer.track_filename}',
+            )
+            self.vid_info.outfile.setText(
+                f'{self.writer.seg_filename} and '
+                f'{self.writer.track_filename}'
+            )
         else:
             self.writer = writer.HDFWriter(self.outfile, mode='w')
-            qw.QMessageBox.information(self,
-                                       'Data will be saved in',
-                                       f'{self.outfile}')
+            qw.QMessageBox.information(
+                self, 'Data will be saved in', f'{self.outfile}'
+            )
             self.vid_info.outfile.setText(f'{self.outfile}')
+        self.sigOutFilename.emit(self.outfile)
         self.vid_info.vidfile.setText(self.video_filename)
         self.vid_info.frames.setText(f'{self.video_reader.frame_count}')
         self.vid_info.fps.setText(f'{self.video_reader.fps}')
@@ -284,40 +312,52 @@ class VideoWidget(qw.QWidget):
             self.display_widget = FrameView()
             self.display_widget.frameScene.setArenaMode()
             self.showGrayscaleAction.triggered.connect(
-                self.display_widget.showGrayscaleAction.trigger)
+                self.display_widget.showGrayscaleAction.trigger
+            )
             self.setColorAction.triggered.connect(
-                self.display_widget.setColorAction.trigger)
+                self.display_widget.setColorAction.trigger
+            )
             self.autoColorAction.triggered.connect(
-                self.display_widget.autoColorAction.trigger)
+                self.display_widget.autoColorAction.trigger
+            )
             self.sigSetColormap.connect(
-                self.display_widget.frameScene.setColormap)
+                self.display_widget.frameScene.setColormap
+            )
             self.setLabelInsideAction.setChecked(
-                self.display_widget.setLabelInsideAction.isChecked())
+                self.display_widget.setLabelInsideAction.isChecked()
+            )
             self.setLabelInsideAction.triggered.connect(
-                self.display_widget.setLabelInsideAction.trigger)
+                self.display_widget.setLabelInsideAction.trigger
+            )
             self.fontSizeAction.triggered.connect(
-                self.display_widget.fontSizeAction.trigger)
+                self.display_widget.fontSizeAction.trigger
+            )
             self.relativeFontSizeAction.triggered.connect(
-                self.display_widget.relativeFontSizeAction.trigger)
+                self.display_widget.relativeFontSizeAction.trigger
+            )
             self.lineWidthAction.triggered.connect(
-                self.display_widget.lineWidthAction.trigger)
+                self.display_widget.lineWidthAction.trigger
+            )
             self.sigSetFrame.connect(self.display_widget.setFrame)
             self.sigSetSegmented.connect(self.display_widget.sigSetPolygons)
-            self.sigSetTracked.connect(
-                self.display_widget.setRectangles)
+            self.sigSetTracked.connect(self.display_widget.setRectangles)
             self.display_widget.sigPolygonsSet.connect(self.startTimer)
             self.display_widget.sigArena.connect(self.sigArena)
             self.sigReset.connect(self.display_widget.resetArenaAction.trigger)
             self.zoomInAction.triggered.connect(self.display_widget.zoomIn)
             self.zoomOutAction.triggered.connect(self.display_widget.zoomOut)
             self.arenaSelectAction.triggered.connect(
-                self.display_widget.setArenaMode)
+                self.display_widget.setArenaMode
+            )
             self.rectSelectAction.triggered.connect(
-                self.display_widget.setRoiRectMode)
+                self.display_widget.setRoiRectMode
+            )
             self.polygonSelectAction.triggered.connect(
-                self.display_widget.setRoiPolygonMode)
+                self.display_widget.setRoiPolygonMode
+            )
             self.resetArenaAction.triggered.connect(
-                self.display_widget.resetArenaAction.trigger)
+                self.display_widget.resetArenaAction.trigger
+            )
             # self.sigSetTracked.connect(self.displayWidget.sigSetRectangles)
             self.slider = qw.QSlider(qc.Qt.Horizontal)
             self.slider.valueChanged.connect(self.sigGotoFrame)
@@ -363,17 +403,21 @@ class VideoWidget(qw.QWidget):
             ptime = 0
         ptime = timedelta(seconds=ptime)
         if self.outfile.endswith('.csv'):
-            data_file_str = f'{self.writer.seg_filename}' \
-                            ' and {self.writer.track_filename}'
+            data_file_str = (
+                f'{self.writer.seg_filename}'
+                ' and {self.writer.track_filename}'
+            )
         else:
             data_file_str = f'{self.outfile}'
 
         qw.QMessageBox.information(
-            self, 'Finished processing',
+            self,
+            'Finished processing',
             f'Reached the end of the video {self.video_filename} '
             f'frame # {self.video_reader.frame_count}.\n'
             f'Time: {ptime}.\n'
-            f'Data saved in {data_file_str}.')
+            f'Data saved in {data_file_str}.',
+        )
 
     @qc.pyqtSlot(dict, int)
     def setTracked(self, bboxes: dict, pos: int) -> None:
@@ -403,8 +447,7 @@ class VideoWidget(qw.QWidget):
 
     @qc.pyqtSlot(bool)
     def playVideo(self, play: bool) -> None:
-        """This function is for playing raw video without any processing
-        """
+        """This function is for playing raw video without any processing"""
         if play:
             if self.startTime is None:  # indicates video was just initialized
                 print('Starting at first frame')
@@ -422,10 +465,12 @@ class VideoWidget(qw.QWidget):
         self.timer.stop()
         self.playAction.setText('Play')
         self.endTime = time.perf_counter()
-        if self.startTime != None:
+        if self.startTime is not None:
             ptime = timedelta(seconds=self.endTime - self.startTime)
-            msg = f'Processed till frame # {self.currentFrame}' \
-                  f' in time: {ptime}.'
+            msg = (
+                f'Processed till frame # {self.currentFrame}'
+                f' in time: {ptime}.'
+            )
             logging.info(msg)
             self.sigStatusMsg.emit(msg)
 
