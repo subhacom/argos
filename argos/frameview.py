@@ -110,6 +110,9 @@ class FrameScene(qw.QGraphicsScene):
     @qc.pyqtSlot(list)
     def setSelected(self, selected: List[int]) -> None:
         """Set list of selected items"""
+        if selected == self.selected:
+            return
+
         self.selected = selected
         if len(selected) == 0:
             self._updateItemDisplay()

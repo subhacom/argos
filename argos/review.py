@@ -870,7 +870,6 @@ class ReviewScene(FrameScene):
         self.lineStyleOldTrack = qc.Qt.DashLine
         self.histGradient = 1
         self.trackHist = []
-        self.pathCmap = settings.value('review/path_cmap', 'viridis')
         self.markerThickness = settings.value(
             'review/marker_thickness', 2.0, type=float
         )
@@ -882,19 +881,14 @@ class ReviewScene(FrameScene):
     def setHistGradient(self, age: int) -> None:
         self.histGradient = age
 
-    @qc.pyqtSlot(str)
-    def setPathCmap(self, cmap: str) -> None:
-        self.pathCmap = cmap
-        settings.setValue('review/path_cmap', cmap)
-
     @qc.pyqtSlot(float)
     def setTrackMarkerThickness(self, thickness: float) -> None:
         """Set the thickness of the marker-edge for drawing paths"""
         self.markerThickness = thickness
         settings.setValue('review/marker_thickness', thickness)
 
-    @qc.pyqtSlot(np.ndarray)
-    def showTrackHist(self, track: np.ndarray) -> None:
+    @qc.pyqtSlot(np.ndarray, str)
+    def showTrackHist(self, track: np.ndarray, cmap: str) -> None:
         for item in self.trackHist:
             try:
                 self.removeItem(item)
@@ -905,7 +899,7 @@ class ReviewScene(FrameScene):
         if self._frame is None:
             return
         colors = [
-            qg.QColor(*get_cmap_color(ii, len(track), self.pathCmap))
+            qg.QColor(*get_cmap_color(ii, len(track), cmap))
             for ii in range(len(track))
         ]
         pens = [
@@ -1075,6 +1069,7 @@ class TrackList(qw.QListWidget):
         self._drag_button = qc.Qt.NoButton
         self.setSelectionMode(qw.QAbstractItemView.SingleSelection)
         self.itemSelectionChanged.connect(self.sendSelected)
+        self.itemClicked.connect(self.sendSelected)
         self.keepSelection = settings.value('review/keepselection', type=bool)
         self.currentFrame = -1
         self.selected = []
@@ -1164,6 +1159,7 @@ class TrackList(qw.QListWidget):
         self.clear()
         sorted_tracks = sorted(track_list)
         self.addItems([str(x) for x in sorted_tracks])
+        # print(self, 'keep selection', self.keepSelection, 'selected:', self.selected)
         if self.keepSelection and len(self.selected) > 0:
             try:
                 idx = sorted_tracks.index(self.selected[0])
@@ -1174,6 +1170,7 @@ class TrackList(qw.QListWidget):
             # self.sigSelected.emit(self.selected)
             return
         self.blockSignals(False)
+        # print('Updating selection')
         self.sendSelected()
 
     @qc.pyqtSlot()
@@ -1181,6 +1178,10 @@ class TrackList(qw.QListWidget):
         """Intermediate slot to convert text labels into integer track ids"""
         self.selected = [int(item.text()) for item in self.selectedItems()]
         self.sigSelected.emit(self.selected)
+        # Note: even if this is sent multiple times (e.g., both
+        # itemSelectionChanged and itemClicked connected to this slot,
+        # the destination FrameView keeps track of current selection and
+        # ignores if the selection has not changed).
 
 
 class LimitWin(qw.QMainWindow):
@@ -1245,8 +1246,8 @@ class ReviewWidget(qw.QWidget):
     sigMousePosMessage = qc.pyqtSignal(str)
     sigUndoCurrentChanges = qc.pyqtSignal(int)
     sigDataFile = qc.pyqtSignal(str, bool)
-    sigProjectTrackHist = qc.pyqtSignal(np.ndarray)
-    sigProjectTrackHistAll = qc.pyqtSignal(np.ndarray)
+    sigProjectTrackHistLeft = qc.pyqtSignal(np.ndarray, str)
+    sigProjectTrackHistRight = qc.pyqtSignal(np.ndarray, str)
     sigQuit = qc.pyqtSignal()  # Pass on quit signal in a threadsafe way
 
     def __init__(self, *args, **kwargs):
@@ -1260,6 +1261,10 @@ class ReviewWidget(qw.QWidget):
         self.jump_step = 10
         self.history_length = 1
         self.all_tracks = OrderedDict()
+        self.pathCmap = {
+            'left': settings.value('review/path_cmap_left', 'inferno'),
+            'right': settings.value('review/path_cmap_right', 'viridis'),
+        }
         self.left_frame = None
         self.right_frame = None
         self.right_tracks = None
@@ -1377,10 +1382,10 @@ class ReviewWidget(qw.QWidget):
             self.leftView.showIdAction.trigger
         )
         self.showIdAction = self.rightView.showIdAction
-        self.sigProjectTrackHist.connect(
+        self.sigProjectTrackHistRight.connect(
             self.rightView.frameScene.showTrackHist
         )
-        self.sigProjectTrackHistAll.connect(
+        self.sigProjectTrackHistLeft.connect(
             self.leftView.frameScene.showTrackHist
         )
         self.right_list.sigMapTracks.connect(self.mapTracks)
@@ -1454,25 +1459,29 @@ class ReviewWidget(qw.QWidget):
             track.loc[:, 'y'] += track.h / 2.0
             track = track[['x', 'y']].values
         # print('Track', track)
+        cmap = self.pathCmap[side]
         if side == 'left':
-            self.sigProjectTrackHistAll.emit(track)
+            self.sigProjectTrackHistLeft.emit(track, cmap)
         else:
-            self.sigProjectTrackHist.emit(track)
+            self.sigProjectTrackHistRight.emit(track, cmap)
 
     @qc.pyqtSlot(list)
     def projectTrackHist(self, selected: list) -> None:
         if not self.showHistoryAction.isChecked():
             if len(self.leftView.frameScene.trackHist) > 0:
-                self.sigProjectTrackHistAll.emit(np.empty(0))
+                self.sigProjectTrackHistLeft.emit(
+                    np.empty(0), self.pathCmap['left']
+                )
             if len(self.rightView.frameScene.trackHist) > 0:
-                self.sigProjectTrackHist.emit(np.empty(0))
+                self.sigProjectTrackHistRight.emit(
+                    np.empty(0), self.pathCmap['right']
+                )
             return
 
         if self.sender() == self.right_list:
             self._projectTrackHist(selected, 'right')
         else:
             self._projectTrackHist(selected, 'left')
-            return
 
     @qc.pyqtSlot(Exception)
     def catchSeekError(self, err: Exception) -> None:
@@ -1712,8 +1721,14 @@ class ReviewWidget(qw.QWidget):
         )
         # self.autoColorAction.triggered.connect(self.leftView.autoColorAction)
         self.colormapAction = self.rightView.colormapAction
-        self.pathCmapAction = qw.QAction('Set colormap for path')
-        self.pathCmapAction.triggered.connect(self.setPathColormap)
+        self.pathCmapLeftAction = qw.QAction(
+            'Colormap for path in previous frame'
+        )
+        self.pathCmapLeftAction.triggered.connect(self.setPathCmapLeft)
+        self.pathCmapRightAction = qw.QAction(
+            'Colormap for path in current frame'
+        )
+        self.pathCmapRightAction.triggered.connect(self.setPathCmapRight)
         # self.colormapAction = qw.QAction('Colormap')
         # self.colormapAction.triggered.connect(self.setColormap)
         self.labelInsideAction = self.rightView.setLabelInsideAction
@@ -2381,6 +2396,32 @@ class ReviewWidget(qw.QWidget):
     def toggleSideBySideView(self, checked: bool) -> None:
         self.leftView.setVisible(checked)
         settings.setValue('review/sidebyside', checked)
+        if checked:
+            try:
+                self.sigProjectTrackHistLeft.disconnect(
+                    self.rightView.frameScene.showTrackHist
+                )
+            except Exception:
+                pass
+            try:
+                self.left_list.sigSelected.disconnect(
+                    self.rightView.sigSelected
+                )
+            except Exception:
+                pass
+            try:
+                self.all_list.sigSelected.disconnect(
+                    self.rightView.sigSelected
+                )
+            except Exception:
+                pass
+
+        else:
+            self.sigProjectTrackHistLeft.connect(
+                self.rightView.frameScene.showTrackHist
+            )
+            self.left_list.sigSelected.connect(self.rightView.sigSelected)
+        self.all_list.sigSelected.connect(self.rightView.sigSelected)
 
     @qc.pyqtSlot(qg.QPolygonF)
     def setRoi(self, roi: qg.QPolygonF) -> None:
@@ -2540,8 +2581,7 @@ class ReviewWidget(qw.QWidget):
         else:
             return ''
 
-    @qc.pyqtSlot()
-    def setPathColormap(self):
+    def _setPathCmap(self, side):
         input, accept = qw.QInputDialog.getItem(
             self,
             'Select colormap',
@@ -2561,8 +2601,16 @@ class ReviewWidget(qw.QWidget):
         logging.debug(f'Setting colormap to {input}')
         if not accept:
             return
-        self.leftView.frameScene.setPathCmap(input)
-        self.rightView.frameScene.setPathCmap(input)
+        self.pathCmap[side] = input
+        settings.setValue(f'review/path_cmap_{side}', input)
+
+    @qc.pyqtSlot()
+    def setPathCmapLeft(self):
+        self._setPathCmap('left')
+
+    @qc.pyqtSlot()
+    def setPathCmapRight(self):
+        self._setPathCmap('right')
 
     @qc.pyqtSlot()
     def openTrackedData(self):
@@ -2856,7 +2904,8 @@ class ReviewerMain(qw.QMainWindow):
         viewMenu.addAction(self.reviewWidget.setAlphaUnselectedAction)
         viewMenu.addAction(self.reviewWidget.autoColorAction)
         viewMenu.addAction(self.reviewWidget.colormapAction)
-        viewMenu.addAction(self.reviewWidget.pathCmapAction)
+        viewMenu.addAction(self.reviewWidget.pathCmapLeftAction)
+        viewMenu.addAction(self.reviewWidget.pathCmapRightAction)
         viewMenu.addAction(self.reviewWidget.keepSelectionAction)
         viewMenu.addSeparator()
         viewMenu.addAction(self.reviewWidget.fontSizeAction)

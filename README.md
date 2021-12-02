@@ -113,7 +113,13 @@ download and use pretrained network weights.
    ```
    pip install argos_tracker
    ```
-   
+
+   If you want the development versions of these, do this instead:
+
+   ```
+   pip install https://github.com/subhacom/argos/archive/master.zip
+   pip install https://github.com/subhacom/argos_tracker/archive/master.zip
+   ```
 
 ### Usage
 
