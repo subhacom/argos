@@ -2,6 +2,11 @@
 Argos is a free, open source software toolkit to facilitate tracking
 multiple objects (animals) in videos.
 
+It is described in this article: Ray, S., & Stopfer, M. A. (2021). 
+Argos: A toolkit for tracking multiple animals in complex 
+visual environments. Methods in Ecology and Evolution, 00, 
+1-11. https://doi.org/10.1111/2041-210X.13776
+
 There are many other excellent tools for tracking animal behavior, but Argos:
 0. Does not require constant background.
 1. Can use classical segmentation methods like thresholding, contour
@@ -357,6 +362,9 @@ tracks and correct mistakes.
 
 4. Press Play (keyboard shortcut: `space bar`) to start going through the video.
 
+
+Some videos demonstrating how to use the Review tool in complex scenarios: https://www.youtube.com/playlist?list=PLdh_edYAAElVLiBgBnLLKZY8VflMm1-LU
+
 ### Important items in Menu/Toolbar
 - `Scroll views together` - zooming will work simultaneously on both
    left and right pane, scrolling right pane will scroll the left one
@@ -586,3 +594,9 @@ tracks and correct mistakes.
   year      = {2019},
   }
   ```
+
+- If you use Argos for a publication, please cite the article describing it:
+
+    Ray, S., & Stopfer, M. A. (2021).  Argos: A toolkit for tracking
+    multiple animals in complex visual environments. Methods in Ecology
+    and Evolution, 00, 1- 11. https://doi.org/10.1111/2041-210X.13776
