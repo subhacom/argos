@@ -14,7 +14,9 @@ Please feel free to create an issue in the issue tracker:
 https://github.com/subhacom/argos/issues if you have questions,
 suggestions, or bugs to report.
 
+
 There are many other excellent tools for tracking animal behavior, but Argos:
+
 0. Does not require constant background.
 1. Can use classical segmentation methods like thresholding, contour
    detection, and watershed when objects have good contrast with
