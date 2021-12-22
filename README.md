@@ -10,22 +10,22 @@ Methods in Ecology and Evolution, 00, 1-11.
 https://doi.org/10.1111/2041-210X.13776
 ```
 
-Please feel free to create an issue in the issue tracker:
-https://github.com/subhacom/argos/issues if you have questions,
+Please feel free to create an issue in the [issue tracker](
+https://github.com/subhacom/argos/issues) if you have questions,
 suggestions, or bugs to report.
 
 
 There are many other excellent tools for tracking animal behavior, but Argos:
 
-0. Does not require constant background.
-1. Can use classical segmentation methods like thresholding, contour
+1. Does not require constant background.
+2. Can use classical segmentation methods like thresholding, contour
    detection, and watershed when objects have good contrast with
    background.
-2. Can use a fast Convolutional Neural Network to detect objects in a
+3. Can use a fast Convolutional Neural Network to detect objects in a
    noisy environment, or when the objects do not have uniform color.
-3. Does not assume fixed number of animals: animals can enter and exit
+4. Does not assume fixed number of animals: animals can enter and exit
    a visual scene.
-4. Is a complete toolkit with tools to
+5. Is a complete toolkit with tools to
    1. Only capture or extract from videos scenes with significant
       movement, reducing the amount of data to be processed.
    2. Facilitate generation of training data from images using a GUI.
@@ -176,7 +176,7 @@ interface to set the parameters, choose algorithms for detection
 tracking proceeds. Follow the steps below to start and use this
 program.
 
-9. Run `argos` tracking script on the Anaconda prompt:
+1. Run `argos` tracking script on the Anaconda prompt:
    
    ```
    python -m argos_track
@@ -186,7 +186,7 @@ program.
    tracker. Follow the steps below in the GUI to track objects while
    visualizing the tracking.
 
-10. Open the video file using either the `File` menu. After selecting
+2. Open the video file using either the `File` menu. After selecting
     the video file, you will be prompted to:
 	  1. Select output data directory/file. You have a choice of CSV
          (text) or HDF5 (binary) format. HDF5 is recommended.
@@ -197,7 +197,7 @@ program.
          select the `yolact_base_54_800000.pth` file downloaded from
          YOLACT repository page.
 	  
-11. Start tracking: click the `play/pause` button and you should see
+3. Start tracking: click the `play/pause` button and you should see
     the tracked locusts. The data will be saved in the filename you
     entered in step above.
 
@@ -223,7 +223,7 @@ program.
 	```
 
      
-12. Classical segmentation: Using the `Segmentation method` menu you can switch
+4. Classical segmentation: Using the `Segmentation method` menu you can switch
     from YOLACT to classical image segmentation for detecting target objects. 
     This method uses patterns in the pixel values in the image to detect 
     contiguous patches. If your target objects are small but have high contrast 
