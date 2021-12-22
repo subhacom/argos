@@ -47,10 +47,13 @@ facilitate the work of biologists.
 The components of Argos are loosely coupled. Specifically, the
 tracking does not use neural nets, so no need for training it with
 videos. You need to train the neural net for detection if you want to
-use it, and that can be done with about a hundred training
-images. Moreover, if your target animal is in the COCO database
-(sheep, elephant, giraffe, zebra, horse, dog, bird), you can freely
-download and use pretrained network weights.
+use it, and that can be done with about a hundred training images
+(here is a jupyter notebook showing how to train Argos/YOLACT on
+Google Colab:
+https://github.com/subhacom/argos_tutorials/blob/main/ArgosTrainingTutorial.ipynb). Moreover,
+if your target animal is in the COCO database (sheep, elephant,
+giraffe, zebra, horse, dog, bird), you can freely download and use
+pretrained network weights.
 
 ## Getting started
 
