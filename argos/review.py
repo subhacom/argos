@@ -816,8 +816,10 @@ class TrackReader(qc.QObject):
             data.to_csv(filepath, index=False)
             changes.to_csv(f'{filepath}.changelist_{ts}.csv')
         else:
-            data.to_hdf(filepath, 'tracked', mode='a')
-            changes.to_hdf(filepath, f'changes/changelist_{ts}', mode='a')
+            data.to_hdf(filepath, 'tracked', mode='a', format='table')
+            changes.to_hdf(
+                filepath, f'changes/changelist_{ts}', mode='a', format='table'
+            )
         self.track_data = data
         self.changeList.clear()
         self.sigChangeList.emit(self.changeList)

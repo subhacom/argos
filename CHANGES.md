@@ -41,10 +41,13 @@
   previous frame, Down - next frame, combined with Shift modifier-
   jump 10 frames back or forward.
 
-## [0.1.0-13] - 2021-06-10
+## [0.1.0-13] - 2022-01-22
 
 ### Changed
 - Review tool: mouse wheel scroll modifier Shift for single frame seek
   and Ctrl + Shift for jumps as just scroll interferes with scrollbar
   functionality.
   
+- Review tool: made HDF5 data format `table` - same as track tool -
+  which produces smaller and more flexible files with slower
+  read/write.
