@@ -1,6 +1,12 @@
 # Argos: tracking multiple objects ([documentation](https://argos.readthedocs.io/en/latest/))
 Argos is a free, open source software toolkit to facilitate tracking
-multiple objects (animals) in videos.
+multiple objects (animals) in videos. 
+
+It is distributed in two packages, this, providing tools for video
+capture, annotation of training dataset, and review and correction of
+tracks detected automatically by the Argos Tracking tool. The other
+package is the Argos Tracking tool, distributed in the package
+[argos-tracker](https://github.com/subhacom/argos_tracker).
 
 It is described in this article: 
 ```

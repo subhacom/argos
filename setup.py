@@ -84,7 +84,7 @@ setup(
     version=find_version('argos', '__init__.py'),  # argos.__version__,
     author='Subhasis Ray',
     author_email='ray.subhasis@gmail.com',
-    description='Software utility for tracking multiple objects (animals) in a video.',
+    description='Software tools to facilitate tracking multiple objects (animals) in a video.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/subhacom/argos',
