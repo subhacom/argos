@@ -91,7 +91,6 @@ class FrameScene(qw.QGraphicsScene):
     def clearItems(self):
         self.points = []
         for item in self.itemDict.values():
-            print('Removing', item)
             self.removeItem(item)
         for label in self.labelDict.values():
             self.removeItem(label)
