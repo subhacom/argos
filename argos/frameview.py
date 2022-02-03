@@ -91,11 +91,13 @@ class FrameScene(qw.QGraphicsScene):
     def clearItems(self):
         self.points = []
         for item in self.itemDict.values():
+            print('Removing', item)
             self.removeItem(item)
         for label in self.labelDict.values():
             self.removeItem(label)
         if self.arenaPolygon is not None:
             self.removeItem(self.arenaPolygon)
+            self.arenaPolygon = None
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
