@@ -1,0 +1,403 @@
+# -*- coding: utf-8 -*-
+# Author: Subhasis Ray <ray dot subhasis at gmail dot com>
+# Created: 2022-02-20 11:09 PM
+import csv
+import logging
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+from PyQt5 import QtCore as qc, QtWidgets as qw
+from argos.constants import Change, ChangeCode
+from sortedcontainers import SortedKeyList
+from argos import utility as ut
+
+
+settings = ut.init()
+
+
+class TrackReader(qc.QObject):
+    """Class to read the tracking data.
+
+    It also keeps a list of changes made by the user and applies them
+    before handing over the track information.
+
+    """
+
+    sigEnd = qc.pyqtSignal()
+    sigSavedFrames = qc.pyqtSignal(int)
+    sigChangeList = qc.pyqtSignal(SortedKeyList)
+
+    def __init__(self, data_file):
+        super(TrackReader, self).__init__()
+        self.data_path = data_file
+        if data_file.endswith('.hdf') or data_file.endswith('.h5'):
+            self.track_data = pd.read_hdf(self.data_path, 'tracked')
+        else:  # assume text file
+            has_header = False
+            col_count = -1
+            # MOT format
+            names = [
+                'frame',
+                'trackid',
+                'x',
+                'y',
+                'w',
+                'h',
+                'confidence',
+                'xc',
+                'yc',
+                'zc',
+            ]
+            with open(self.data_path, 'r') as fd:
+                reader = csv.reader(fd)
+                row = reader.__next__()
+                col_count = len(row)
+                try:
+                    _ = float(row[0])
+                    has_header = False
+                except ValueError:
+                    has_header = True
+
+                if has_header:
+                    self.track_data = pd.read_csv(self.data_path)
+                else:
+                    names = names[:col_count]
+                    self.track_data = pd.read_csv(self.data_path, names=names)
+
+        self.track_data = self.track_data.astype(
+            {'frame': int, 'trackid': int}
+        )
+        self.last_frame = self.track_data.frame.max()
+        self.wmin = settings.value('segment/min_width', 0)
+        self.wmax = settings.value('segment/max_width', 1000)
+        self.hmin = settings.value('segment/min_height', 0)
+        self.hmax = settings.value('segment/max_height', 1000)
+
+        def keyfn(change):
+            return (change.frame, change.idx)
+
+        self.changeList = SortedKeyList(key=keyfn)
+        self._change_idx = 0
+        self.undone_changes = set()
+
+    @property
+    def max_id(self):
+        return self.track_data.trackid.max()
+
+    @qc.pyqtSlot(int)
+    def setWmin(self, val: int):
+        self.wmin = val
+
+    @qc.pyqtSlot(int)
+    def setWmax(self, val: int):
+        self.wmax = val
+
+    @qc.pyqtSlot(int)
+    def setHmin(self, val: int):
+        self.hmin = val
+
+    @qc.pyqtSlot(int)
+    def setHmax(self, val: int):
+        self.hmax = val
+
+    def getTrackId(self, track_id, frame_no=None, hist=10):
+        """Get all entries for a track across frames.
+
+        Parameters
+        ----------
+        frame_no: int, default None
+            If specified, only entries around this frame are
+            returned. If `None`, return all entries for this track.
+        hist: int, default 10
+            Number of past and future entries around `frame_no`
+            to select.
+
+        Returns
+        -------
+        pd.DataFrame
+            The data for track `track_id` for frames `frame_no` -
+            `hist` to `frame_no` + `hist`.
+
+            If `frame_no` is `None`, data for `track_id` across all frames.
+
+            `None` if no track matches the specified `track_id` in frame `frame_no`.
+
+        """
+        track = self.track_data[self.track_data.trackid == track_id].copy()
+        if frame_no is None:
+            return track
+        tgt = track[track.frame == frame_no]
+        if len(tgt) == 0:
+            return None
+        pos = track.index.get_loc(tgt.iloc[0].name)
+        pre = max(0, pos - hist)
+        post = min(len(track), pos + hist)
+        return track.iloc[pre:post].copy()
+
+    def getFramePrevNew(self, frame_no):
+        """Return the previous frame where a new object ID was detected"""
+        if frame_no <= 0:
+            return 0
+        entry_frame = []
+        cur_tracks = self.track_data[self.track_data.frame < frame_no][
+            ['trackid', 'frame']
+        ]
+        for trackid, fgrp in cur_tracks.groupby('trackid'):
+            entry_frame.append((fgrp['frame'].min(), trackid))
+        if len(entry_frame) == 0:
+            return frame_no
+        entry_frame = pd.DataFrame(
+            data=entry_frame, columns=['frame', 'trackid']
+        )
+        entry_frame.sort_values(by='frame', ascending=False, inplace=True)
+        fno = entry_frame.iloc[0]['frame']
+        return fno
+
+    def getFrameNextNew(self, frame_no):
+        """Return the next frame where a new object ID was detected"""
+        if frame_no > self.last_frame:
+            return self.last_frame + 1
+        cur_tracks = set(
+            self.track_data[self.track_data.frame <= frame_no]['trackid']
+        )
+        for fno in range(frame_no, self.last_frame + 1):
+            tracks = set(
+                self.track_data[self.track_data.frame == fno]['trackid']
+            )
+            if len(tracks - cur_tracks) > 0:
+                return fno
+        logging.debug(
+            f'Reached last frame with tracks: frame no {self.last_frame}'
+        )
+        return self.last_frame + 1
+
+    def getTracks(self, frame_no):
+        if frame_no > self.last_frame:
+            logging.debug(
+                f'Reached last frame with tracks: frame no {frame_no}'
+            )
+            self.sigEnd.emit()
+            return {}
+        self.frame_pos = frame_no
+        tracks = self.track_data[self.track_data.frame == frame_no]
+        # Filter bboxes violating size constraints
+        wh = np.sort(tracks[['w', 'h']].values, axis=1)
+        # print('Excluded', tracks.iloc[(
+        sel = np.flatnonzero(
+            (wh[:, 0] >= self.wmin)
+            & (wh[:, 0] <= self.wmax)
+            & (wh[:, 1] >= self.hmin)
+            & (wh[:, 1] <= self.hmax)
+        )
+        tracks = tracks.iloc[sel]
+        tracks = self.applyChanges(tracks)
+        return tracks
+
+    @qc.pyqtSlot(int, int, int)
+    def changeTrack(self, frame_no, orig_id, new_id, endFrame=-1):
+        """When user assigns `newId` to `orig_id` keep it in undo buffer"""
+        change = Change(
+            frame=frame_no,
+            end=endFrame,
+            change=ChangeCode.op_assign,
+            orig=orig_id,
+            new=new_id,
+            idx=self._change_idx,
+        )
+        self._change_idx += 1
+        self.changeList.add(change)
+        self.sigChangeList.emit(self.changeList)
+        logging.debug(
+            f'Changin track: frame: {frame_no}, old: {orig_id}, new: {new_id}'
+        )
+
+    @qc.pyqtSlot(int, int, int)
+    def swapTrack(self, frameNo, origId, newId, endFrame=-1):
+        """When user swaps `newId` with `orig_id` keep it in swap buffer"""
+        change = Change(
+            frame=frameNo,
+            end=endFrame,
+            change=ChangeCode.op_swap,
+            orig=origId,
+            new=newId,
+            idx=self._change_idx,
+        )
+        self._change_idx += 1
+        self.changeList.add(change)
+        logging.debug(
+            f'Swap track: frame: {frameNo}, old: {origId}, new: {newId}'
+        )
+
+    def deleteTrack(self, frameNo, origId, endFrame=-1):
+        change = Change(
+            frame=frameNo,
+            end=endFrame,
+            change=ChangeCode.op_delete,
+            orig=origId,
+            new=-1,
+            idx=self._change_idx,
+        )
+        self._change_idx += 1
+        self.changeList.add(change)
+
+    @qc.pyqtSlot(int)
+    def undoChangeTrack(self, frameNo):
+        """This puts the specified frame in a blacklist so all changes applied
+        on it are ignored"""
+        while True:
+            loc = self.changeList.bisect_key_left((frameNo, 0))
+            if (
+                loc < len(self.changeList)
+                and self.changeList[loc].frame == frameNo
+            ):
+                self.changeList.pop(loc)
+            else:
+                return
+
+    def applyChanges(self, tdata):
+        """Apply the changes in `changeList` to traks in `trackdf`
+        `trackdf` should have a single `frame` value - changes  only
+        upto and including this frame are applied.
+        """
+        if len(tdata) == 0:
+            return {}
+        tracks = []
+        idx_dict = {}
+        for ii, row in enumerate(tdata.itertuples()):
+            tracks.append([row.trackid, row.x, row.y, row.w, row.h, row.frame])
+            idx_dict[row.trackid] = ii
+        frameNo = tdata.frame.values[0]
+        delete_idx = set()
+        for change in self.changeList:
+            if change.frame > frameNo:
+                break
+            if (change.frame in self.undone_changes) or (
+                0 <= change.end < frameNo
+            ):
+                continue
+            orig_idx = idx_dict.pop(change.orig, None)
+            if change.change == ChangeCode.op_swap:
+                new_idx = idx_dict.pop(change.new, None)
+                if new_idx is not None:
+                    tracks[new_idx][0] = change.orig
+                    idx_dict[change.orig] = new_idx
+                if orig_idx is not None:
+                    tracks[orig_idx][0] = change.new
+                    idx_dict[change.new] = orig_idx
+            elif (orig_idx is not None) and (
+                (change.change == ChangeCode.op_assign)
+                or (change.change == ChangeCode.op_merge)
+            ):
+                # TODO - assign is same as merge now - but maybe in future
+                #  differentiate between assign, which should remove
+                #  pre-existing change.new item if change.orig is not present
+                #  in current tracks, and merge, which should keep
+                #  change.new even if change.orig is not present
+                tracks[orig_idx][0] = change.new
+                new_idx = idx_dict.pop(change.new, None)
+                idx_dict[change.new] = orig_idx
+                if new_idx is not None:
+                    delete_idx.add(new_idx)
+            elif (
+                change.change == ChangeCode.op_delete
+            ) and orig_idx is not None:
+                delete_idx.add(orig_idx)
+            elif orig_idx is not None:  # push the orig index back
+                idx_dict[change.orig] = orig_idx
+        tracks = {
+            t[0]: t[1:] for ii, t in enumerate(tracks) if ii not in delete_idx
+        }
+        return tracks
+
+    def saveChanges(self, filepath):
+        """Consolidate all the changes made in track id assignment.
+
+        Assumptions: as tracking progresses, only new, bigger numbers are
+        assigned for track ids. track_id never goes down.
+
+        track ids can be swapped.
+        """
+        # assignments = self.consolidateChanges()
+        data = []
+
+        for frame_no, tdata in self.track_data.groupby('frame'):
+            tracks = self.applyChanges(tdata)
+            for tid, tdata in tracks.items():
+                data.append([frame_no, tid] + tdata[:4])
+                qw.QApplication.processEvents()
+            self.sigSavedFrames.emit(frame_no)
+        data = pd.DataFrame(
+            data=data, columns=['frame', 'trackid', 'x', 'y', 'w', 'h']
+        )
+        changes = [
+            (
+                change.frame,
+                change.end,
+                change.change.name,
+                change.change.value,
+                change.orig,
+                change.new,
+                change.idx,
+            )
+            for change in self.changeList
+            if change.frame not in self.undone_changes
+        ]
+
+        changes = pd.DataFrame(
+            data=changes,
+            columns=['frame', 'end', 'change', 'code', 'orig', 'new', 'idx'],
+        )
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if filepath.endswith('.csv'):
+            data.to_csv(filepath, index=False)
+            changes.to_csv(f'{filepath}.changelist_{ts}.csv')
+        else:
+            data.to_hdf(filepath, 'tracked', mode='a', format='table')
+            changes.to_hdf(
+                filepath, f'changes/changelist_{ts}', mode='a', format='table'
+            )
+        self.track_data = data
+        self.changeList.clear()
+        self.sigChangeList.emit(self.changeList)
+
+    @qc.pyqtSlot(str)
+    def saveChangeList(self, fname: str) -> None:
+        # self.changeList = sorted(self.changeList, key=attrgetter('frame'))
+        with open(fname, 'w') as fd:
+            writer = csv.writer(fd)
+            writer.writerow(['frame', 'end', 'change', 'code', 'old', 'new'])
+            for change in self.changeList:
+                if change.frame not in self.undone_changes:
+                    writer.writerow(
+                        [
+                            change.frame,
+                            change.end,
+                            change.change.name,
+                            change.change.value,
+                            change.orig,
+                            change.new,
+                        ]
+                    )
+
+    @qc.pyqtSlot(str)
+    def loadChangeList(self, fname: str) -> None:
+        self.changeList.clear()
+        with open(fname) as fd:
+            reader = csv.DictReader(fd)
+            idx = 0
+            for row in reader:
+                new = int(row['new']) if len(row['new']) > 0 else None
+                chcode = getattr(ChangeCode, row['change'])
+                change = Change(
+                    frame=int(row['frame']),
+                    end=int(row['end']),
+                    change=chcode,
+                    orig=int(row['orig']),
+                    new=new,
+                    idx=idx,
+                )
+                self.changeList.add(change)
+                idx += 1
+        self.sigChangeList.emit(self.changeList)
