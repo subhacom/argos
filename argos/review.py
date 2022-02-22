@@ -560,8 +560,6 @@ class ReviewWidget(qw.QWidget):
         self.trackReader = None
         self.track_filename = None
         self.vid_info = VidInfo()
-        self.left_tracks = {}
-        self.right_tracks = {}
         self.roi = None
         # Since video seek is buggy, we have to do continuous reading
         self.save_indicator = None
@@ -792,7 +790,7 @@ class ReviewWidget(qw.QWidget):
 
     @qc.pyqtSlot()
     def setBreakpointAtCurrent(self):
-        self.breakpoint = self.frame_no
+        self.breakpoint = self.cur['pos']
 
     @qc.pyqtSlot()
     def setBreakpointAtEntry(self):
@@ -953,7 +951,7 @@ class ReviewWidget(qw.QWidget):
                 fwd()
             elif direction == 1:
                 bak()
-            if self.frame_no == self.breakpoint:
+            if self.cur['pos'] == self.breakpoint:
                 break
 
     def makeActions(self):
@@ -1401,19 +1399,19 @@ class ReviewWidget(qw.QWidget):
                 self,
                 'Delete in frame range',
                 'Delete till frame',
-                self.frame_no,
-                self.frame_no,
+                self.cur['pos'],
+                self.cur['pos'],
                 2 ** 31 - 1,
             )
             if not ok:
                 return
         if cur:
-            endFrame = self.frame_no
+            endFrame = self.cur['pos']
         for sel in selected:
-            self.trackReader.deleteTrack(self.frame_no, sel, endFrame)
-            if sel not in self.right_tracks:
+            self.trackReader.deleteTrack(self.cur['pos'], sel, endFrame)
+            if sel not in self.cur['tracks']:
                 continue
-            self.right_tracks.pop(sel)
+            self.cur['tracks'].pop(sel)
             right_items = self.right_list.findItems(
                 items[0].text(), qc.Qt.MatchExactly
             )
@@ -1457,7 +1455,7 @@ class ReviewWidget(qw.QWidget):
         )
         if ok:
             print(f'Renaming track {tid} to {val}')
-            self.mapTracks(val, tid, self.frame_no, False)
+            self.mapTracks(val, tid, self.cur['pos'], False)
 
     @qc.pyqtSlot()
     def swapTracks(self):
@@ -1824,14 +1822,14 @@ class ReviewWidget(qw.QWidget):
             self.sigDiffMessage.emit(message)
 
     def _get_diff(self, show_new):
-        right_keys = set(self.right_tracks.keys())
+        right_keys = set(self.cur['tracks'].keys())
         all_keys = set(self.old_all_tracks.keys())
         new = right_keys - all_keys
         if show_new:
             if len(new) > 0:
                 return f'Frame {self.cur["pos"] - 1}-{self.cur["pos"]}: New track on right: {new}.'
             return ''
-        left_keys = set(self.left_tracks.keys())
+        left_keys = set(self.prev['tracks'].keys())
         if left_keys != right_keys:
             # logging.info(f'Tracks don\'t match between frames {self.frame_no - 1} '
             #              f'and {self.frame_no}: '
@@ -2122,8 +2120,8 @@ class ReviewWidget(qw.QWidget):
             )
         tracks = self.trackReader.getTracks(self.cur['pos'])
         self.sigRightTrackList.emit(list(tracks.keys()))
-        self.right_tracks = self._flag_tracks({}, tracks)
-        self.sigRightTracks.emit(self.right_tracks)
+        self.cur['tracks'] = self._flag_tracks({}, tracks)
+        self.sigRightTracks.emit(self.cur['tracks'])
         self.sigDataFile.emit(self.track_filename, True)
 
     @qc.pyqtSlot()
