@@ -70,10 +70,12 @@ class TrackReader(qc.QObject):
         )
         # Here I keep the entry frames for each track to seatch next
         # new track efficiently
-        self.entry_frames = self.track_data.groupby('trackid').frame.aggregate(
-            'min'
+        self.entry_frames = (
+            self.track_data.groupby('trackid')
+            .frame.aggregate('min')
+            .drop_duplicates()
+            .sort_values()
         )
-        self.entry_frames.drop_duplicates(inplace=True)
         self.last_frame = self.track_data.frame.max()
         self.wmin = settings.value('segment/min_width', 0)
         self.wmax = settings.value('segment/max_width', 1000)
