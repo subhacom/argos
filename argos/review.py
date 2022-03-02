@@ -1583,6 +1583,11 @@ class ReviewWidget(qw.QWidget):
         frame = self.trackReader.getFrameNextNew(self.cur['pos'])
         self.gotoFrame(frame - 1)
         self.gotoFrame(frame)
+        if set(self.cur['tracks']) == set(self.prev['tracks']):
+            self.sigDiffMessage.emit(
+                f'{self.prev["pos"]} - {self.cur["pos"]}'
+                ': tracks differ but filtered out'
+            )
 
     @qc.pyqtSlot()
     def jumpPrevNew(self):
@@ -1591,6 +1596,11 @@ class ReviewWidget(qw.QWidget):
         frame = self.trackReader.getFramePrevNew(self.cur['pos'])
         self.gotoFrame(frame - 1)
         self.gotoFrame(frame)
+        if set(self.cur['tracks']) == set(self.prev['tracks']):
+            self.sigDiffMessage.emit(
+                f'{self.prev["pos"]} - {self.cur["pos"]}'
+                ': tracks differ but filtered out'
+            )
 
     @qc.pyqtSlot()
     def gotoNextChange(self):
@@ -1764,7 +1774,6 @@ class ReviewWidget(qw.QWidget):
                 'pos': -1,
             }
         self.cur = {'frame': frame, 'tracks': flagged_tracks, 'pos': pos}
-        self.sigDiffMessage.emit(f'{self.prev["pos"]} > {self.cur["pos"]} ')
         # When overlay is checked, show the diff on the right
         if (
             self.overlayAction.isChecked()

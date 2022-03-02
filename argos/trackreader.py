@@ -68,6 +68,12 @@ class TrackReader(qc.QObject):
         self.track_data = self.track_data.astype(
             {'frame': int, 'trackid': int}
         )
+        # Here I keep the entry frames for each track to seatch next
+        # new track efficiently
+        self.entry_frames = self.track_data.groupby('trackid').frame.aggregate(
+            'min'
+        )
+        self.entry_frames.drop_duplicates(inplace=True)
         self.last_frame = self.track_data.frame.max()
         self.wmin = settings.value('segment/min_width', 0)
         self.wmax = settings.value('segment/max_width', 1000)
@@ -137,40 +143,21 @@ class TrackReader(qc.QObject):
 
     def getFramePrevNew(self, frame_no):
         """Return the previous frame where a new object ID was detected"""
-        if frame_no <= 0:
-            return 0
-        entry_frame = []
-        cur_tracks = self.track_data[self.track_data.frame < frame_no][
-            ['trackid', 'frame']
-        ]
-        for trackid, fgrp in cur_tracks.groupby('trackid'):
-            entry_frame.append((fgrp['frame'].min(), trackid))
-        if len(entry_frame) == 0:
-            return frame_no
-        entry_frame = pd.DataFrame(
-            data=entry_frame, columns=['frame', 'trackid']
-        )
-        entry_frame.sort_values(by='frame', ascending=False, inplace=True)
-        fno = entry_frame.iloc[0]['frame']
+        fno = -1
+        pos = self.entry_frames.searchsorted(frame_no)
+        if pos > 0:
+            fno = self.entry_frames.iloc[pos - 1]
         return fno
 
     def getFrameNextNew(self, frame_no):
         """Return the next frame where a new object ID was detected"""
-        if frame_no > self.last_frame:
-            return self.last_frame + 1
-        cur_tracks = set(
-            self.track_data[self.track_data.frame <= frame_no]['trackid']
-        )
-        for fno in range(frame_no, self.last_frame + 1):
-            tracks = set(
-                self.track_data[self.track_data.frame == fno]['trackid']
-            )
-            if len(tracks - cur_tracks) > 0:
-                return fno
-        logging.debug(
-            f'Reached last frame with tracks: frame no {self.last_frame}'
-        )
-        return self.last_frame + 1
+        fno = self.last_frame + 1
+        pos = self.entry_frames.searchsorted(frame_no)
+        if pos < self.entry_frames.size:
+            fno = self.entry_frames.iloc[pos]
+        if fno == frame_no:
+            fno = self.entry_frames.iloc[pos + 1]
+        return fno
 
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
