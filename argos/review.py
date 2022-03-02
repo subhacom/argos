@@ -470,15 +470,43 @@ def displayDoc():
     qg.QDesktopServices.openUrl(qc.QUrl(DOC_LINK))
 
 
-class LimitWin(qw.QMainWindow):
+class LimitWin(qw.QDialog):
     sigClose = qc.pyqtSignal(bool)  # connected to action checked state
 
     def __init__(self, *args, **kwargs):
         super(LimitWin, self).__init__(*args, **kwargs)
+        self.lim_widget = LimitsWidget(self)
+        layout = qw.QVBoxLayout()
+        layout.addWidget(self.lim_widget)
+        self.ok_button = qw.QPushButton('OK', self)
+        layout.addWidget(self.ok_button)
+        self.setLayout(layout)
+        self.ok_button.clicked.connect(self.close)
 
     def closeEvent(self, a0: qg.QCloseEvent) -> None:
         self.sigClose.emit(False)
         super(LimitWin, self).closeEvent(a0)
+
+    def connectLimitSignals(
+        self,
+        wminSlot=None,
+        wmaxSlot=None,
+        hminSlot=None,
+        hmaxSlot=None,
+        roiSignal=None,
+    ):
+        """Connect the signals from `lim_widget` to corresponding
+        slots passed as arguments and `roiSignal` to `setRoi` slot"""
+        if wminSlot is not None:
+            self.lim_widget.sigWmin.connect(wminSlot)
+        if wmaxSlot is not None:
+            self.lim_widget.sigWmax.connect(wmaxSlot)
+        if hminSlot is not None:
+            self.lim_widget.sigHmin.connect(hminSlot)
+        if hmaxSlot is not None:
+            self.lim_widget.sigHmax.connect(hmaxSlot)
+        if roiSignal is not None:
+            roiSignal.connect(self.lim_widget.setRoi)
 
 
 class ChangeWindow(qw.QMainWindow):
@@ -628,9 +656,7 @@ class ReviewWidget(qw.QWidget):
         ctrl_layout.addWidget(self.reset_button)
         layout.addLayout(ctrl_layout)
         self.setLayout(layout)
-        self.lim_widget = LimitsWidget(self)
-        self.lim_win = LimitWin()
-        self.lim_win.setCentralWidget(self.lim_widget)
+        self.lim_win = LimitWin(self)
         self.changelist_widget = ChangeWindow()
         self.changelist_widget.setVisible(False)
         self.makeActions()
@@ -639,7 +665,7 @@ class ReviewWidget(qw.QWidget):
         self.sigLeftFrame.connect(self.leftView.setFrame)
         self.sigRightFrame.connect(self.rightView.setFrame)
         self.rightView.sigArena.connect(self.setRoi)
-        self.rightView.sigArena.connect(self.lim_widget.setRoi)
+        self.lim_win.connectLimitSignals(roiSignal=self.rightView.sigArena)
         self.rightView.sigArena.connect(self.leftView.frameScene.setArena)
         self.sigLeftTracks.connect(self.leftView.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
@@ -1957,10 +1983,12 @@ class ReviewWidget(qw.QWidget):
         self.leftView.frameScene.setHistGradient(self.history_length)
         self.rightView.frameScene.setHistGradient(self.history_length)
         self.rightView.resetArenaAction.trigger()
-        self.lim_widget.sigWmin.connect(self.trackReader.setWmin)
-        self.lim_widget.sigWmax.connect(self.trackReader.setWmax)
-        self.lim_widget.sigHmin.connect(self.trackReader.setHmin)
-        self.lim_widget.sigHmax.connect(self.trackReader.setHmax)
+        self.lim_win.connectLimitSignals(
+            wminSlot=self.trackReader.setWmin,
+            wmaxSlot=self.trackReader.setWmax,
+            hminSlot=self.trackReader.setHmin,
+            hmaxSlot=self.trackReader.setHmax,
+        )
         if self.disableSeekAction.isChecked():
             self.sigNextFrame.connect(self.video_reader.read)
         else:

@@ -155,10 +155,10 @@ class TrackReader(qc.QObject):
         """Return the next frame where a new object ID was detected"""
         fno = self.last_frame + 1
         pos = self.entry_frames.searchsorted(frame_no)
-        if pos < self.entry_frames.size:
+        if pos < self.entry_frames.size - 1:
             fno = self.entry_frames.iloc[pos]
-        if fno == frame_no:
-            fno = self.entry_frames.iloc[pos + 1]
+            if fno == frame_no:
+                fno = self.entry_frames.iloc[pos + 1]
         return fno
 
     def getTracks(self, frame_no):
