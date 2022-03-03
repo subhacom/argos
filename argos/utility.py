@@ -325,6 +325,34 @@ def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
     return qimg
 
 
+def vec_rect_intersection(ra, rb):
+    """Vectorized rectangle intersection.
+
+    Parameters
+    ----------
+    ra: np.ndarray
+        Coordinates of a single rectangle as 1D array, xywh format
+    rb: np.ndarray
+        Coordinates of other rectangles, one in each row, xywh format
+
+    Returns
+    -------
+    np.ndarray:
+        Intersections of ra with rectangles in rbvec with
+        columns (x, y, dx, dy). If no intersection, dx or dy <= 0
+    """
+    result = np.zeros(len(rb), dtype=np.int32)
+    result[:, 0] = np.maximum(ra[0], rb[:, 0])
+    result[:, 1] = np.maximum(ra[1], rb[:, 1])
+    result[:, 2] = (
+        np.minimum(ra[0] + ra[2], rb[:, 0] + rb[:, 2]) - result[:, 0]
+    )
+    result[:, 3] = (
+        np.minimum(ra[1] + ra[3], rb[:, 1] + rb[:, 3]) - result[:, 1]
+    )
+    return result
+
+
 # Try to import cython version of these functions, otherwise define them in
 # pure python
 try:

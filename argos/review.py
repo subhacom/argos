@@ -494,6 +494,7 @@ class LimitWin(qw.QDialog):
         hminSlot=None,
         hmaxSlot=None,
         roiSignal=None,
+        resetRoiSignal=None,
     ):
         """Connect the signals from `lim_widget` to corresponding
         slots passed as arguments and `roiSignal` to `setRoi` slot"""
@@ -507,6 +508,8 @@ class LimitWin(qw.QDialog):
             self.lim_widget.sigHmax.connect(hmaxSlot)
         if roiSignal is not None:
             roiSignal.connect(self.lim_widget.setRoi)
+        if resetRoiSignal is not None:
+            resetRoiSignal.connect(self.lim_widget.resetRoi)
 
 
 class ChangeWindow(qw.QMainWindow):
@@ -664,8 +667,11 @@ class ReviewWidget(qw.QWidget):
         self.timer.timeout.connect(self.nextFrame)
         self.sigLeftFrame.connect(self.leftView.setFrame)
         self.sigRightFrame.connect(self.rightView.setFrame)
-        self.rightView.sigArena.connect(self.setRoi)
-        self.lim_win.connectLimitSignals(roiSignal=self.rightView.sigArena)
+        # self.rightView.sigArena.connect(self.setRoi)
+        self.lim_win.connectLimitSignals(
+            roiSignal=self.rightView.sigArena,
+            resetRoiSignal=self.rightView.resetArenaAction.triggered,
+        )
         self.rightView.sigArena.connect(self.leftView.frameScene.setArena)
         self.sigLeftTracks.connect(self.leftView.sigSetRectangles)
         self.sigLeftTrackList.connect(self.left_list.replaceAll)
@@ -1075,7 +1081,8 @@ class ReviewWidget(qw.QWidget):
         self.enableDrawArenaAction.triggered.connect(self.rightView.enableDraw)
         self.enableDrawArenaAction.triggered.connect(self.leftView.enableDraw)
         self.enableDrawArenaAction.setChecked(False)
-        self.rightView.resetArenaAction.triggered.connect(self.resetRoi)
+        # self.rightView.resetArenaAction.triggered.connect(self.resetRoi)
+
         self.rightView.resetArenaAction.triggered.connect(
             self.leftView.resetArenaAction.trigger
         )
@@ -1759,13 +1766,13 @@ class ReviewWidget(qw.QWidget):
             self.left_list.sigSelected.connect(self.rightView.sigSelected)
             self.all_list.sigSelected.connect(self.rightView.sigSelected)
 
-    @qc.pyqtSlot(qg.QPolygonF)
-    def setRoi(self, roi: qg.QPolygonF) -> None:
-        self.roi = roi
-
-    @qc.pyqtSlot()
-    def resetRoi(self) -> None:
-        self.roi = None
+    # @qc.pyqtSlot(qg.QPolygonF)
+    # def setRoi(self, roi: qg.QPolygonF) -> None:
+    #     self.roi = roi
+    #
+    # @qc.pyqtSlot()
+    # def resetRoi(self) -> None:
+    #     self.roi = None
 
     @qc.pyqtSlot()
     def undoCurrentChanges(self):
@@ -1782,14 +1789,14 @@ class ReviewWidget(qw.QWidget):
         tracks = self.trackReader.getTracks(pos)
         flagged_tracks = self._flag_tracks({}, tracks)
         # ts = time.perf_counter_ns()
-        if self.roi is not None:
-            # flag tracks outside ROI
-            keys = list(tracks.keys())
-            for tid in keys:
-                bbox = qg.QPolygonF(qc.QRectF(*tracks[tid][:4]))
-                if not self.roi.intersects(bbox):
-                    self.trackReader.deleteTrack(pos, tid)
-                    tracks.pop(tid)
+        # if self.roi is not None:
+        #     # flag tracks outside ROI
+        #     keys = list(tracks.keys())
+        #     for tid in keys:
+        #         bbox = qg.QPolygonF(qc.QRectF(*tracks[tid][:4]))
+        #         if not self.roi.intersects(bbox):
+        #             self.trackReader.deleteTrack(pos, tid)
+        #             tracks.pop(tid)
 
         if pos > 0:
             self.prev = self.cur
@@ -1988,6 +1995,10 @@ class ReviewWidget(qw.QWidget):
             wmaxSlot=self.trackReader.setWmax,
             hminSlot=self.trackReader.setHmin,
             hmaxSlot=self.trackReader.setHmax,
+        )
+        self.rightView.sigArena.connect(self.trackReader.setRoi)
+        self.rightView.resetArenaAction.triggered.connect(
+            self.trackReader.resetRoi
         )
         if self.disableSeekAction.isChecked():
             self.sigNextFrame.connect(self.video_reader.read)

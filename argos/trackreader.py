@@ -4,10 +4,11 @@
 import csv
 import logging
 from datetime import datetime
+import time
 
 import numpy as np
 import pandas as pd
-from PyQt5 import QtCore as qc, QtWidgets as qw
+from PyQt5 import QtCore as qc, QtWidgets as qw, QtGui as qg
 from argos.constants import Change, ChangeCode
 from sortedcontainers import SortedKeyList
 from argos import utility as ut
@@ -30,6 +31,7 @@ class TrackReader(qc.QObject):
 
     def __init__(self, data_file):
         super(TrackReader, self).__init__()
+        self.roi = None
         self.data_path = data_file
         if data_file.endswith('.hdf') or data_file.endswith('.h5'):
             self.track_data = pd.read_hdf(self.data_path, 'tracked')
@@ -109,6 +111,14 @@ class TrackReader(qc.QObject):
     def setHmax(self, val: int):
         self.hmax = val
 
+    @qc.pyqtSlot(qg.QPolygonF)
+    def setRoi(self, roi):
+        self.roi = roi
+
+    @qc.pyqtSlot()
+    def resetRoi(self):
+        self.roi = None
+
     def getTrackId(self, track_id, frame_no=None, hist=10):
         """Get all entries for a track across frames.
 
@@ -172,7 +182,6 @@ class TrackReader(qc.QObject):
         tracks = self.track_data[self.track_data.frame == frame_no]
         # Filter bboxes violating size constraints
         wh = np.sort(tracks[['w', 'h']].values, axis=1)
-        # print('Excluded', tracks.iloc[(
         sel = np.flatnonzero(
             (wh[:, 0] >= self.wmin)
             & (wh[:, 0] <= self.wmax)
@@ -244,16 +253,51 @@ class TrackReader(qc.QObject):
             else:
                 return
 
+    def _filterTracks(self, tracks):
+        wh = np.sort(tracks[['w', 'h']].values, axis=1)
+        if self.roi is not None:
+            intersects = [
+                self.roi.intersects(
+                    qg.QPolygonF(qc.QRectF(track.x, track.y, track.w, track.h))
+                )
+                for track in tracks.itertuples()
+            ]
+            intersects = np.array(intersects, dtype=bool)
+        else:
+            intersects = np.ones(tracks.shape[0], dtype=bool)
+
+        sel = np.flatnonzero(
+            (wh[:, 0] >= self.wmin)
+            & (wh[:, 0] <= self.wmax)
+            & (wh[:, 1] >= self.hmin)
+            & (wh[:, 1] <= self.hmax)
+            & intersects
+        )
+        return tracks.iloc[sel]
+
     def applyChanges(self, tdata):
-        """Apply the changes in `changeList` to traks in `trackdf`
-        `trackdf` should have a single `frame` value - changes  only
-        upto and including this frame are applied.
+        """Apply the changes in `changeList` to traks in `tdata`.
+
+        Parameters
+        ----------
+        tdata: pd.DataFrame
+            Tracks for the current frame
+
+        Returns
+        -------
+        dict:
+            A dict mapping ``trackid: (x, y, w, h, frame)``
+
+        NOTE: `tdata` should have a single `frame` value - changes
+        only upto and including this frame are applied.
         """
         if len(tdata) == 0:
             return {}
+        # First do filtering
+        filtered = self._filterTracks(tdata)
         tracks = []
         idx_dict = {}
-        for ii, row in enumerate(tdata.itertuples()):
+        for ii, row in enumerate(filtered.itertuples()):
             tracks.append([row.trackid, row.x, row.y, row.w, row.h, row.frame])
             idx_dict[row.trackid] = ii
         frameNo = tdata.frame.values[0]
@@ -309,7 +353,7 @@ class TrackReader(qc.QObject):
         """
         # assignments = self.consolidateChanges()
         data = []
-
+        t1_s = time.perf_counter()
         for frame_no, tdata in self.track_data.groupby('frame'):
             tracks = self.applyChanges(tdata)
             for tid, tdata in tracks.items():
@@ -319,6 +363,12 @@ class TrackReader(qc.QObject):
         data = pd.DataFrame(
             data=data, columns=['frame', 'trackid', 'x', 'y', 'w', 'h']
         )
+        t1_e = time.perf_counter()
+        print(
+            'Time to apply changes to tracks and combine into data frame',
+            t1_e - t1_s,
+        )
+        t2_s = time.perf_counter()
         changes = [
             (
                 change.frame,
@@ -337,19 +387,44 @@ class TrackReader(qc.QObject):
             data=changes,
             columns=['frame', 'end', 'change', 'code', 'orig', 'new', 'idx'],
         )
-
+        t2_e = time.perf_counter()
+        print('Time to collect changes', t2_e - t2_s)
+        t3_s = time.perf_counter()
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         if filepath.endswith('.csv'):
             data.to_csv(filepath, index=False)
             changes.to_csv(f'{filepath}.changelist_{ts}.csv')
         else:
-            data.to_hdf(filepath, 'tracked', mode='a', format='table')
-            changes.to_hdf(
-                filepath, f'changes/changelist_{ts}', mode='a', format='table'
-            )
+            self._saveDataChangesHDF5(filepath, changes, data, ts)
+        t3_e = time.perf_counter()
+        print('Time to save data', t3_e - t3_s)
         self.track_data = data
         self.changeList.clear()
         self.sigChangeList.emit(self.changeList)
+
+    def _saveDataChangesHDF5(self, filepath, changes, data, timestamp):
+        """Save changes and data in HDF5 format. Here we also store
+        the limits (min and max height, width, and roi) as attributes
+        of the changes group"""
+        with pd.HDFStore(filepath) as store:
+            store.put('/tracked', data, format='table')
+            change_path = f'changes/changelist_{timestamp}'
+            store.put(change_path, changes, format='table')
+            store.get_storer(change_path).attrs.wmin = self.wmin
+            store.get_storer(change_path).attrs.wmax = self.wmax
+            store.get_storer(change_path).attrs.hmin = self.hmin
+            store.get_storer(change_path).attrs.hmax = self.hmax
+            if self.roi is not None:
+                store.get_storer(change_path).attrs.roi = [
+                    (int(point.x()), int(point.y())) for point in self.roi
+                ]
+            else:
+                store.get_storer(change_path).attrs.roi = [
+                    (0, 0),
+                    (0, np.iinfo(np.int32).max),
+                    (np.iinfo(np.int32).max, np.iinfo(np.int32).max),
+                    (np.iinfo(np.int32).max, 0),
+                ]
 
     @qc.pyqtSlot(str)
     def saveChangeList(self, fname: str) -> None:
