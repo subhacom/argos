@@ -181,15 +181,8 @@ class TrackReader(qc.QObject):
         self.frame_pos = frame_no
         tracks = self.track_data[self.track_data.frame == frame_no]
         # Filter bboxes violating size constraints
-        wh = np.sort(tracks[['w', 'h']].values, axis=1)
-        sel = np.flatnonzero(
-            (wh[:, 0] >= self.wmin)
-            & (wh[:, 0] <= self.wmax)
-            & (wh[:, 1] >= self.hmin)
-            & (wh[:, 1] <= self.hmax)
-        )
-        tracks = tracks.iloc[sel]
-        tracks = self.applyChanges(tracks)
+        filtered = self._filterTracks(tracks)
+        tracks = self.applyChanges(filtered)
         return tracks
 
     @qc.pyqtSlot(int, int, int)
@@ -293,11 +286,10 @@ class TrackReader(qc.QObject):
         """
         if len(tdata) == 0:
             return {}
-        # First do filtering
-        filtered = self._filterTracks(tdata)
+
         tracks = []
         idx_dict = {}
-        for ii, row in enumerate(filtered.itertuples()):
+        for ii, row in enumerate(tdata.itertuples()):
             tracks.append([row.trackid, row.x, row.y, row.w, row.h, row.frame])
             idx_dict[row.trackid] = ii
         frameNo = tdata.frame.values[0]
@@ -344,7 +336,7 @@ class TrackReader(qc.QObject):
         return tracks
 
     def saveChanges(self, filepath):
-        """Consolidate all the changes made in track id assignment.
+        """Consolidate all the changes made in track id assignment and save.
 
         Assumptions: as tracking progresses, only new, bigger numbers are
         assigned for track ids. track_id never goes down.
@@ -354,8 +346,9 @@ class TrackReader(qc.QObject):
         # assignments = self.consolidateChanges()
         data = []
         t1_s = time.perf_counter()
-        for frame_no, tdata in self.track_data.groupby('frame'):
-            tracks = self.applyChanges(tdata)
+        all_tracks = self._filterTracks(self.track_data)
+        for frame_no, fdata in all_tracks.groupby('frame'):
+            tracks = self.applyChanges(fdata)
             for tid, tdata in tracks.items():
                 data.append([frame_no, tid] + tdata[:4])
                 qw.QApplication.processEvents()
