@@ -648,9 +648,15 @@ class ReviewWidget(qw.QWidget):
         panes_layout.addWidget(self.rightView, 1)
         layout.addLayout(panes_layout)
         self.play_button = qw.QPushButton('Play')
+        self.play_button.setIcon(
+            self.style().standardIcon(qw.QStyle.SP_MediaPlay)
+        )
         self.slider = qw.QSlider(qc.Qt.Horizontal)
         self.pos_spin = qw.QSpinBox()
         self.reset_button = qw.QPushButton('Reset')
+        self.reset_button.setIcon(
+            self.style().standardIcon(qw.QStyle.SP_MediaStop)
+        )
         self.reset_button.clicked.connect(self.reset)
         ctrl_layout = qw.QHBoxLayout()
         ctrl_layout.addWidget(self.play_button)
@@ -1087,8 +1093,16 @@ class ReviewWidget(qw.QWidget):
             self.leftView.resetArenaAction.trigger
         )
         self.openAction = qw.QAction('Open tracked data (Ctrl+o)')
+        self.openAction.setIcon(
+            self.style().standardIcon(qw.QStyle.StandardPixmap.SP_DirOpenIcon)
+        )
         self.openAction.triggered.connect(self.openTrackedData)
         self.saveAction = qw.QAction('Save reviewed data (Ctrl+s)')
+        self.saveAction.setIcon(
+            self.style().standardIcon(
+                qw.QStyle.StandardPixmap.SP_DialogSaveButton
+            )
+        )
         self.saveAction.triggered.connect(self.saveReviewedTracks)
         self.speedUpAction = qw.QAction('Double speed (Ctrl+Up arrow)')
         self.speedUpAction.triggered.connect(self.speedUp)
@@ -1106,8 +1120,14 @@ class ReviewWidget(qw.QWidget):
         self.showOldTracksAction.setCheckable(True)
         # self.showOldTracksAction.triggered.connect(self.all_list.setEnabled)
         self.playAction = qw.QAction('Play (Space)')
+        self.playAction.setIcon(
+            self.style().standardIcon(qw.QStyle.StandardPixmap.SP_MediaPlay)
+        )
         self.playAction.triggered.connect(self.playVideo)
         self.resetAction = qw.QAction('Reset')
+        self.resetAction.setIcon(
+            self.style().standardIcon(qw.QStyle.StandardPixmap.SP_MediaStop)
+        )
         self.resetAction.setToolTip(
             'Reset to initial state.' ' Lose all unsaved changes.'
         )
@@ -1272,7 +1292,8 @@ class ReviewWidget(qw.QWidget):
         self.histGradientAction.triggered.connect(self.setHistGradient)
         self.showChangeListAction = qw.QAction('Show list of changes (Alt+c)')
         self.showChangeListAction.setCheckable(True)
-        self.showChangeListAction.triggered.connect(self.showChangeList)
+        self.showChangeListAction.triggered.connect(self.updateChangeList)
+        self.sigDataFile.connect(self.updateChangeList)
         self.loadChangeListAction = qw.QAction('Load list of changes')
         self.loadChangeListAction.triggered.connect(self.loadChangeList)
         self.saveChangeListAction = qw.QAction('Save list of changes')
@@ -1289,6 +1310,11 @@ class ReviewWidget(qw.QWidget):
         )
         self.toggleSideBySideView(checked)
         self.vidinfoAction = qw.QAction('Video information')
+        self.vidinfoAction.setIcon(
+            self.style().standardIcon(
+                qw.QStyle.StandardPixmap.SP_FileDialogInfoView
+            )
+        )
         self.vidinfoAction.triggered.connect(self.vid_info.show)
 
     def makeShortcuts(self):
@@ -1700,12 +1726,11 @@ class ReviewWidget(qw.QWidget):
             ret[tid] = np.array(rect)
         return ret
 
-    @qc.pyqtSlot(bool)
-    def showChangeList(self, checked):
+    @qc.pyqtSlot()
+    @qc.pyqtSlot(str, bool)
+    def updateChangeList(self, filepath='', checked=True):
+        """Catches `self.sigDataFile` to update the changelist"""
         if self.trackReader is None:
-            return
-        if not checked:
-            self.changelist_widget.setVisible(False)
             return
         change_list = [
             change
@@ -1713,7 +1738,6 @@ class ReviewWidget(qw.QWidget):
             if change.frame not in self.trackReader.undone_changes
         ]
         self.changelist_widget.setChangeList(change_list)
-        self.changelist_widget.setVisible(True)
 
     @qc.pyqtSlot()
     def saveChangeList(self):
@@ -2107,11 +2131,23 @@ class ReviewWidget(qw.QWidget):
             return
         if play:
             self.play_button.setText('Pause (Space)')
+            self.play_button.setIcon(
+                self.style().standardIcon(qw.QStyle.SP_MediaPause)
+            )
             self.playAction.setText('Pause (Space)')
+            self.playAction.setIcon(
+                self.style().standardIcon(qw.QStyle.SP_MediaPause)
+            )
             self.timer.start(int(self.frame_interval / self.speed))
         else:
             self.play_button.setText('Play (Space)')
+            self.play_button.setIcon(
+                self.style().standardIcon(qw.QStyle.SP_MediaPlay)
+            )
             self.playAction.setText('Play (Space)')
+            self.playAction.setIcon(
+                self.style().standardIcon(qw.QStyle.SP_MediaPlay)
+            )
             self.timer.stop()
 
     @qc.pyqtSlot()
@@ -2195,6 +2231,18 @@ class ReviewerMain(qw.QMainWindow):
     def __init__(self):
         super(ReviewerMain, self).__init__()
         self.reviewWidget = ReviewWidget()
+        self.rightDock = qw.QDockWidget('Changes')
+        self.rightDock.setFeatures(
+            qw.QDockWidget.DockWidgetMovable
+            | qw.QDockWidget.DockWidgetFloatable
+        )
+        self.rightDock.setWidget(self.reviewWidget.changelist_widget)
+        self.rightDock.setVisible(False)
+        self.reviewWidget.showChangeListAction.triggered.connect(
+            self.rightDock.setVisible
+        )
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self.rightDock)
+
         fileMenu = self.menuBar().addMenu('&File')
         fileMenu.addAction(self.reviewWidget.openAction)
         fileMenu.addAction(self.reviewWidget.saveAction)
@@ -2331,8 +2379,18 @@ class ReviewerMain(qw.QMainWindow):
 
         helpMenu = self.menuBar().addMenu('Help')
         aboutAction = helpMenu.addAction('&About')
+        aboutAction.setIcon(
+            self.style().standardIcon(
+                qw.QStyle.StandardPixmap.SP_MessageBoxInformation
+            )
+        )
         aboutAction.triggered.connect(displayAbout)
         docAction = helpMenu.addAction('Documentation')
+        docAction.setIcon(
+            self.style().standardIcon(
+                qw.QStyle.StandardPixmap.SP_MessageBoxQuestion
+            )
+        )
         docAction.triggered.connect(displayDoc)
         helpMenu.addAction(self.reviewWidget.vidinfoAction)
 
@@ -2364,6 +2422,8 @@ class ReviewerMain(qw.QMainWindow):
         self.posLabel = qw.QLabel()
         self.statusBar().addPermanentWidget(self.posLabel)
         self.reviewWidget.sigMousePosMessage.connect(self.posLabel.setText)
+        # make sure to show change list at first
+        self.reviewWidget.showChangeListAction.trigger()
         self.setCentralWidget(self.reviewWidget)
 
     @qc.pyqtSlot(bool)
