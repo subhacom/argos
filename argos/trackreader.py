@@ -399,6 +399,8 @@ class TrackReader(qc.QObject):
         """Save changes and data in HDF5 format. Here we also store
         the limits (min and max height, width, and roi) as attributes
         of the changes group"""
+        if len(changes) == 0:
+            return
         with pd.HDFStore(filepath) as store:
             store.put('/tracked', data, format='table')
             change_path = f'changes/changelist_{timestamp}'
