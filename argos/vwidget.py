@@ -427,7 +427,9 @@ class VideoWidget(qw.QWidget):
     def startTimer(self):
         if self.playAction.isChecked():
             logging.debug(f'Starting timer for frame')
-            self.timer.start(1000.0 / self.video_reader.fps)
+            t = int(np.round(1000.0 / self.video_reader.fps))
+            t = 10 if t < 1 else t
+            self.timer.start(t)
 
     @qc.pyqtSlot(np.ndarray, int)
     def setFrame(self, frame: np.ndarray, pos: int) -> None:
@@ -454,7 +456,8 @@ class VideoWidget(qw.QWidget):
                 self.sigGotoFrame.emit(0)
             self.startTime = time.perf_counter()
             self.playAction.setText('Pause')
-            t = 1000.0 / self.video_reader.fps
+            t = int(np.round(1000.0 / self.video_reader.fps))
+            t = 10 if t < 1 else t
             self.timer.start(t)
         else:
             self.pauseVideo()
