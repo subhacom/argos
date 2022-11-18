@@ -242,7 +242,7 @@ class FrameScene(qw.QGraphicsScene):
             )
         else:
             pen = qg.QPen(self.color)
-        pen.setWidth(self.linewidth)
+        pen.setWidthF(self.linewidth)
         item.setPen(pen)
         self.addItem(item)
         self.itemDict[index] = item
@@ -265,7 +265,7 @@ class FrameScene(qw.QGraphicsScene):
     def addIncompletePath(self, path: qg.QPainterPath) -> None:
         self._clearIncomplete()
         pen = qg.QPen(self.incompleteColor)
-        pen.setWidth(self.linewidth)
+        pen.setWidthF(self.linewidth)
         self.incomplete_item = self.addPath(path, pen)
 
     # @qc.pyqtSlot(np.ndarray)
@@ -398,7 +398,7 @@ class FrameScene(qw.QGraphicsScene):
         if len(self.selected) == 0:
             for key, item in self.itemDict.items():
                 pen = item.pen()
-                pen.setWidth(self.linewidth)
+                pen.setWidthF(int(self.linewidth))
                 if self.colorMode == ColorMode.single:
                     color = qg.QColor(self.color)
                 else:
@@ -419,7 +419,7 @@ class FrameScene(qw.QGraphicsScene):
         for key in unselected:
             item = self.itemDict[key]
             pen = item.pen()
-            pen.setWidth(self.linewidth)
+            pen.setWidthF(self.linewidth)
             if self.colorMode == ColorMode.single:
                 color = qg.QColor(self.color)
             else:
@@ -438,7 +438,7 @@ class FrameScene(qw.QGraphicsScene):
             item = self.itemDict[key]
             label = self.labelDict[key]
             pen = item.pen()
-            pen.setWidth(self.linewidth + 2)
+            pen.setWidthF(self.linewidth + 2)
             if self.colorMode == ColorMode.single:
                 color = qg.QColor(self.selectedColor)
             else:
@@ -467,7 +467,7 @@ class FrameScene(qw.QGraphicsScene):
                 pen = item.pen()
                 pen.setColor(color)
                 if key in self.selected:
-                    pen.setWidth(self.linewidth + 2)
+                    pen.setWidthF(self.linewidth + 2)
                 item.setPen(pen)
                 # self.labelDict[key].setDefaultTextColor # this is done in _updateItemDisplay
         else:
