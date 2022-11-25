@@ -246,6 +246,9 @@ class VideoWidget(qw.QWidget):
         except IOError as err:
             qw.QMessageBox.critical(self, 'Video open failed', str(err))
             return
+        except AssertionError as err:
+            qw.QMessageBox.critical(self, 'Could not open camera', str(err))
+            return
         ## Set-up for saving data
         self.writer = None
         directory = os.path.dirname(self.video_filename)

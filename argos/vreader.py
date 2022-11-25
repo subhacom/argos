@@ -12,7 +12,7 @@ import cv2
 from PyQt5 import QtCore as qc
 
 from argos import utility as ut
-from argos import capture as cu
+from argos import caputil as cu
 
 
 class VideoReader(qc.QObject):
@@ -24,7 +24,14 @@ class VideoReader(qc.QObject):
     sigSeekError = qc.pyqtSignal(Exception)
     sigVideoEnd = qc.pyqtSignal()
 
-    def __init__(self, path: str, width=-1, height=-1, fps=30, waitCond: threading.Event=None):
+    def __init__(
+        self,
+        path: str,
+        width=-1,
+        height=-1,
+        fps=30,
+        waitCond: threading.Event = None,
+    ):
         super(VideoReader, self).__init__()
         # TODO check if I really need the mutex just for reading
         self.mutex = qc.QMutex()
@@ -40,10 +47,14 @@ class VideoReader(qc.QObject):
         if self.is_webcam:
             # Camera FPS opens a temporary VideoCapture with the camera
             # - so do that before initializing current VideoCapture
-            self.mutex.lock()            
-            self.fps, self.frame_width, self.frame_height = cu.get_camera_fps(int(path), width, height, fps, nframes=30)
+            self.mutex.lock()
+            self.fps, self.frame_width, self.frame_height = cu.get_camera_fps(
+                int(path), width, height, fps, nframes=30
+            )
             self.mutex.unlock()
-            print(f'Camera settings: w={self.frame_width}, h={self.frame_height}, fps={self.fps}')
+            print(
+                f'Camera settings: w={self.frame_width}, h={self.frame_height}, fps={self.fps}'
+            )
             self._vid = cv2.VideoCapture(int(path))
             self._vid.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
             self._vid.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
@@ -59,14 +70,17 @@ class VideoReader(qc.QObject):
         if not self._vid.isOpened():
             raise IOError(f'Could not open video: {path}')
 
-
     @qc.pyqtSlot(str)
     def setVideoOutFile(self, path, format):
         self.mutex.lock()
         self._outpath = path
         self._fourcc = cv2.VideoWriter_fourcc(*format)
-        self._outfile = cv2.VideoWriter(self._outpath, self._fourcc, self.fps,
-                                      (self.frame_width, self.frame_height))
+        self._outfile = cv2.VideoWriter(
+            self._outpath,
+            self._fourcc,
+            self.fps,
+            (self.frame_width, self.frame_height),
+        )
         try:
             self._ts_file = open(f'{self._outpath}.csv', 'w')
             self._ts_writer = csv.writer(self._ts_file)
@@ -95,9 +109,12 @@ class VideoReader(qc.QObject):
             pos = int(self._vid.get(cv2.CAP_PROP_POS_FRAMES))
             if pos != frame_no:
                 self.mutex.unlock()
-                self.sigSeekError.emit(RuntimeError(
-                    f'This video format does not allow correct seek: '
-                    f'tried {frame_no}, got {pos}'))
+                self.sigSeekError.emit(
+                    RuntimeError(
+                        f'This video format does not allow correct seek: '
+                        f'tried {frame_no}, got {pos}'
+                    )
+                )
                 return
         self._frame_no = frame_no
         ret, frame = self._vid.read()
@@ -107,7 +124,9 @@ class VideoReader(qc.QObject):
             self.sigVideoEnd.emit()
             return
         if frame is None:
-            logging.info(f'Empty frame at position {frame_no} @ {datetime.now()}')
+            logging.info(
+                f'Empty frame at position {frame_no} @ {datetime.now()}'
+            )
             self.sigVideoEnd.emit()
             return
         if self.is_webcam and self._outfile is not None:
@@ -139,8 +158,10 @@ class VideoReader(qc.QObject):
             self.sigVideoEnd.emit()
             return
         if frame is None:
-            logging.info(f'Empty frame at position {self._frame_no}'
-                         f' @ {datetime.now()}')
+            logging.info(
+                f'Empty frame at position {self._frame_no}'
+                f' @ {datetime.now()}'
+            )
             self.sigVideoEnd.emit()
             return
         # event = threading.Event()
@@ -148,7 +169,10 @@ class VideoReader(qc.QObject):
         if self._frame_no == 0:
             logging.info(f'Read first frame @ {datetime.now()}')
         if self.is_webcam and self._outfile is not None:
-            assert self.frame_width == frame.shape[1] and self.frame_height == frame.shape[0]
+            assert (
+                self.frame_width == frame.shape[1]
+                and self.frame_height == frame.shape[0]
+            )
             self._outfile.write(frame)
             ts = datetime.now()
             self._ts_writer.writerow([self._frame_no, ts])
