@@ -12,10 +12,7 @@ import logging
 from typing import Tuple
 import numpy as np
 import cv2
-from PyQt5 import (
-    QtCore as qc,
-    QtWidgets as qw
-)
+from PyQt5 import QtCore as qc, QtWidgets as qw
 
 from argos.utility import match_bboxes, pairwise_distance, init
 from argos.constants import OutlineStyle, DistanceMetric
@@ -56,9 +53,15 @@ class CSRMultiTracker(qc.QObject):
 
     def __init__(self, *args, **kwargs):
         super(CSRMultiTracker, self).__init__(*args, **kwargs)
-        self.checkAge = settings.value('csrt/checkAge', 10, type=int)  # check against segmentation after these many frames
-        self.checkSeq = settings.value('csrt/checkSeq', 1, type=int)  # keep checking for these many frames for missing objects
-        self.missLimit = settings.value('csrt/missLimit', 3, type=int)  # delete tracker after these many misses
+        self.checkAge = settings.value(
+            'csrt/checkAge', 10, type=int
+        )  # check against segmentation after these many frames
+        self.checkSeq = settings.value(
+            'csrt/checkSeq', 1, type=int
+        )  # keep checking for these many frames for missing objects
+        self.missLimit = settings.value(
+            'csrt/missLimit', 3, type=int
+        )  # delete tracker after these many misses
         self.maxDist = settings.value('csrt/maxDist', 0.3, type=float)
         if settings.value('csrt/distMetric', 'iou', type=str) == 'euclidean':
             self.distMetric = DistanceMetric.euclidean
@@ -80,16 +83,18 @@ class CSRMultiTracker(qc.QObject):
     def find_nonoverlapping(self, bboxes):
         """Remove entries which are within `maxDist` distance from another bbox
         considering them to be the same object detected twice."""
-        dist = pairwise_distance(bboxes, bboxes,
-                                 OutlineStyle.bbox,
-                                 DistanceMetric.iou)
-        close_row, close_col = np.where(dist <= self.maxDist)
-        ignore = close_col[close_col > close_row]
-        if len(ignore) > 0:
-            logging.debug(f'Ignore {ignore}')
-        valid_idx = set(list(range(bboxes.shape[0]))) - set(ignore)
-        logging.debug(f'Valid indices: {valid_idx}')
-        return bboxes[list(valid_idx)].copy()
+        if bboxes.size > 0:
+            dist = pairwise_distance(
+                bboxes, bboxes, OutlineStyle.bbox, DistanceMetric.iou
+            )
+            close_row, close_col = np.where(dist <= self.maxDist)
+            ignore = close_col[close_col > close_row]
+            if len(ignore) > 0:
+                logging.debug(f'Ignore {ignore}')
+            valid_idx = set(list(range(bboxes.shape[0]))) - set(ignore)
+            logging.debug(f'Valid indices: {valid_idx}')
+            return bboxes[list(valid_idx)].copy()
+        return np.empty(0)
 
     @qc.pyqtSlot(np.ndarray, np.ndarray, int)
     def track(self, frame: np.ndarray, bboxes: np.ndarray, pos: int) -> None:
@@ -116,26 +121,35 @@ class CSRMultiTracker(qc.QObject):
         self.age += 1
         if len(self.trackers) == 0 and bboxes.size > 0:
             valid = self.find_nonoverlapping(bboxes)
-            ret = {self._add_tracker(frame, valid[ii]): valid[ii]
-                   for ii in range(valid.shape[0])}
+            ret = {
+                self._add_tracker(frame, valid[ii]): valid[ii]
+                for ii in range(valid.shape[0])
+            }
             logging.debug(f'==== Added initial trackers \n{ret}')
             self.sigTracked.emit(ret, pos)
             return
 
-        predicted = {id_: tracker.update(frame)
-                     for id_, tracker in self.trackers.items()}
+        predicted = {
+            id_: tracker.update(frame)
+            for id_, tracker in self.trackers.items()
+        }
         self.sigTracked.emit(predicted, pos)
         if self.age > self.checkAge:
             valid = self.find_nonoverlapping(bboxes)
             matched, new_unmatched, old_unmatched = match_bboxes(
-                predicted, valid, boxtype=OutlineStyle.bbox,
+                predicted,
+                valid,
+                boxtype=OutlineStyle.bbox,
                 metric=self.distMetric,
-                max_dist=self.maxDist)
+                max_dist=self.maxDist,
+            )
             logging.debug(f'==== matching bboxes Frame: {pos} ====')
-            logging.debug(f'Input bboxes: {valid}\n'
-                          f'Matched: {matched}\n'
-                          f'New unmatched: {new_unmatched}\n'
-                          f'Old unmatched: {old_unmatched}')
+            logging.debug(
+                f'Input bboxes: {valid}\n'
+                f'Matched: {matched}\n'
+                f'New unmatched: {new_unmatched}\n'
+                f'Old unmatched: {old_unmatched}'
+            )
             # Renitialize trackers that matched to closest bounding box
             for tid, idx in matched.items():
                 self.trackers[tid].reinit(frame, valid[idx])
@@ -149,8 +163,11 @@ class CSRMultiTracker(qc.QObject):
         # Remove the trackers that missed too many times - only after we have
         # given them `checkSeq` chances for rematching
         if self.check_count >= self.checkSeq:
-            self.trackers = {tid: tracker for tid, tracker in self.trackers.items()
-                             if tracker.misses < self.missLimit}
+            self.trackers = {
+                tid: tracker
+                for tid, tracker in self.trackers.items()
+                if tracker.misses < self.missLimit
+            }
             self.age = 0
             self.check_count = 0
 
@@ -178,7 +195,6 @@ class CSRMultiTracker(qc.QObject):
             self.distMetric = DistanceMetric.euclidean
         else:
             raise ValueError(f'Unknown distance metric {metric}')
-            
 
     @qc.pyqtSlot()
     def reset(self):
@@ -202,6 +218,7 @@ class CSRTWidget(qw.QWidget):
     variables are reset after that.
 
     """
+
     sigTrack = qc.pyqtSignal(np.ndarray, np.ndarray, int)
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
@@ -218,40 +235,49 @@ class CSRTWidget(qw.QWidget):
         self._checkAgeLabel = qw.QLabel('Check after every N frames')
         self._checkAgeSpin = qw.QSpinBox()
         self._checkAgeSpin.setRange(0, 100)
-        value = settings.value('csrt/checkAge', self.tracker.checkAge,
-                               type=int)
+        value = settings.value(
+            'csrt/checkAge', self.tracker.checkAge, type=int
+        )
         self.tracker.checkAge = value
         self._checkAgeSpin.setValue(value)
-        self._checkAgeSpin.setToolTip('Verify tracked bounding boxes against'
-                                        ' segmented bounding boxes every this'
-                                        ' many frames. Remove or reinitialize'
-                                        ' tracks that are off.')
+        self._checkAgeSpin.setToolTip(
+            'Verify tracked bounding boxes against'
+            ' segmented bounding boxes every this'
+            ' many frames. Remove or reinitialize'
+            ' tracks that are off.'
+        )
         layout.addRow(self._checkAgeLabel, self._checkAgeSpin)
         self._checkSeqLabel = qw.QLabel('# of checks')
         self._checkSeqSpin = qw.QSpinBox()
         self._checkSeqSpin.setRange(0, 100)
-        value = settings.value('csrt/checkSeq', self.tracker.checkSeq,
-                               type=int)
+        value = settings.value(
+            'csrt/checkSeq', self.tracker.checkSeq, type=int
+        )
         self._checkSeqSpin.setValue(value)
         self.tracker.checkSeq = value
-        self._checkSeqSpin.setToolTip('Try this many times before removing a'
-                                        ' failed tracker.')
+        self._checkSeqSpin.setToolTip(
+            'Try this many times before removing a' ' failed tracker.'
+        )
         layout.addRow(self._checkSeqLabel, self._checkSeqSpin)
         self._missLimitLabel = qw.QLabel('Miss limit')
         self._missLimitSpin = qw.QSpinBox()
-        self._missLimitSpin.setToolTip('Number of misses before a tracker is'
-                                         ' removed.')
+        self._missLimitSpin.setToolTip(
+            'Number of misses before a tracker is' ' removed.'
+        )
         self._missLimitSpin.setRange(1, 100)
-        value = settings.value('csrt/missLimit', self.tracker.missLimit,
-                               type=int)
+        value = settings.value(
+            'csrt/missLimit', self.tracker.missLimit, type=int
+        )
         self._missLimitSpin.setValue(value)
         self.tracker.missLimit = value
         layout.addRow(self._missLimitLabel, self._missLimitSpin)
         self._maxDistLabel = qw.QLabel('Minimum separation')
         self._maxDistSpin = qw.QDoubleSpinBox()
-        self._maxDistSpin.setToolTip('Minimum separation between a tracker and'
-                                       ' its closest bounding box to consider'
-                                       ' them to be separate objects.')
+        self._maxDistSpin.setToolTip(
+            'Minimum separation between a tracker and'
+            ' its closest bounding box to consider'
+            ' them to be separate objects.'
+        )
         self._maxDistSpin.setValue(self.tracker.maxDist)
         layout.addRow(self._maxDistLabel, self._maxDistSpin)
         self._distMetricLabel = qw.QLabel('Distance metric')
@@ -262,11 +288,13 @@ class CSRTWidget(qw.QWidget):
         else:
             self._distMetricCombo.setCurrentText('Euclidean')
         self._distMetricCombo.setToolTip(
-            'Distance metric to use for measuring proximity')
+            'Distance metric to use for measuring proximity'
+        )
         layout.addRow(self._distMetricLabel, self._distMetricCombo)
         self._disableCheck = qw.QCheckBox('Disable tracking')
-        self._disableCheck.setToolTip('Directly show segmentation results '
-                                      'without any tracking')
+        self._disableCheck.setToolTip(
+            'Directly show segmentation results ' 'without any tracking'
+        )
         layout.addWidget(self._disableCheck)
         self.setLayout(layout)
         ################
@@ -283,7 +311,8 @@ class CSRTWidget(qw.QWidget):
         self._missLimitSpin.valueChanged.connect(self.tracker.setMissLimit)
         self._maxDistSpin.valueChanged.connect(self.tracker.setMaxDist)
         self._distMetricCombo.currentTextChanged.connect(
-            self.tracker.setDistMetric)
+            self.tracker.setDistMetric
+        )
         self.thread.start()
 
     @qc.pyqtSlot(np.ndarray, int)
@@ -297,8 +326,7 @@ class CSRTWidget(qw.QWidget):
         self._framePos = pos
         if self._framePos >= 0 and self._framePos == self._bboxesPos:
             logging.debug(f'Emitting signal for frame {self._framePos}')
-            self.sigTrack.emit(self._frame, self._bboxes,
-                               self._framePos)
+            self.sigTrack.emit(self._frame, self._bboxes, self._framePos)
             self._framePos = -1
             self._bboxesPos = -1
 
@@ -308,16 +336,15 @@ class CSRTWidget(qw.QWidget):
         tracker if the image for the same frame is available"""
         logging.debug(f'Received bboxes: {pos}')
         if self._disableCheck.isChecked():
-            self.sigTracked.emit({ii: bboxes[ii]
-                                  for ii in range(bboxes.shape[0])},
-                                 pos)
+            self.sigTracked.emit(
+                {ii: bboxes[ii] for ii in range(bboxes.shape[0])}, pos
+            )
             return
         self._bboxes = bboxes
         self._bboxesPos = pos
         if self._framePos >= 0 and self._framePos == self._bboxesPos:
             logging.debug(f'Emitting signal for frame {self._framePos}')
-            self.sigTrack.emit(self._frame, self._bboxes,
-                               self._framePos)
+            self.sigTrack.emit(self._frame, self._bboxes, self._framePos)
             self._framePos = -1
             self._bboxesPos = -1
 
@@ -327,6 +354,9 @@ class CSRTWidget(qw.QWidget):
         settings.setValue('csrt/checkSeq', self.tracker.checkSeq)
         settings.setValue('csrt/missLimit', self.tracker.missLimit)
         settings.setValue('csrt/maxDist', self.tracker.maxDist)
-        settings.setValue('csrt/distMetric',
-                          'iou' if self.tracker.distMetric == DistanceMetric.iou
-                          else 'euclidean')
+        settings.setValue(
+            'csrt/distMetric',
+            'iou'
+            if self.tracker.distMetric == DistanceMetric.iou
+            else 'euclidean',
+        )
