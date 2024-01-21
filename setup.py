@@ -119,5 +119,6 @@ setup(
         'opencv-contrib-python',
         'pyyaml',
         'matplotlib',
+        'qdarkstyle'
     ],
 )

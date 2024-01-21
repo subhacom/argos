@@ -548,7 +548,7 @@ except ImportError as err:
             Row ``ii``, column ``jj`` contains the computed distance between
             ``new_bboxes[ii]`` and ``bboxes[jj]``.
         """
-        dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]), dtype=np.float)
+        dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]), dtype=float)
         if metric == DistanceMetric.euclidean:
             centers = bboxes[:, :2] + bboxes[:, 2:] * 0.5
             new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5
