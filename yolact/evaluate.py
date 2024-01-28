@@ -672,7 +672,7 @@ def prep_metrics(
             gt_boxes[:, [0, 2]] *= w
             gt_boxes[:, [1, 3]] *= h
             gt_classes = list(gt[:, 4].astype(int))
-            gt_masks = torch.tensor(gt_masks).view(-1, h * w).cpu()
+            gt_masks = torch.tensor(gt_masks).view(-1, h * w).cuda()
 
             if num_crowd > 0:
                 # split = lambda x: (x[-num_crowd:], x[:-num_crowd])
