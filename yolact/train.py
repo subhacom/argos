@@ -792,17 +792,23 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         if args.cuda:
             if (torch_major_version >= 2) and (torch_minor_version >= 1):
+                print(
+                    f'Torch version {torch_minor_version}.{torch_minor_version}: Setting default device cuda'
+                )
                 torch.set_default_device('cuda')
                 # torch.set_default_dtype('torch.cuda.FloatTensor')
             else:
                 torch.set_default_tensor_type('torch.cuda.FloatTensor')
-        if not args.cuda:
+        else:
             print(
                 "WARNING: It looks like you have a CUDA device, but aren't "
                 "using CUDA.\nRun with --cuda for optimal training speed."
             )
             torch.set_default_tensor_type('torch.FloatTensor')
     else:
+        print(
+            "WARNING: It looks like you don't have a CUDA device. Training will be slow"
+        )
         torch.set_default_tensor_type('torch.FloatTensor')
 
     if args.autoscale and args.batch_size != 8:
