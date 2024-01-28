@@ -793,7 +793,7 @@ if __name__ == '__main__':
         if args.cuda:
             if (torch_major_version >= 2) and (torch_minor_version >= 1):
                 torch.set_default_device('cuda')
-                torch.set_default_dtype('torch.cuda.FloatTensor')
+                # torch.set_default_dtype('torch.cuda.FloatTensor')
             else:
                 torch.set_default_tensor_type('torch.cuda.FloatTensor')
         if not args.cuda:
