@@ -289,7 +289,7 @@ def cond_proximity(points_a, points_b, min_dist):
     sigma = np.std(points_a, axis=0) * np.std(points_b, axis=0)
     dx2 = (np.mean(points_a[:, 0]) - np.mean(points_b[:, 0])) ** 2 / sigma[0]
     dy2 = (np.mean(points_a[:, 1]) - np.mean(points_b[:, 1])) ** 2 / sigma[1]
-    return dx2 + dy2 < min_dist ** 2
+    return dx2 + dy2 < min_dist**2
 
 
 def cv2qimage(frame: np.ndarray, copy: bool = False) -> qg.QImage:
@@ -711,11 +711,14 @@ def get_cmap_color(num, maxnum, cmap):
 def extract_frames(vidfile, nframes, scale=1.0, outdir='.', random=False):
     """Extract `nframes` frames from `vidfile` into `outdir`"""
     cap = cv2.VideoCapture(vidfile)
+    if not cap.isOpened():
+        raise Exception(f'Could not open file {vidfile}')
     fname = os.path.basename(vidfile)
     prefix = fname.rpartition('.')[0]
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     idx = np.arange(frame_count, dtype=int)
-    if frame_count < nframes:
+    print('Frame count', frame_count, ', extracting', nframes)
+    if frame_count > nframes:
         if random:
             np.random.shuffle(idx)
             idx = idx[:nframes]
@@ -724,20 +727,15 @@ def extract_frames(vidfile, nframes, scale=1.0, outdir='.', random=False):
             idx = idx[::step]
     idx = sorted(idx)
     ii = 0
-    jj = 0
-    while cap.isOpened():
+    for ii in idx:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, ii - 1)
         ret, frame = cap.read()
         if frame is None:
             break
-        if idx[jj] == ii:
-            size = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
-            if scale < 1:
-                frame = cv2.resize(frame, size, cv2.INTER_AREA)
-            elif scale > 1:
-                frame = cv2.resize(frame, size, cv2.INTER_CUBIC)
-            cv2.imwrite(
-                os.path.join(outdir, f'{prefix}_{idx[jj]:06d}.png'), frame
-            )
-            jj += 1
-        ii += 1
+        size = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
+        if scale < 1:
+            frame = cv2.resize(frame, size, cv2.INTER_AREA)
+        elif scale > 1:
+            frame = cv2.resize(frame, size, cv2.INTER_CUBIC)
+        cv2.imwrite(os.path.join(outdir, f'{prefix}_{ii:06d}.png'), frame)
     cap.release()

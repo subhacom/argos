@@ -28,6 +28,10 @@ from yolact import Yolact
 import yolact.evaluate as eval_script
 
 
+torch_version = torch.__version__.split('.')
+torch_major_version = int(torch_version[0])
+torch_minor_version = int(torch_version[1])
+
 # Reduce memory usage
 torch.cuda.empty_cache()
 
@@ -109,7 +113,9 @@ def make_parser():
     parser.add_argument(
         '--log_folder', default='logs/', help='Directory for saving logs.'
     )
-    parser.add_argument('--config', default=None, help='The config object to use.')
+    parser.add_argument(
+        '--config', default=None, help='The config object to use.'
+    )
     parser.add_argument(
         '--save_interval',
         default=10000,
@@ -188,7 +194,11 @@ def make_parser():
     )
 
     parser.set_defaults(
-        keep_latest=False, log=True, log_gpu=False, interrupt=True, autoscale=True
+        keep_latest=False,
+        log=True,
+        log_gpu=False,
+        interrupt=True,
+        autoscale=True,
     )
 
     return parser
@@ -218,6 +228,39 @@ class NetLoss(nn.Module):
         return losses
 
 
+# ScatterWrapper is old code removed from yolact repo - see here: https://github.com/dbolya/yolact/issues/410
+class ScatterWrapper:
+    """Input is any number of lists. This will preserve them through a dataparallel scatter."""
+
+    def __init__(self, *args):
+        for arg in args:
+            if not isinstance(arg, list):
+                print('Warning: ScatterWrapper got input of non-list type.')
+        self.args = args
+        self.batch_size = len(args[0])
+
+    def make_mask(self):
+        out = torch.Tensor(list(range(self.batch_size))).long()
+        if args.cuda:
+            return out.cuda()
+        else:
+            return out
+
+    def get_args(self, mask):
+        device = mask.device
+        mask = [int(x) for x in mask]
+        out_args = [[] for _ in self.args]
+
+        for out, arg in zip(out_args, self.args):
+            for idx in mask:
+                x = arg[idx]
+                if isinstance(x, torch.Tensor):
+                    x = x.to(device)
+                out.append(x)
+
+        return out_args
+
+
 class CustomDataParallel(nn.DataParallel):
     """
     This is a custom version of DataParallel that works better with our training data.
@@ -242,7 +285,9 @@ class CustomDataParallel(nn.DataParallel):
         out = {}
 
         for k in outputs[0]:
-            out[k] = torch.stack([output[k].to(output_device) for output in outputs])
+            out[k] = torch.stack(
+                [output[k].to(output_device) for output in outputs]
+            )
 
         return out
 
@@ -305,7 +350,10 @@ def train(args):
         )
 
     optimizer = optim.SGD(
-        net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.decay
+        net.parameters(),
+        lr=args.lr,
+        momentum=args.momentum,
+        weight_decay=args.decay,
     )
     criterion = MultiBoxLoss(
         num_classes=cfg.num_classes,
@@ -354,7 +402,7 @@ def train(args):
         shuffle=True,
         collate_fn=detection_collate,
         pin_memory=True,
-        generator=generator
+        generator=generator,
     )
 
     time_avg = MovingAverage()
@@ -398,7 +446,10 @@ def train(args):
                     ]
 
                 # Warm up by linearly interpolating the learning rate from some smaller value
-                if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
+                if (
+                    cfg.lr_warmup_until > 0
+                    and iteration <= cfg.lr_warmup_until
+                ):
                     set_lr(
                         optimizer,
                         (args.lr - cfg.lr_warmup_init)
@@ -412,7 +463,7 @@ def train(args):
                     and iteration >= cfg.lr_steps[step_index]
                 ):
                     step_index += 1
-                    set_lr(optimizer, args.lr * (args.gamma ** step_index))
+                    set_lr(optimizer, args.lr * (args.gamma**step_index))
 
                 # Zero the grad to get ready to compute gradients
                 optimizer.zero_grad()
@@ -448,7 +499,8 @@ def train(args):
                 if iteration % 10 == 0:
                     eta_str = str(
                         datetime.timedelta(
-                            seconds=(cfg.max_iter - iteration) * time_avg.get_avg()
+                            seconds=(cfg.max_iter - iteration)
+                            * time_avg.get_avg()
                         )
                     ).split('.')[0]
 
@@ -462,20 +514,28 @@ def train(args):
                         [],
                     )
                     print(
-                        f'[{epoch:3d}] {iteration:7d} ||' +
-                        ' '.join([f' {loss_labels[ii]}: {loss_labels[ii+1]:.3f} |'
-                                  for ii in range(0, len(loss_labels), 2)]) +
-                        f' T: {total:.3f} || ETA: {eta_str} || timer: {elapsed:.3f}',
+                        f'[{epoch:3d}] {iteration:7d} ||'
+                        + ' '.join(
+                            [
+                                f' {loss_labels[ii]}: {loss_labels[ii+1]:.3f} |'
+                                for ii in range(0, len(loss_labels), 2)
+                            ]
+                        )
+                        + f' T: {total:.3f} || ETA: {eta_str} || timer: {elapsed:.3f}',
                         flush=True,
                     )
 
                 if args.log:
                     precision = 5
-                    loss_info = {k: round(losses[k].item(), precision) for k in losses}
+                    loss_info = {
+                        k: round(losses[k].item(), precision) for k in losses
+                    }
                     loss_info['T'] = round(loss.item(), precision)
 
                     if args.log_gpu:
-                        log.log_gpu_stats = iteration % 10 == 0  # nvidia-smi is sloooow
+                        log.log_gpu_stats = (
+                            iteration % 10 == 0
+                        )  # nvidia-smi is sloooow
 
                     log.log(
                         'train',
@@ -490,9 +550,14 @@ def train(args):
 
                 iteration += 1
 
-                if iteration % args.save_interval == 0 and iteration != args.start_iter:
+                if (
+                    iteration % args.save_interval == 0
+                    and iteration != args.start_iter
+                ):
                     if args.keep_latest:
-                        latest = SavePath.get_latest(args.save_folder, cfg.name)
+                        latest = SavePath.get_latest(
+                            args.save_folder, cfg.name
+                        )
                     path = save_path(epoch, iteration)
                     print(f'Saving state, iter: {iteration} in "{path}"')
                     yolact_net.save_weights(path)
@@ -519,7 +584,11 @@ def train(args):
 
         # Compute validation mAP after training is finished
         compute_validation_map(
-            epoch, iteration, yolact_net, val_dataset, log if args.log else None
+            epoch,
+            iteration,
+            yolact_net,
+            val_dataset,
+            log if args.log else None,
         )
     except KeyboardInterrupt:
         if args.interrupt:
@@ -528,7 +597,9 @@ def train(args):
             # Delete previous copy of the interrupted network so we don't spam the weights folder
             SavePath.remove_interrupt(args.save_folder)
 
-            yolact_net.save_weights(save_path(epoch, repr(iteration) + '_interrupt'))
+            yolact_net.save_weights(
+                save_path(epoch, repr(iteration) + '_interrupt')
+            )
         exit()
 
     yolact_net.save_weights(save_path(epoch, iteration))
@@ -574,9 +645,12 @@ def prepare_data(datum, devices: list = None, allocation: list = None):
             for idx, (image, target, mask, num_crowd) in enumerate(
                 zip(images, targets, masks, num_crowds)
             ):
-                images[idx], targets[idx], masks[idx], num_crowds[idx] = enforce_size(
-                    image, target, mask, num_crowd, w, h
-                )
+                (
+                    images[idx],
+                    targets[idx],
+                    masks[idx],
+                    num_crowds[idx],
+                ) = enforce_size(image, target, mask, num_crowd, w, h)
 
         cur_idx = 0
         split_images, split_targets, split_masks, split_numcrowds = [
@@ -639,33 +713,51 @@ def compute_validation_loss(net, data_loader, criterion):
         for k in losses:
             losses[k] /= iterations
 
-        loss_labels = sum([[k, losses[k]] for k in loss_types if k in losses], [])
+        loss_labels = sum(
+            [[k, losses[k]] for k in loss_types if k in losses], []
+        )
         print(
-            f'Validation ||' +
-            ' '.join([f'{loss_labels[ii]}: {loss_labels[ii+1]:%.3f}'
-                      for ii in range(0, len(loss_labels), 2)]),
+            'Validation || '
+            + ' '.join(
+                [
+                    f'{loss_labels[ii]}: {loss_labels[ii+1]:%.3f}'
+                    for ii in range(0, len(loss_labels), 2)
+                ]
+            ),
             flush=True,
         )
 
 
-def compute_validation_map(epoch, iteration, yolact_net, dataset, log: Log = None):
+def compute_validation_map(
+    epoch, iteration, yolact_net, dataset, log: Log = None
+):
     with torch.no_grad():
         yolact_net.eval()
 
         start = time.time()
         print()
-        print("Computing validation mAP (this may take a while)...", flush=True)
+        print(
+            "Computing validation mAP (this may take a while)...", flush=True
+        )
         val_info = eval_script.evaluate(yolact_net, dataset, train_mode=True)
         end = time.time()
 
         if log is not None:
-            log.log('val', val_info, elapsed=(end - start), epoch=epoch, iter=iteration)
+            log.log(
+                'val',
+                val_info,
+                elapsed=(end - start),
+                epoch=epoch,
+                iter=iteration,
+            )
 
         yolact_net.train()
 
 
 def setup_eval():
-    eval_script.parse_args(['--no_bar', '--max_images=' + str(args.validation_size)])
+    eval_script.parse_args(
+        ['--no_bar', '--max_images=' + str(args.validation_size)]
+    )
 
 
 if __name__ == '__main__':
@@ -699,7 +791,11 @@ if __name__ == '__main__':
 
     if torch.cuda.is_available():
         if args.cuda:
-            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+            if (torch_major_version >= 2) and (torch_minor_version >= 1):
+                torch.set_default_device('cuda')
+                torch.set_default_dtype('torch.cuda.FloatTensor')
+            else:
+                torch.set_default_tensor_type('torch.cuda.FloatTensor')
         if not args.cuda:
             print(
                 "WARNING: It looks like you have a CUDA device, but aren't "
