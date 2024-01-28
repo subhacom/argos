@@ -668,11 +668,11 @@ def prep_metrics(
 
     if not args.output_coco_json:
         with timer.env('Prepare gt'):
-            gt_boxes = torch.Tensor(gt[:, :4])
+            gt_boxes = torch.tensor(gt[:, :4]).cpu()
             gt_boxes[:, [0, 2]] *= w
             gt_boxes[:, [1, 3]] *= h
             gt_classes = list(gt[:, 4].astype(int))
-            gt_masks = torch.Tensor(gt_masks).view(-1, h * w)
+            gt_masks = torch.tensor(gt_masks).view(-1, h * w).cpu()
 
             if num_crowd > 0:
                 # split = lambda x: (x[-num_crowd:], x[:-num_crowd])
