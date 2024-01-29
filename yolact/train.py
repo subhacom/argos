@@ -792,9 +792,9 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         if args.cuda:
             if (torch_major_version >= 2) and (torch_minor_version >= 1):
-                print(
-                    f'Torch version {torch_major_version}.{torch_minor_version}: Setting default device cuda'
-                )
+                # print(
+                #     f'Torch version {torch_major_version}.{torch_minor_version}: Setting default device cuda'
+                # )
                 torch.set_default_device('cuda')
                 # torch.set_default_dtype('torch.cuda.FloatTensor')
             else:

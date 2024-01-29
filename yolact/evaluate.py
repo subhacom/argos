@@ -672,7 +672,7 @@ def prep_metrics(
             gt_boxes[:, [0, 2]] *= w
             gt_boxes[:, [1, 3]] *= h
             gt_classes = list(gt[:, 4].astype(int))
-            gt_masks = torch.tensor(gt_masks).view(-1, h * w).cuda()
+            gt_masks = torch.tensor(gt_masks, dtype=torch.float).view(-1, h * w).cuda()
 
             if num_crowd > 0:
                 # split = lambda x: (x[-num_crowd:], x[:-num_crowd])
@@ -723,7 +723,9 @@ def prep_metrics(
     with timer.env('Eval Setup'):
         num_pred = len(classes)
         num_gt = len(gt_classes)
-
+        gt_boxes = gt_boxes.cuda().int()
+        # print(masks.dtype, masks.device, gt_masks.dtype, gt_masks.device, masks, gt_masks)
+        # print(boxes.dtype, boxes.device, gt_boxes.dtype, gt_boxes.device, boxes, gt_boxes)
         mask_iou_cache = _mask_iou(masks, gt_masks)
         bbox_iou_cache = _bbox_iou(boxes.float(), gt_boxes.float())
 
