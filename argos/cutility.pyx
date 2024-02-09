@@ -44,9 +44,9 @@ cpdef np.ndarray[np.int_t, ndim=2] rect2points(
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
+cpdef np.ndarray[float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
-    cdef np.ndarray ret = np.asanyarray(rect, dtype=np.float)
+    cdef np.ndarray ret = np.asanyarray(rect, dtype=float)
     ret[0] += ret[2] * 0.5
     ret[1] += ret[3] * 0.5
     # ret[:2] += ret[2:] * 0.5
@@ -56,7 +56,7 @@ cpdef np.ndarray[np.float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[np.float_t, ndim=1] rect):
+cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[float_t, ndim=1] rect):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
     cdef float w = rect[2] * rect[3]
@@ -170,7 +170,7 @@ cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=
 
 # @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim=2] new_bboxes, np.ndarray[np.int_t, ndim=2] bboxes,
+cpdef np.ndarray[float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim=2] new_bboxes, np.ndarray[np.int_t, ndim=2] bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible
     pair.
@@ -195,9 +195,9 @@ cpdef np.ndarray[np.float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim
         ``new_bboxes[ii]`` and ``bboxes[jj]``.
      """
     cdef np.ndarray dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]),
-                                    dtype=np.float)
-    cdef np.ndarray centers = np.zeros((bboxes.shape[0], 2), dtype=np.float)
-    cdef np.ndarray new_centers = np.zeros((new_bboxes.shape[0], 2), dtype=np.float)
+                                    dtype=float)
+    cdef np.ndarray centers = np.zeros((bboxes.shape[0], 2), dtype=float)
+    cdef np.ndarray new_centers = np.zeros((new_bboxes.shape[0], 2), dtype=float)
     if metric == DistanceMetric.euclidean:
         centers[:, :] = bboxes[:, :2] + bboxes[:, 2:] * 0.5
         new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5

@@ -353,7 +353,7 @@ class PredictionModule(nn.Module):
                                 prior_data += [x, y, w, h]
 
                 self.priors = (
-                    torch.Tensor(prior_data).view(-1, 4).to(device).detach()
+                    torch.tensor(prior_data).view(-1, 4).to(device).detach()
                 )
                 self.priors.requires_grad = False
                 self.last_img_size = (cfg._tmp_img_w, cfg._tmp_img_h)
