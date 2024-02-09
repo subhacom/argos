@@ -33,7 +33,7 @@ def nms(np.ndarray[np.float32_t, ndim=2] dets, np.float32_t thresh):
 
     cdef int ndets = dets.shape[0]
     cdef np.ndarray[np.int64_t, ndim=1] suppressed = \
-            np.zeros((ndets), dtype=np.int64_t)
+            np.zeros((ndets), dtype=long)
 
     # nominal indices
     cdef int _i, _j
