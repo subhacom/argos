@@ -6,45 +6,57 @@
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
+# Updated by Subhasis Ray, 2024
+#   Notes on update:
+#   Switched to using cython memoryviews, but this posed
+#   many issues:
+#    1. numpy boradcast cannot be done on memoryviews.
+#       So needed to keep an ndarray as well.
+#       https://stackoverflow.com/questions/66118199/array-broadcasting-in-cython-memoryview
+#       For the same reason they must be passed through
+#       np.asarray() before arithmetic
+#    2. cdef types must be cnp.TYPE_t, but dtype in numpy
+#       array constructors must be np.TYPE
+#
 # --------------------------------------------------------
 
 cimport cython
 import numpy as np
-cimport numpy as np
+cimport numpy as cnp
 
-cdef inline np.float32_t max(np.float32_t a, np.float32_t b) nogil:
+cdef inline cnp.float32_t max(cnp.float32_t a, cnp.float32_t b) nogil:
     return a if a >= b else b
 
-cdef inline np.float32_t min(np.float32_t a, np.float32_t b) nogil:
+cdef inline cnp.float32_t min(cnp.float32_t a, cnp.float32_t b) nogil:
     return a if a <= b else b
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
 @cython.wraparound(False)
-def nms(np.ndarray[np.float32_t, ndim=2] dets, np.float32_t thresh):
-    cdef np.ndarray[np.float32_t, ndim=1] x1 = dets[:, 0]
-    cdef np.ndarray[np.float32_t, ndim=1] y1 = dets[:, 1]
-    cdef np.ndarray[np.float32_t, ndim=1] x2 = dets[:, 2]
-    cdef np.ndarray[np.float32_t, ndim=1] y2 = dets[:, 3]
-    cdef np.ndarray[np.float32_t, ndim=1] scores = dets[:, 4]
+def nms(cnp.float32_t[:, :] dets, cnp.float32_t thresh):
+    cdef cnp.float32_t[:] x1 = dets[:, 0]
+    cdef cnp.float32_t[:] y1 = dets[:, 1]
+    cdef cnp.float32_t[:] x2 = dets[:, 2]
+    cdef cnp.float32_t[:] y2 = dets[:, 3]
+    cdef cnp.float32_t[:] scores = dets[:, 4]
 
-    cdef np.ndarray[np.float32_t, ndim=1] areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-    cdef np.ndarray[np.int64_t, ndim=1] order = scores.argsort()[::-1]
+    cdef cnp.float32_t[:] areas = (np.asarray(x2) - np.asarray(x1) + 1) * (np.asarray(y2) - np.asarray(y1) + 1)
+    cdef cnp.int32_t[:] order = scores.argsort()[::-1]
 
-    cdef int ndets = dets.shape[0]
-    cdef np.ndarray[np.int64_t, ndim=1] suppressed = \
-            np.zeros((ndets), dtype=long)
+    cdef size_t ndets = dets.shape[0]
+    suppressed_np = np.zeros((ndets), dtype=np.int32)
+    cdef cnp.int32_t[:] suppressed = suppressed_np
 
     # nominal indices
-    cdef int _i, _j
+    cdef size_t _i, _j
     # sorted indices
-    cdef int i, j
+    cdef size_t i, j
     # temp variables for box i's (the box currently under consideration)
-    cdef np.float32_t ix1, iy1, ix2, iy2, iarea
+    cdef cnp.float32_t ix1, iy1, ix2, iy2, iarea
     # variables for computing overlap with box j (lower scoring box)
-    cdef np.float32_t xx1, yy1, xx2, yy2
-    cdef np.float32_t w, h
-    cdef np.float32_t inter, ovr
+    cdef cnp.float32_t xx1, yy1, xx2, yy2
+    cdef cnp.float32_t w, h
+    cdef cnp.float32_t inter, ovr
 
     with nogil:
       for _i in range(ndets):
@@ -71,4 +83,4 @@ def nms(np.ndarray[np.float32_t, ndim=2] dets, np.float32_t thresh):
               if ovr >= thresh:
                   suppressed[j] = 1
 
-    return np.where(suppressed == 0)[0]
+    return np.where(suppressed_np == 0)[0]

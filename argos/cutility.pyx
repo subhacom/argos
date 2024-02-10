@@ -32,8 +32,8 @@ cpdef np.ndarray points2rect(p0: np.ndarray, p1: np.ndarray):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef np.ndarray[np.int_t, ndim=2] rect2points(
-    np.ndarray[np.int_t, ndim=1] rect):
+cpdef np.ndarray[int, ndim=2] rect2points(
+    np.ndarray[int, ndim=1] rect):
     """Convert topleft, width, height format rectangle into four anti-clockwise
     vertices"""
     return np.vstack([rect[:2],
@@ -44,7 +44,7 @@ cpdef np.ndarray[np.int_t, ndim=2] rect2points(
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
+cpdef np.ndarray[float, ndim=1] tlwh2xyrh(np.ndarray[int, ndim=1] rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
     cdef np.ndarray ret = np.asanyarray(rect, dtype=float)
     ret[0] += ret[2] * 0.5
@@ -56,7 +56,7 @@ cpdef np.ndarray[float_t, ndim=1] tlwh2xyrh(np.ndarray[np.int_t, ndim=1] rect):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[float_t, ndim=1] rect):
+cpdef np.ndarray[int, ndim=1] xyrh2tlwh(np.ndarray[float, ndim=1] rect):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
     cdef float w = rect[2] * rect[3]
@@ -69,7 +69,7 @@ cpdef np.ndarray[np.int_t, ndim=1] xyrh2tlwh(np.ndarray[float_t, ndim=1] rect):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
+cpdef np.ndarray[int, ndim=1] rect_intersection(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
     """Find if two axis-aligned rectangles intersect.
 
     This runs almost 50 times faster than Polygon intersection in shapely.
@@ -89,7 +89,7 @@ cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1
         overlap, all entries are 0.
     """
     cdef int x, y, dx, dy
-    cdef np.ndarray result = np.zeros((4,), dtype=np.int)
+    cdef np.ndarray result = np.zeros((4,), dtype=int)
     x = int(max(ra[0], rb[0]))
     y = int(max(ra[1], rb[1]))
     dx = int(min(ra[0] + ra[2], rb[0] + rb[2]) - x)
@@ -104,7 +104,7 @@ cpdef np.ndarray[np.int_t, ndim=1] rect_intersection(np.ndarray[np.int_t, ndim=1
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef float rect_iou(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
+cpdef float rect_iou(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
     """Compute Intersection over Union of two axis-aligned rectangles.
 
     This is the ratio of the are of intersection to the area of the union
@@ -137,7 +137,7 @@ cpdef float rect_iou(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=1] rb):
+cpdef float rect_ios(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
     """Compute intersection over area of smaller of two axis-aligned
     rectangles.
 
@@ -170,7 +170,7 @@ cpdef float rect_ios(np.ndarray[np.int_t, ndim=1] ra, np.ndarray[np.int_t, ndim=
 
 # @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[float_t, ndim=2] pairwise_distance(np.ndarray[np.int_t, ndim=2] new_bboxes, np.ndarray[np.int_t, ndim=2] bboxes,
+cpdef np.ndarray[float, ndim=2] pairwise_distance(np.ndarray[int, ndim=2] new_bboxes, np.ndarray[int, ndim=2] bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible
     pair.
