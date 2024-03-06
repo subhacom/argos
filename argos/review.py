@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-09 1:20 PM
-"""
-=========================
+"""=========================
 Review and correct tracks
 =========================
 Usage:
@@ -209,6 +208,14 @@ time needed to read and display a frame.
 Instead of going through the entire video, you can jump to the next
 frame where a new trackid was introduced, press ``N`` key (``Jump to
 next new track``).
+
+Sometimes tracking algorithms can mix up the identities of two
+animals, and this will appear as a sudden jump in the position in the
+frame where their ids were swapped. To check these, you can use
+``Ctrl+N`` to go to the next jump in position, and ``Ctrl+P`` for the
+previous jump. The threshold for the jump can be set in ``Diff
+settings`` menu, using the ``Set displacement threshold to flag
+jumps``.
 
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
 backward by pressing ``Ctrl + PgUp`` on the keyboard.
@@ -419,6 +426,7 @@ With such videos, attempt to jump frames will result in error, and the
 review tool will disable ``seek`` when it detects this. To enable seek
 when the video format permits it, uncheck the ``Disable seek`` item
 in the ``Play`` menu.
+
 """
 
 import sys
@@ -1154,9 +1162,9 @@ class ReviewWidget(qw.QWidget):
             'Go to previous change (Shift+c)'
         )
         self.jumpPrevChangeAction.triggered.connect(self.jumpPrevChange)
-        self.jumpNextJumpAction = qw.QAction('Go to next jump')
+        self.jumpNextJumpAction = qw.QAction('Go to next jump (Ctrl+n)')
         self.jumpNextJumpAction.triggered.connect(self.jumpNextJump)
-        self.jumpPrevJumpAction = qw.QAction('Go to previous jump')
+        self.jumpPrevJumpAction = qw.QAction('Go to previous jump (Ctrl+p)')
         self.jumpPrevJumpAction.triggered.connect(self.jumpPrevJump)
 
         self.frameBreakpointAction = qw.QAction('Set breakpoint at frame (b)')
