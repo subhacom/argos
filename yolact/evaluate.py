@@ -486,7 +486,8 @@ def prep_display(
                     font_thickness,
                     cv2.LINE_AA,
                 )
-        out_bboxes.append(out_)
+        if out_bboxes is not None:
+            out_bboxes.append(out_)
 
     return img_numpy
 
@@ -1032,7 +1033,10 @@ def evalvideo(net: Yolact, path: str, out_path: str = None):
 
     def prep_frame(inp, fps_str, out_bboxes=None):
         with torch.no_grad():
-            frame, preds = inp
+            if isinstance(inp, tuple):
+                frame, preds = inp
+            else:
+                frame = inp; preds = None
             return prep_display(
                 preds,
                 frame,
