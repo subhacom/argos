@@ -4,7 +4,7 @@
 # Description:
 # Author: Subhasis Ray
 # Created: Mon Mar  4 17:22:46 2024 (+0530)
-# Last-Updated: Wed Mar  6 22:17:22 2024 (+0530)
+# Last-Updated: Wed Mar  6 22:20:36 2024 (+0530)
 #           By: Subhasis Ray
 #
 
@@ -87,12 +87,11 @@ if __name__ == '__main__':
         width = 5.0
         height = 5.0
 
-    data, meta = load_dlc(infile)
+    data = load_dlc(infile)
     data['w'] = width
     data['h'] = height
-    data.to_hdf(outfile, 'tracked')
+    data.to_hdf(outfile, key='tracked')
     print(f'Converted {infile} to {outfile}')
-    print('Metadata:', meta)
 
 #
 # conert_dlc.py ends here
