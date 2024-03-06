@@ -1963,14 +1963,14 @@ class ReviewWidget(qw.QWidget):
     def _setJumpThreshold(self):
         """Set the threshold distance in positions between successive frames to flag it as a jump"""
         jumpThreshold = settings.value('review/jumpthreshold', 50.0, type=float)
-        input, accept = qw.QInputDialog.getDouble(
+        jumpThreshold, accept = qw.QInputDialog.getDouble(
             self,
             'Threshold displacement for jumps',
             'Displacement', jumpThreshold, min=0.1
         )
         if not accept:
             return
-        settings.setValue('review/jumpthreshold', 50.0)
+        settings.setValue('review/jumpthreshold', jumpThreshold)
         
     def _setPathCmap(self, side):
         cmap, accept = qw.QInputDialog.getItem(
