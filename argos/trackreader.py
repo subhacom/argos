@@ -69,7 +69,7 @@ class TrackReader(qc.QObject):
 
         self.track_data = self.track_data.astype(
             {'frame': int, 'trackid': int}
-        )
+        ).sort_values('frame')
         # Here I keep the entry frames for each track to seatch next
         # new track efficiently
         self.entry_frames = (
@@ -78,6 +78,16 @@ class TrackReader(qc.QObject):
             .drop_duplicates()
             .sort_values()
         )
+        self.track_data.assign(dx=0, dy=0, ds=0)
+        
+        for trackid in self.track_data.trackid.unique():
+            track = self.track_data[self.track_data.trackid == trackid].copy()
+            dx = track['x'].diff().values
+            dy = track['y'].diff().values
+            ds = np.sqrt(dx**2 + dy**2)
+            self.track_data.loc[self.track_data.trackid == trackid, 'dx'] = dx
+            self.track_data.loc[self.track_data.trackid == trackid, 'dy'] = dy
+            self.track_data.loc[self.track_data.trackid == trackid, 'ds'] = ds
         self.last_frame = self.track_data.frame.max()
         self.wmin = settings.value('segment/min_width', 0)
         self.wmax = settings.value('segment/max_width', 1000)
@@ -171,6 +181,28 @@ class TrackReader(qc.QObject):
                 fno = self.entry_frames.iloc[pos + 1]
         return fno
 
+    def getFramePrevJump(self, frame_no, threshold):
+        """Return the previous frame where any object changed position by over threshold distance"""
+        filtered = self.track_data.loc[(self.track_data.frame < frame_no) & (self.track_data.ds > threshold)]
+        frame = filtered.frame.max()
+        jumped = filtered[(filtered.frame == frame) & (filtered.ds > threshold)]
+        print('X' * 80)
+        print(jumped)
+        print('Y' * 80)
+        return frame, sorted(jumped.trackid.values)
+
+    def getFrameNextJump(self, frame_no, threshold):
+        """Return the next frame where any object changed position by over threshold distance"""
+        filtered = self.track_data.loc[(self.track_data.frame > frame_no) & (self.track_data.ds > threshold)]
+        frame = filtered.frame.min()
+        jumped = filtered[(filtered.frame == frame) & (filtered.ds > threshold)]
+        print('$' * 80)
+        print(jumped)
+        for idx, trackid in jumped.trackid.items():
+            print(self.track_data[(self.track_data.frame >= frame - 5) & (self.track_data.frame < frame + 5) & (self.track_data.trackid == trackid)])
+        print('#' * 80)
+        return frame, sorted(jumped.trackid.values)
+    
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
             logging.debug(

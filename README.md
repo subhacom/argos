@@ -94,6 +94,8 @@ pretrained network weights.
    to select the  right command. But note that you will need to install the appropriate 
    [NVIDIA driver](https://www.nvidia.com/Download/index.aspx) for it to work.
 
+   *NOTE: Feb 2024 YOLACT does not work on PyTorch with CUDA 12 due to a device mismatch. Use CUDA  11.8 version of PyTorch*
+   
    In case you do not have a CUDA capable GPU, you have to use
    *CPU-only* version (which can be ~10 times slower), in the Anaconda
    prompt
