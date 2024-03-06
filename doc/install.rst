@@ -35,6 +35,10 @@ Installation using Anaconda
 
      conda install pytorch torchvision cpuonly -c pytorch
 
+   *NOTE If you face issues with conda claiming package dependencies are unresolvable, a workaround can be installing pytorch as part of creating the new environment in step 2*::
+
+     conda create -n track -c conda-forge -c pytorch -c nvidia python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers pytorch torchvision torchaudio pytorch-cuda=12.1
+     
 6. Install ``pycocotools``.
 
    On Windows:

@@ -30,7 +30,8 @@ def postprocess(det_output, w, h, batch_idx=0, interpolation_mode='bilinear',
         - boxes   [num_det, 4]: The bounding box for each detection in absolute point form.
         - masks   [num_det, h, w]: Full image masks for each detection.
     """
-    
+    if det_output is None:
+        return torch.empty(0), torch.empty(0), torch.empty(0), torch.empty(0)
     dets = det_output[batch_idx]
     net = dets['net']
     dets = dets['detection']
