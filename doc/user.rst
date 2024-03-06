@@ -1011,6 +1011,14 @@ Instead of going through the entire video, you can jump to the next
 frame where a new trackid was introduced, press ``N`` key (``Jump to
 next new track``).
 
+Sometimes a tracking algorithm would swap identities of tracked points
+by mistake, resulting in a sudden jump in position. These can be
+detected by the Review tool based on the jump threshold parameter,
+which can be set via ``Diff settings->Set displacement threshold to
+flag jumps`` in the menu. You can go to the next frame where any such
+jump occurred using ``Ctrl + n`` keys, and the previous frame using
+``Ctrl + p`` (``command+n`` and ``command+p`` on mac).
+
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
 backward by pressing ``Ctrl + PgUp`` on the keyboard (the mac
 equivalents are ``command+fn+DownArrow`` and ``command+fn+UpArrow``).
