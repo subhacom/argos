@@ -19,6 +19,8 @@ n,Jump to next mismatch of IDs between two successive frames
 p,Jump to previous mismatch of IDs between two successive frames
 c,Jump to next change in ChangeList from current frame
 Shift + c,Jump to last change in ChangeList from current frame
+Ctrl + n (mac: command + n), Go to the next jump (frame where position of a tracked point changed more than distance threshold)
+Ctrl + p (mac: command + p), Go to the previous jump (frame where position of a tracked point changed more than distance threshold)
 \+,Zoom-in previous frame
 \_ (underscore),Zoom-out previous frame
 \=,Zoom-in current frame

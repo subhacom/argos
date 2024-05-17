@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-07-09 1:20 PM
-"""
-=========================
+"""=========================
 Review and correct tracks
 =========================
 Usage:
@@ -209,6 +208,14 @@ time needed to read and display a frame.
 Instead of going through the entire video, you can jump to the next
 frame where a new trackid was introduced, press ``N`` key (``Jump to
 next new track``).
+
+Sometimes tracking algorithms can mix up the identities of two
+animals, and this will appear as a sudden jump in the position in the
+frame where their ids were swapped. To check these, you can use
+``Ctrl+N`` to go to the next jump in position, and ``Ctrl+P`` for the
+previous jump. The threshold for the jump can be set in ``Diff
+settings`` menu, using the ``Set displacement threshold to flag
+jumps``.
 
 You can jump forward 10 frames by pressing ``Ctrl + PgDn`` and
 backward by pressing ``Ctrl + PgUp`` on the keyboard.
@@ -419,6 +426,7 @@ With such videos, attempt to jump frames will result in error, and the
 review tool will disable ``seek`` when it detects this. To enable seek
 when the video format permits it, uncheck the ``Disable seek`` item
 in the ``Play`` menu.
+
 """
 
 import sys
@@ -1143,17 +1151,21 @@ class ReviewWidget(qw.QWidget):
         self.jumpBackwardAction = qw.QAction('Jump backward (Ctrl+Page up)')
         self.jumpBackwardAction.triggered.connect(self.jumpBackward)
 
-        self.jumpNextNewAction = qw.QAction('Jump to next new track (n)')
+        self.jumpNextNewAction = qw.QAction('Go to next new track (n)')
         self.jumpNextNewAction.triggered.connect(self.jumpNextNew)
-        self.jumpPrevNewAction = qw.QAction('Jump to previous new track (p)')
+        self.jumpPrevNewAction = qw.QAction('Go to previous new track (p)')
         self.jumpPrevNewAction.triggered.connect(self.jumpPrevNew)
 
-        self.jumpNextChangeAction = qw.QAction('Jump to next change (c)')
-        self.jumpNextChangeAction.triggered.connect(self.gotoNextChange)
+        self.jumpNextChangeAction = qw.QAction('Go to next change (c)')
+        self.jumpNextChangeAction.triggered.connect(self.jumpNextChange)
         self.jumpPrevChangeAction = qw.QAction(
-            'Jump to previous change (Shift+c)'
+            'Go to previous change (Shift+c)'
         )
-        self.jumpPrevChangeAction.triggered.connect(self.gotoPrevChange)
+        self.jumpPrevChangeAction.triggered.connect(self.jumpPrevChange)
+        self.jumpNextJumpAction = qw.QAction('Go to next jump (Ctrl+n)')
+        self.jumpNextJumpAction.triggered.connect(self.jumpNextJump)
+        self.jumpPrevJumpAction = qw.QAction('Go to previous jump (Ctrl+p)')
+        self.jumpPrevJumpAction.triggered.connect(self.jumpPrevJump)
 
         self.frameBreakpointAction = qw.QAction('Set breakpoint at frame (b)')
         self.frameBreakpointAction.triggered.connect(self.setBreakpoint)
@@ -1197,6 +1209,8 @@ class ReviewWidget(qw.QWidget):
         self.showDifferenceAction.setCheckable(True)
         show_difference = settings.value('review/showdiff', 2, type=int)
         self.showDifferenceAction.setChecked(show_difference == 2)
+        self.setJumpThresholdAction = qw.QAction('Set displacement threshold to flag jumps')
+        self.setJumpThresholdAction.triggered.connect(self._setJumpThreshold)
         self.showNewAction = qw.QAction('Show popup message for new tracks')
         self.showNewAction.setCheckable(True)
         self.showNewAction.setChecked(show_difference == 1)
@@ -1355,12 +1369,21 @@ class ReviewWidget(qw.QWidget):
         self.sc_jump_nextnew.activated.connect(self.jumpNextNew)
         self.sc_jump_prevnew = qw.QShortcut(qg.QKeySequence('P'), self)
         self.sc_jump_prevnew.activated.connect(self.jumpPrevNew)
+        self.sc_jump_next_jump = qw.QShortcut(
+            qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_N), self
+        )
+        self.sc_jump_next_jump.activated.connect(self.jumpNextJump)
+        self.sc_jump_prev_jump = qw.QShortcut(
+            qg.QKeySequence(qc.Qt.CTRL + qc.Qt.Key_P), self
+        )
+        self.sc_jump_prev_jump.activated.connect(self.jumpPrevJump)
+
         self.sc_jump_nextchange = qw.QShortcut(qg.QKeySequence('C'), self)
-        self.sc_jump_nextchange.activated.connect(self.gotoNextChange)
+        self.sc_jump_nextchange.activated.connect(self.jumpNextChange)
         self.sc_jump_prevchange = qw.QShortcut(
             qg.QKeySequence('Shift+C'), self
         )
-        self.sc_jump_prevchange.activated.connect(self.gotoPrevChange)
+        self.sc_jump_prevchange.activated.connect(self.jumpPrevChange)
 
         self.sc_zoom_in_left = qw.QShortcut(qg.QKeySequence('+'), self)
         self.sc_zoom_in_left.activated.connect(self.leftView.zoomIn)
@@ -1460,7 +1483,7 @@ class ReviewWidget(qw.QWidget):
                 'Delete till frame',
                 self.cur['pos'],
                 self.cur['pos'],
-                2 ** 31 - 1,
+                2**31 - 1,
             )
             if not ok:
                 return
@@ -1554,7 +1577,7 @@ class ReviewWidget(qw.QWidget):
             'Apply till frame',
             self.cur['pos'],
             self.cur['pos'],
-            2 ** 31 - 1,
+            2**31 - 1,
         )
         if not accept:
             return
@@ -1584,7 +1607,7 @@ class ReviewWidget(qw.QWidget):
             'Apply till frame',
             self.cur['pos'],
             self.cur['pos'],
-            2 ** 31 - 1,
+            2**31 - 1,
         )
         if not accept:
             return
@@ -1662,7 +1685,31 @@ class ReviewWidget(qw.QWidget):
             )
 
     @qc.pyqtSlot()
-    def gotoNextChange(self):
+    def jumpNextJump(self):
+        if self.trackReader is None:
+            return
+        jumpThreshold = settings.value('review/jumpthreshold', 50.0, type=float)        
+        frame, tracks = self.trackReader.getFrameNextJump(self.cur['pos'], jumpThreshold)
+        self.gotoFrame(frame - 1)
+        self.gotoFrame(frame)
+        self.sigDiffMessage.emit(
+            f'{self.prev["pos"]} - {self.cur["pos"]} Jump in: {tracks}'
+            )
+
+    @qc.pyqtSlot()
+    def jumpPrevJump(self):
+        if self.trackReader is None:
+            return
+        jumpThreshold = settings.value('review/jumpthreshold', 50.0, type=float)        
+        frame, tracks = self.trackReader.getFramePrevJump(self.cur['pos'], jumpThreshold)
+        self.gotoFrame(frame - 1)
+        self.gotoFrame(frame)
+        self.sigDiffMessage.emit(
+            f'{self.prev["pos"]} - {self.cur["pos"]} Jump in tracks: {tracks}'
+            )
+
+    @qc.pyqtSlot()
+    def jumpNextChange(self):
         if self.trackReader is None:
             return
         change_frames = [
@@ -1677,7 +1724,7 @@ class ReviewWidget(qw.QWidget):
             self.gotoFrame(change_frames[pos])
 
     @qc.pyqtSlot()
-    def gotoPrevChange(self):
+    def jumpPrevChange(self):
         if self.trackReader is None:
             return
         change_frames = [
@@ -1921,8 +1968,20 @@ class ReviewWidget(qw.QWidget):
         else:
             return ''
 
+    def _setJumpThreshold(self):
+        """Set the threshold distance in positions between successive frames to flag it as a jump"""
+        jumpThreshold = settings.value('review/jumpthreshold', 50.0, type=float)
+        jumpThreshold, accept = qw.QInputDialog.getDouble(
+            self,
+            'Threshold displacement for jumps',
+            'Displacement', jumpThreshold, min=0.1
+        )
+        if not accept:
+            return
+        settings.setValue('review/jumpthreshold', jumpThreshold)
+        
     def _setPathCmap(self, side):
-        input, accept = qw.QInputDialog.getItem(
+        cmap, accept = qw.QInputDialog.getItem(
             self,
             'Select colormap',
             'Colormap',
@@ -1938,11 +1997,11 @@ class ReviewWidget(qw.QWidget):
                 'hot',
             ],
         )
-        logging.debug(f'Setting colormap to {input}')
+        logging.debug(f'Setting colormap to {cmap}')
         if not accept:
             return
-        self.pathCmap[side] = input
-        settings.setValue(f'review/path_cmap_{side}', input)
+        self.pathCmap[side] = cmap
+        settings.setValue(f'review/path_cmap_{side}', cmap)
 
     @qc.pyqtSlot()
     def setPathCmapLeft(self):
@@ -2263,6 +2322,7 @@ class ReviewerMain(qw.QMainWindow):
         diffgrp.addAction(self.reviewWidget.showDifferenceAction)
         diffgrp.addAction(self.reviewWidget.showNewAction)
         diffgrp.addAction(self.reviewWidget.showNoneAction)
+        diffgrp.addAction(self.reviewWidget.setJumpThresholdAction)
         diffgrp.setExclusive(True)
         diffMenu.addActions(diffgrp.actions())
 
@@ -2344,6 +2404,8 @@ class ReviewerMain(qw.QMainWindow):
         playMenu.addAction(self.reviewWidget.jumpPrevNewAction)
         playMenu.addAction(self.reviewWidget.jumpNextChangeAction)
         playMenu.addAction(self.reviewWidget.jumpPrevChangeAction)
+        playMenu.addAction(self.reviewWidget.jumpNextJumpAction)
+        playMenu.addAction(self.reviewWidget.jumpPrevJumpAction)
 
         actionMenu = self.menuBar().addMenu('Action')
         actionMenu.addActions(
