@@ -34,7 +34,8 @@ With the ``--fplot`` option, it will save the plot in the filename
 passed after it.
 
 With the ``--vout`` option, it will save the video with bounding boxes
-in the filename passed after it.
+in the filename passed after it. You must specify ``--play`` to get this
+to work.
 
 With ``--trail`` option, it will show the trail  of each animal from past
 ``trail`` frames. However, if ``trail_sec`` flag is set, it will show the trails
@@ -267,6 +268,7 @@ def play_tracks(vidfile, trackfile, lw=2, color='auto',
     height = None
     scale_x = 1
     scale_y = 1
+    print('Output video:', vout)
     if vout is not None:
         fourcc = cv2.VideoWriter_fourcc(*outfmt)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -435,6 +437,7 @@ def make_parser():
 
 if __name__ == '__main__':
     args = make_parser().parse_args()
+    print(args)
     if (args.video is not None) and args.play:
         play_tracks(args.video, args.data, lw=args.vlw, fontscale=args.fs,
                     fthickness=args.ft,

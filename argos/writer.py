@@ -107,11 +107,11 @@ class HDFWriter(DataHandler):
             self.filename, mode=self.mode, complib='blosc'
         )
 
-    def __del__(self):
-        try:
-            self.close()
-        except Exception as e:
-            logging.warn('Exception when closing file writer', e)
+    # def __del__(self):
+    #     try:
+    #         self.close()
+    #     except Exception as e:
+    #         logging.warn('Exception when closing file writer', e)
 
 
 class CSVWriter(DataHandler):
