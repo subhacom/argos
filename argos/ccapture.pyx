@@ -96,7 +96,7 @@ cpdef int vcapture(str input_, str output, str fmt, int fps,
                     cnp.ndarray[int] tc,
                     int tx,
                     int ty,
-                    float fs
+                    double fs
                     ):
 
     cdef int w_
