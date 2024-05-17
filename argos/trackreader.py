@@ -186,9 +186,6 @@ class TrackReader(qc.QObject):
         filtered = self.track_data.loc[(self.track_data.frame < frame_no) & (self.track_data.ds > threshold)]
         frame = filtered.frame.max()
         jumped = filtered[(filtered.frame == frame) & (filtered.ds > threshold)]
-        print('X' * 80)
-        print(jumped)
-        print('Y' * 80)
         return frame, sorted(jumped.trackid.values)
 
     def getFrameNextJump(self, frame_no, threshold):
@@ -196,11 +193,8 @@ class TrackReader(qc.QObject):
         filtered = self.track_data.loc[(self.track_data.frame > frame_no) & (self.track_data.ds > threshold)]
         frame = filtered.frame.min()
         jumped = filtered[(filtered.frame == frame) & (filtered.ds > threshold)]
-        print('$' * 80)
-        print(jumped)
         for idx, trackid in jumped.trackid.items():
             print(self.track_data[(self.track_data.frame >= frame - 5) & (self.track_data.frame < frame + 5) & (self.track_data.trackid == trackid)])
-        print('#' * 80)
         return frame, sorted(jumped.trackid.values)
     
     def getTracks(self, frame_no):

@@ -88,21 +88,11 @@ class LimitsWidget(qw.QWidget):
             self.sigProcessed.emit(bboxes.copy(), pos)
             return
         wh = np.sort(bboxes[:, 2:], axis=1)
-        print('FFFFFFFFFF', wh)
-        print(
-            'YYYYYYYYYY limits:',
-            self._wmin_edit.value(),
-            self._wmax_edit.value(),
-            self._hmin_edit.value(),
-            self._hmax_edit.value(),
-        )
-        narrower = wh[:, 0] >= self._wmin_edit.value()
-        wider = wh[:, 0] <= self._wmax_edit.value()
-        shorter = wh[:, 1] >= self._hmin_edit.value()
-        taller = wh[:, 1] <= self._hmax_edit.value()
-        fit = narrower & wider & shorter & taller
-
-        print(narrower, '\n', wider, '\n', shorter, '\n', taller, '\n', fit)
+        min_wide = wh[:, 0] >= self._wmin_edit.value()
+        max_wide = wh[:, 0] <= self._wmax_edit.value()
+        min_high = wh[:, 1] >= self._hmin_edit.value()
+        max_high = wh[:, 1] <= self._hmax_edit.value()
+        fit = min_wide & max_wide & min_high & max_high
         valid = bboxes[fit]
         logging.debug(f'Sending bboxes: {len(valid)}')
         if self.roi is None:
