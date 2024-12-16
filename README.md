@@ -97,14 +97,19 @@ pretrained network weights.
    ``` 
 
 6. Install `pycocotools`
-
-   On Windows:
-     1. Install [MS Visual Studio Build Tools](https://go.microsoft.com/fwlink/?LinkId=691126). 
+   In the Anaconda command prompt run:
+   ```
+   conda install pycocotools -c conda-forge
+   ```
+		
+	Alternatively, to install from github repo:
+	On Windows:
+       1. Install [MS Visual Studio Build Tools](https://go.microsoft.com/fwlink/?LinkId=691126). 
         Select Windows XX SDK for your version of Windows.
      2. Go to `C:\Program Files (x86)\Microsoft Visual C++ Build Tools` and run 
         `vcbuildtools_msbuild.bat`
      3. Install [git](https://git-scm.com/downloads)
-     4. In the Anaconda command prompt run:
+		Alternatively, install it from github repo:
 	 
         ```
         pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
@@ -115,12 +120,12 @@ pretrained network weights.
         ```
 		
 		
-   On Linux/Unix/Mac you need to have `make` and `g++` installed, and then in 
-   the Anaconda command prompt:
+	On Linux/Unix/Mac you need to have `make` and `g++` installed, and then in 
+	the Anaconda command prompt:
    
-   ```
-   pip install pycocotools
-   ```
+	   ```
+	   pip install pycocotools
+	   ```
 
 7. Install Argos with this command:
 
