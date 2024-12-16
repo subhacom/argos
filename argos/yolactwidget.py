@@ -31,6 +31,7 @@ from PyQt5 import QtCore as qc, QtWidgets as qw
 from yolact import Yolact
 from yolact.data import config as yconfig, get_label_map
 
+
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
@@ -199,6 +200,15 @@ class YolactWorker(qc.QObject):
             classes, scores, boxes = [
                 x[idx].cpu().numpy() for x in (classes, scores, boxes)
             ]
+            logging.debug(
+                '\n'.join(
+                    [
+                        f'\tclass: {c}={self.config.dataset.class_names[c]},'
+                        f'score: {s}, bbox: {b}'
+                        for c, s, b in zip(classes, scores, boxes)
+                    ]
+                )
+            )
             # This is probably not required, `postprocess` uses
             # `score_thresh` already
             num_dets_to_consider = min(self.top_k, classes.shape[0])
@@ -232,10 +242,10 @@ class YolactWorker(qc.QObject):
 
             toc = time.perf_counter_ns()
             logging.debug(
-                'Time to process single _image: %f s', 1e-9 * (toc - tic)
+                f'Time to process single _image: {1e-9 * (toc - tic)} s.'
             )
             self.sigProcessed.emit(boxes, pos)
-            logging.debug(f'Emitted bboxes for frame {pos}: {boxes}')
+            logging.debug(f'Emitted bboxes for frame {pos}:\n{boxes}')
         _dt = time.perf_counter() - _ts
         logging.debug(
             f'{__name__}.{self.__class__.__name__}.process: Runtime: {_dt}s'

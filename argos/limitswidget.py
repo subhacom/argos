@@ -2,21 +2,11 @@
 # Author: Subhasis Ray <ray dot subhasis at gmail dot com>
 # Created: 2020-08-11 9:20 PM
 """Widget to apply size constraints and ROI to filter segmented objects"""
-from typing import List, Tuple
 import logging
-from collections import OrderedDict
 import numpy as np
-import cv2
-from sklearn import cluster
-from PyQt5 import (
-    QtWidgets as qw,
-    QtCore as qc,
-    QtGui as qg
-)
+from PyQt5 import QtWidgets as qw, QtCore as qc, QtGui as qg
 
-import argos.constants as const
 from argos import utility as ut
-from argos.frameview import FrameView
 
 settings = ut.init()
 
@@ -93,25 +83,28 @@ class LimitsWidget(qw.QWidget):
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, bboxes: np.ndarray, pos: int) -> None:
-        logging.debug(bboxes.shape)
+        logging.debug(f'Received bboxes: {bboxes.shape}, pos: {pos}')
         if len(bboxes) == 0:
             self.sigProcessed.emit(bboxes.copy(), pos)
             return
         wh = np.sort(bboxes[:, 2:], axis=1)
-        valid = bboxes[(wh[:, 0] >= self._wmin_edit.value()) &
-                       (wh[:, 0] <= self._wmax_edit.value()) &
-                       (wh[:, 1] >= self._hmin_edit.value()) &
-                       (wh[:, 1] <= self._hmax_edit.value())]
+        min_wide = wh[:, 0] >= self._wmin_edit.value()
+        max_wide = wh[:, 0] <= self._wmax_edit.value()
+        min_high = wh[:, 1] >= self._hmin_edit.value()
+        max_high = wh[:, 1] <= self._hmax_edit.value()
+        fit = min_wide & max_wide & min_high & max_high
+        valid = bboxes[fit]
+        logging.debug(f'Sending bboxes: {len(valid)}')
         if self.roi is None:
             self.sigProcessed.emit(valid.copy(), pos)
             return
         vidx = []
         for ii in range(valid.shape[0]):
             vertices = ut.rect2points(valid[ii, :])
-            contained = [self.roi.containsPoint(qc.QPointF(*vtx),
-                                                qc.Qt.OddEvenFill)
-                         for vtx in vertices]
+            contained = [
+                self.roi.containsPoint(qc.QPointF(*vtx), qc.Qt.OddEvenFill)
+                for vtx in vertices
+            ]
             if np.any(contained):
                 vidx.append(ii)
         self.sigProcessed.emit(valid[vidx].copy(), pos)
-

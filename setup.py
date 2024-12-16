@@ -18,7 +18,7 @@
       pip install --index-url https://test.pypi.org/simple/ --no-deps argos-toolkit --extra-index-url https://pypi.org/simple
 
 
-``argos-tracker`` is just PyPI name, the installed package is named
+``argos-toolkit`` is just PyPI name, the installed package is named
 ``argos``. This is to avoid name conflict with another package on
 PyPI.
 
@@ -97,7 +97,7 @@ setup(
     ext_modules=cythonize(ext_modules),
     classifiers=[
         'Programming Language :: Python :: 3',
-        'License :: Public Domain',
+        'License :: OSI Approved :: GNU General Public License (GPL)',
         'Operating System :: Microsoft :: Windows',
         'Operating System :: MacOS',
         'Operating System :: POSIX :: Linux',

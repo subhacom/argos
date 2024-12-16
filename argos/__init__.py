@@ -1,4 +1,17 @@
-# -*- coding: utf-8 -*-
-# Author: Subhasis Ray <ray dot subhasis at gmail dot com>
+# __init__.py --- 
+# 
+# Filename: __init__.py
+# Description: 
+# Author: Subhasis Ray
 # Created: 2020-05-28 2:59 PM
-__version__ = '0.1.3.post2'
+# Last-Updated: Fri May 17 09:08:21 2024 (-0400)
+#           By: Subhasis Ray
+# 
+
+# Code:
+
+
+__version__ = '0.2.0'
+
+#
+# __init__.py ends here

@@ -57,8 +57,7 @@ class DataHandler(qc.QObject):
 class HDFWriter(DataHandler):
     def __init__(self, filename, mode='w'):
         super(HDFWriter, self).__init__(filename, mode)
-        self.data_store = pd.HDFStore(filename, mode=mode,
-                                      complib='blosc')
+        self.data_store = pd.HDFStore(filename, mode=mode, complib='blosc')
 
     def _write(self):
         """
@@ -88,8 +87,9 @@ class HDFWriter(DataHandler):
             logging.info('No tracking data.')
             return
         data = np.concatenate(data)
-        data = pd.DataFrame(data=data, columns=['frame', 'trackid',
-                                                'x', 'y', 'w', 'h'])
+        data = pd.DataFrame(
+            data=data, columns=['frame', 'trackid', 'x', 'y', 'w', 'h']
+        )
         self.data_store.put(tracked_key, data, format='table', append=False)
 
     @qc.pyqtSlot()
@@ -103,16 +103,20 @@ class HDFWriter(DataHandler):
     def reset(self):
         """Overwrite current files, going back to start."""
         self.close()
-        self.data_store = pd.HDFStore(self.filename,
-                                      mode=self.mode,
-                                      complib='blosc')
+        self.data_store = pd.HDFStore(
+            self.filename, mode=self.mode, complib='blosc'
+        )
 
-    def __del__(self):
-        self.close()
+    # def __del__(self):
+    #     try:
+    #         self.close()
+    #     except Exception as e:
+    #         logging.warn('Exception when closing file writer', e)
 
 
 class CSVWriter(DataHandler):
     """Not used any more. Using HDF5 is much faster"""
+
     def __init__(self, filename, mode='w'):
         super(CSVWriter, self).__init__(filename, mode)
         prefix, _, ext = filename.rpartition('.')

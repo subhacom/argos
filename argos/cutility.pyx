@@ -44,9 +44,9 @@ cpdef np.ndarray[int, ndim=2] rect2points(
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[float, ndim=1] tlwh2xyrh(np.ndarray[int, ndim=1] rect):
+cpdef np.ndarray[np.float64_t, ndim=1] tlwh2xyrh(np.ndarray[int, ndim=1] rect):
     """Convert rectangle in top-left, width, height format into center, aspect ratio, height"""
-    cdef np.ndarray ret = np.asanyarray(rect, dtype=float)
+    cdef np.ndarray ret = np.asanyarray(rect, dtype=np.float64)
     ret[0] += ret[2] * 0.5
     ret[1] += ret[3] * 0.5
     # ret[:2] += ret[2:] * 0.5
@@ -56,10 +56,10 @@ cpdef np.ndarray[float, ndim=1] tlwh2xyrh(np.ndarray[int, ndim=1] rect):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[int, ndim=1] xyrh2tlwh(np.ndarray[float, ndim=1] rect):
+cpdef np.ndarray[int, ndim=1] xyrh2tlwh(np.ndarray[np.float64_t, ndim=1] rect):
     """Convert centre, aspect ratio, height into top-left, width, height
     format"""
-    cdef float w = rect[2] * rect[3]
+    cdef np.float64_t w = rect[2] * rect[3]
     cdef np.ndarray ret = np.asanyarray((round(rect[0] - w / 2.0),
                                          round(rect[1] - rect[3] / 2.0),
                                          round(w), round(rect[3])),
@@ -104,7 +104,7 @@ cpdef np.ndarray[int, ndim=1] rect_intersection(np.ndarray[int, ndim=1] ra, np.n
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef float rect_iou(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
+cpdef np.float64_t rect_iou(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
     """Compute Intersection over Union of two axis-aligned rectangles.
 
     This is the ratio of the are of intersection to the area of the union
@@ -123,8 +123,8 @@ cpdef float rect_iou(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
         The Intersection over Union of two rectangles.
     """
     cdef np.ndarray inter = rect_intersection(ra, rb)
-    cdef float area_i, area_u
-    cdef float ret
+    cdef np.float64_t area_i, area_u
+    cdef np.float64_t ret
     area_i = inter[2] * inter[3]
     area_u = ra[2] * ra[3] + rb[2] * rb[3] - area_i
     if area_u <= 0 or area_i < 0:
@@ -137,7 +137,7 @@ cpdef float rect_iou(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef float rect_ios(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
+cpdef np.float64_t rect_ios(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
     """Compute intersection over area of smaller of two axis-aligned
     rectangles.
 
@@ -157,12 +157,12 @@ cpdef float rect_ios(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
         The Intersection over area of the smaller of two rectangles.
     """
     cdef np.ndarray inter = rect_intersection(ra, rb)
-    cdef float area_i = inter[2] *inter[3]
-    cdef float area_a = ra[2] * ra[3]
-    cdef float area_b = rb[2] * rb[3]
+    cdef np.float64_t area_i = inter[2] *inter[3]
+    cdef np.float64_t area_a = ra[2] * ra[3]
+    cdef np.float64_t area_b = rb[2] * rb[3]
     if area_i < 0 or area_a <= 0 or area_b <= 0:
         raise ValueError('Area not positive')
-    cdef float ret = area_i / min(area_a, area_b)
+    cdef np.float64_t ret = area_i / min(area_a, area_b)
     if np.isinf(ret) or np.isnan(ret) or ret < 0:
         raise ValueError('Invalid intersection')
     return ret
@@ -170,7 +170,7 @@ cpdef float rect_ios(np.ndarray[int, ndim=1] ra, np.ndarray[int, ndim=1] rb):
 
 # @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cpdef np.ndarray[float, ndim=2] pairwise_distance(np.ndarray[int, ndim=2] new_bboxes, np.ndarray[int, ndim=2] bboxes,
+cpdef np.ndarray[np.float64_t, ndim=2] pairwise_distance(np.ndarray[int, ndim=2] new_bboxes, np.ndarray[int, ndim=2] bboxes,
                       object boxtype, object metric):
     """Takes two lists of boxes and computes the distance between every possible
     pair.
@@ -195,9 +195,9 @@ cpdef np.ndarray[float, ndim=2] pairwise_distance(np.ndarray[int, ndim=2] new_bb
         ``new_bboxes[ii]`` and ``bboxes[jj]``.
      """
     cdef np.ndarray dist = np.zeros((new_bboxes.shape[0], bboxes.shape[0]),
-                                    dtype=float)
-    cdef np.ndarray centers = np.zeros((bboxes.shape[0], 2), dtype=float)
-    cdef np.ndarray new_centers = np.zeros((new_bboxes.shape[0], 2), dtype=float)
+                                    dtype=np.float64)
+    cdef np.ndarray centers = np.zeros((bboxes.shape[0], 2), dtype=np.float64)
+    cdef np.ndarray new_centers = np.zeros((new_bboxes.shape[0], 2), dtype=np.float64)
     if metric == DistanceMetric.euclidean:
         centers[:, :] = bboxes[:, :2] + bboxes[:, 2:] * 0.5
         new_centers = new_bboxes[:, :2] + new_bboxes[:, 2:] * 0.5

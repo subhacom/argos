@@ -486,7 +486,7 @@ When training with a custom dataset, use one of the above as ``base`` in the ann
 
 Usage:
 ::
-    python -m argos_track
+    python -m argos.track
 
 
 In Argos, this is the main tool for tracking objects
@@ -658,17 +658,17 @@ the available algorithms.
 ***********************************************
 Usage:
 ::
-     python -m argos_track.batchtrack -i {input_file} -o {output_file}
+     python -m argos.batchtrack -i {input_file} -o {output_file}
      -c {config_file}
 
-Try ``python -m argos_track.batchtrack -h`` for details of command-line
+Try ``python -m argos.batchtrack -h`` for details of command-line
 options.
 
 This program allows non-interactive tracking of objects in a video.
 When using classical segmentation this can speed things up by
 utilizing multiple CPU cores.
 
-It may be easier to use the interactive tracking :py:mod:`argos_track`
+It may be easier to use the interactive tracking :py:mod:`argos.track`
 to play with the segmentation parameters to see what work best for
 videos in a specific setting. The optimal setting can then be exported
 to a configuration file which will then be passed with ``-c`` command
@@ -678,7 +678,7 @@ Examples
 ========
 Use YOLACT for segmentation and SORT for tracking:
 ::
-    python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
+    python -m argos.batchtrack -i video.avi -o video.h5 -m yolact \\
     --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
     --overlap_thresh=0.3 --cuda=True \\
     --pmin=10 --pmax=500 --wmin=5 --wmax=100 --hmin=5 --hmax=100 \\
@@ -733,7 +733,7 @@ rest of the arguments:
 
 
 All of this can be more easily set graphically in
-:py:mod:`argos_track` and exported into a file, which can then be
+:py:mod:`argos.track` and exported into a file, which can then be
 passed with ``-c {config_file}``.
 
 
