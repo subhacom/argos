@@ -44,7 +44,7 @@ cpdef bint check_motion_gray(cnp.ndarray[unsigned char, ndim=2] gray_cur,
                                               kernel_width), 0)
 
     cdef cnp.ndarray[unsigned char, ndim=2] frame_delta = cv2.absdiff(blurred_cur, blurred_prev)
-    cdef cnp.int_t ret
+    cdef cnp.int64_t ret
     contour_info = None
     contours = None
     hierarchy = None
