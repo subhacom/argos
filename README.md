@@ -1,12 +1,12 @@
 # Argos: tracking multiple objects ([documentation](https://argos.readthedocs.io/en/latest/))
 Argos is a free, open source software toolkit to facilitate tracking
-multiple objects (animals) in videos. 
+multiple objects (animals) in videos.
 
-It is described in this article: 
+It is described in this article:
 ```
-Ray, S., Stopfer, M.A., 2022. 
-Argos: A toolkit for tracking multiple animals in complex visual environments. 
-Methods in Ecology and Evolution 13, 585–595. 
+Ray, S., Stopfer, M.A., 2022.
+Argos: A toolkit for tracking multiple animals in complex visual environments.
+Methods in Ecology and Evolution 13, 585–595.
 https://doi.org/10.1111/2041-210X.13776
 
 ```
@@ -37,7 +37,7 @@ There are many other excellent tools for tracking animal behavior, but Argos:
 The user documentation for Argos is available on
 [readthedocs](https://argos.readthedocs.io/en/latest/).
 
-Argos 0.2.0 onwards is released free and open source GPL3 license. 
+Argos 0.2.0 onwards is released free and open source GPL3 license.
 
 Instead of reinventing the wheel, we put together algorithms developed
 by researchers in computer vision in a simple graphical interface to
@@ -57,60 +57,69 @@ pretrained network weights.
 ## Getting started
 
 ### Installation using Anaconda
-1. Install [anaconda](https://www.anaconda.com/) python distribution. You can 
-   download the free Individual Edition 
+1. Install [anaconda](https://www.anaconda.com/) python distribution. You can
+   download the free Individual Edition
    [here](https://www.anaconda.com/products/individual#Downloads)
-2. Create an environment with required packages (enter this commands in 
+2. Create an environment with required packages (enter this commands in
    Anaconda prompt):
-   
+
    ```
-   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers
+   conda create -n track -c conda-forge python cython scipy numpy scikit-learn pyqt pyyaml matplotlib pandas pytables ffmpeg sortedcontainers hdf5 h5py
    ```
-   
+
    This will create a virtual Python environment called `track`
 3. Activate the environment (enter this commands in Anaconda prompt):
-   
+
    ```
    conda activate track
    ```
-   
-4. Install OpenCV with contributed modules (required for some recent tracking 
+
+4. Install OpenCV with contributed modules (required for some recent tracking
    algorithms, but not part of the main OpenCV distribution available in conda):
    ```commandline
-    pip install opencv-contrib-python
+    pip install opencv-contrib-python-headless
    ```
-   
+
+   *Note: original requirement was `opencv-contrib-python`, but this installs a plugin that conflicts with PyQt5, resulting in an error like:*
+
+     ```
+      qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "{env-location}/lib/python3.14/site-packages/cv2/qt/plugins" even though it was found.
+      This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
+
+      Available platform plugins are: xcb, eglfs, minimal, minimalegl, offscreen, vnc, webgl.
+     ```
+
 5. Install PyTorch.
 
    If you have a CUDA capable GPU, see  [pytorch website](https://pytorch.org/get-started/locally/)
-   to select the  right command. But note that you will need to install the appropriate 
+   to select the  right command. But note that you will need to install the appropriate
    [NVIDIA driver](https://www.nvidia.com/Download/index.aspx) for it to work.
 
    *NOTE: Feb 2024 YOLACT does not work on PyTorch with CUDA 12 due to a device mismatch. Use CUDA  11.8 version of PyTorch*
-   
+
    In case you do not have a CUDA capable GPU, you have to use
    *CPU-only* version (which can be ~10 times slower), in the Anaconda
    prompt
 
-   ``` 
-   conda install pytorch torchvision cpuonly -c pytorch 
-   ``` 
+   ```
+   conda install pytorch torchvision cpuonly -c pytorch
+   ```
 
 6. Install `pycocotools`
    In the Anaconda command prompt run:
    ```
    conda install pycocotools -c conda-forge
    ```
-		
+
 	Alternatively, to install from github repo:
 	On Windows:
-       1. Install [MS Visual Studio Build Tools](https://go.microsoft.com/fwlink/?LinkId=691126). 
+       1. Install [MS Visual Studio Build Tools](https://go.microsoft.com/fwlink/?LinkId=691126).
         Select Windows XX SDK for your version of Windows.
-     2. Go to `C:\Program Files (x86)\Microsoft Visual C++ Build Tools` and run 
+     2. Go to `C:\Program Files (x86)\Microsoft Visual C++ Build Tools` and run
         `vcbuildtools_msbuild.bat`
      3. Install [git](https://git-scm.com/downloads)
 		Alternatively, install it from github repo:
-	 
+
         ```
         pip install git+https://github.com/philferriere/cocoapi.git#egg=pycocotools^&subdirectory=PythonAPI
         ```
@@ -118,11 +127,11 @@ pretrained network weights.
         ```
         pip install "git+https://github.com/philferriere/cocoapi.git#egg=pycocotools&subdirectory=PythonAPI"
         ```
-		
-		
-	On Linux/Unix/Mac you need to have `make` and `g++` installed, and then in 
+
+
+	On Linux/Unix/Mac you need to have `make` and `g++` installed, and then in
 	the Anaconda command prompt:
-   
+
 	   ```
 	   pip install pycocotools
 	   ```
@@ -181,7 +190,7 @@ tracking proceeds. Follow the steps below to start and use this
 program.
 
 1. Run `argos` tracking script on the Anaconda prompt:
-   
+
    ```
    python -m argos.track
    ```
@@ -200,7 +209,7 @@ program.
 	  3. File containing trained network weights, and here you should
          select the `yolact_base_54_800000.pth` file downloaded from
          YOLACT repository page.
-	  
+
 3. Start tracking: click the `play/pause` button and you should see
     the tracked locusts. The data will be saved in the filename you
     entered in step above.
@@ -210,10 +219,10 @@ program.
     containing `frame-no,x,y,w,h` where (x, y) is the coordinate of
     the top left corner of the bounding box and `w` and `h` are its
     width and height respectively.
-    
-    The tracks will be saved in `{videofile}.trk.csv`. Each row in this file 
+
+    The tracks will be saved in `{videofile}.trk.csv`. Each row in this file
     contains `frame-no,track-id,x,y,w,h`.
-	
+
 	If you choose HDF5 in step 10.1 above, the same data will be saved
     in a single file compatible with the Pandas library. The
     segementation data will be saved in the group `/segmented` and
@@ -226,42 +235,42 @@ program.
 	tracks = pandas.read_hdf(tracked_filename, 'tracked')
 	```
 
-     
+
 4. Classical segmentation: Using the `Segmentation method` menu you can switch
-    from YOLACT to classical image segmentation for detecting target objects. 
-    This method uses patterns in the pixel values in the image to detect 
-    contiguous patches. If your target objects are small but have high contrast 
-    with the background, this may give tighter bounding boxes, and thus more 
+    from YOLACT to classical image segmentation for detecting target objects.
+    This method uses patterns in the pixel values in the image to detect
+    contiguous patches. If your target objects are small but have high contrast
+    with the background, this may give tighter bounding boxes, and thus more
     accurate tracking.
-    
+
     When this is enabled, the right panel will allow you to set the parameters.
-    
-    The classical segmentation works by first blurring the image so that sharp 
+
+    The classical segmentation works by first blurring the image so that sharp
     edges of objects are smoothed out. Blur width and SD control this.
-    
+
     Select invert thresholding for dark objects on light background.
-    
-    Segmentation method: if Threshold, then contiguous white pixels are taken 
-    as objects. If DBSCAN, the DBSCAN algorithm is used for spatially 
+
+    Segmentation method: if Threshold, then contiguous white pixels are taken
+    as objects. If DBSCAN, the DBSCAN algorithm is used for spatially
     clustering the white pixels. This usually provides finer selection of
-    object at the cost of speed. 
-    
-    When DBSCAN is chosen, only clusters of at least `minimum samples`	pixels 
+    object at the cost of speed.
+
+    When DBSCAN is chosen, only clusters of at least `minimum samples`	pixels
     are considered valid.
-    
-    The initial segmentation is further refined by specifying limits on object 
-    size by specifying `minimum pixels`, `maximum pixels`, `minimum width`, 
+
+    The initial segmentation is further refined by specifying limits on object
+    size by specifying `minimum pixels`, `maximum pixels`, `minimum width`,
     `maximum width`, `minimum length` and `maximum length`.
-	
-	
-#### Batch tracking 
+
+
+#### Batch tracking
 You can also run the tracking in batch mode from the command
 line. This is useful for processing a number of files from a shell
 script. This uses YOLACT for decteting objects and SORT for tracking.
 
 ```
 python -m argos.batchtrack -i {input_file} -o {output_file} -c {yolact_config} -w {yolact_weights} -s {score} -k {max_objects} --hmin {minimum_height} --hmax {maximum_height} --wmin {minimum_width} --wmax {maximum_width} --overlap {minimum_overlap} --max_age {maximum_misses}
-```	
+```
 
 where every entry inside braces is to be replaced by the appropriate
 value. The arguments are described below (full list can be obtained by
@@ -286,10 +295,10 @@ the command `python -m argos.batchtrack -h`)
 
 - `minimum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels less than this number.
-  
+
 - `maximum_height`: an integer - filter out detected objects whose
   bounding box has length in pixels larger than this number.
-  
+
 - `minimum_width`: an integer - filter out detected objects whose
   bounding box has width in pixels less than this number.
 
@@ -300,24 +309,24 @@ the command `python -m argos.batchtrack -h`)
   overlap between two overlapping objects in successive frames to
   consider them the same object. This overlap is measured as the ratio
   of intersection to union of their bounding boxes. Smaller value will
-  be lenient, larger value will be stricter. 
-  
+  be lenient, larger value will be stricter.
+
   Imagine object A in frame 1 has moved in frame 2 to A'. If the area
   of overlap of the bounding boxes of A and A' is half their combined
   area, and the specified minimum overlap is 0.3, then A' will be
   correctly labeled the same as A. If the specified minimum overlap is
   0.7, then A' will be considered a different object and will receive
   a new label.
-  
+
   Thus with a larger value for overlap, a small movement may cause the
   object to be labeled as a new object. A smaller value of overlap may
   cause different objects coming close together to be confused as the
   same object.
-  
+
 - maximum_misses: if an object cannot be detected in these many
   successive frames, it is considered lost. It can be smaller when
   detection is good and the video is recorded at high FPS.
-  
+
 Example:
 
 For detecting animals that should be within 5 and 50 pixels wide and
@@ -369,7 +378,7 @@ tracks and correct mistakes.
 
 3. From the File menu open the track generated by the tracking utility and it
    will ask for the corresponding video file.
-   
+
    Once both are selected, you will see the current frame in the right
    pane and the previous frame in the left pane (initially empty).
 
@@ -382,13 +391,13 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
 - `Scroll views together` - zooming will work simultaneously on both
    left and right pane, scrolling right pane will scroll the left one
    too. Useful for comparing the same regions in a zoomed in video.
-   
+
 -  `Set color` button for selecting a single color for all bounding
    boxes and track label text.
 
 -  `Autocolor` button when checked, will automatically pick random
    colors.
-   
+
    `Colormap` button for selecting a colormap and number of different
    values to use from this colormap for the bounding boxes and track
    label text.
@@ -401,14 +410,14 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
   checked (default), then it will show a popup message each time the
   track ids in the current frame do not match those on the left frame
   and the video will pause.
-   
+
 - If `Show popup message for new track` button is checked, then only
   when a new track appears on the right pane, the video will pause a
   popup message will inform you about it.
-   
+
 - If `No popup message for tracks` button is checked, then the video
   will run silently.
-   
+
 - Whenever there is a left-right mismatch in track labels, there will
   be a message in the status bar (a status message) pointing out the
   differences. In the message text, new track labels will be in bold.
@@ -417,13 +426,13 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
   correct label pressing the left mouse button from the list of all
   tracks in the middle to the corresponding track id in the list of
   current tracks in the right list.
-     
+
 - To apply this for just the current frame, keep the `Shift` key
   pressed when dragging and dropping.
-     
+
 - If a track on the right is a false detection, you can delete it by
   pressing `x` or `delete` key.
-     
+
   To apply this for current frame only keep the `Ctrl` key pressed at
   the same time.
 
@@ -431,10 +440,10 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
   or cross each other, can be swapped by mistake. You can use the
   right mouse button to drag and drop one track id from the left/all
   list on another on the right list to swap them.
-     
+
   To apply this for just the current frame, keep the `Shift` key
   pressed when dragging and dropping.
-     
+
      *NOTE* Swapping and assigning on the same trackid within a single
      frame can be problematic.  Sometimes the tracking algorithm can
      temporarily mislabel tracks. For example, object `A` (trackid=1)
@@ -450,7 +459,7 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
      assignment and then the swap, `B` will get the label 2 from the
      assignment first, and as `A` also has label 2, both of them will
      become 1 after the swap.
-	 
+
 - To undo the changes made in current frame press `Ctrl+Z`. Note that
   this will undo all operations (swap, assignment, deletion)
   specified in the current frame.
@@ -511,7 +520,7 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
 - Filtering out bad tracks by size: if your objects of interest have a
   specific size range, you can filter out bad detections by setting a
   size limit via `View->Size limits`.
-	 
+
 - `plot_tracks.py` : a python script with functions to display the tracks.
 
 ## Known-issues
@@ -528,17 +537,17 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
   ValueError: numpy.ndarray size changed, may indicate binary incompatibility. Expected 88 from C header, got 80 from PyObject
   ```
 
-  This happens with older version of numpy (should be 1.20 or later). 
+  This happens with older version of numpy (should be 1.20 or later).
   Try upgrading numpy:
   ```
   pip install -U numpy
   ```
 
-- When installing with `pip` I get this error message 
+- When installing with `pip` I get this error message
   ```
   Collecting torch
     Downloading torch-1.8.0-cp39-cp39-manylinux1_x86_64.whl (735.5 MB)
-  
+
   ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE. If you have updated the package versions, please update the hashes. Otherwise, examine the package contents carefully; someone may have tampered with them.
   ```
   Try pip with `--no-cache-dir` option, like this:
@@ -549,36 +558,36 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
   ```
   ModuleNotFoundError: No module named 'pycocotools'
   ```
-  
+
   This indicates that pycocotools is not installed on your system. We
   did not include pycocotools in the dependencies as that creates
   problem for MS Windows (see special case for Windows in installation
   instrctions above).
-  
+
   On Unix-like systems (Linux/Mac) you can install pycocotools with
   ```
   pip install pycocotools
   ```
-  
+
 - I get this error when trying `python -m argos.track`:
   ```
   RuntimeError: Found no NVIDIA driver on your system. Please check that you have an NVIDIA GPU and installed a driver from http://www.nvidia.com/Download/index.aspx
   ```
-  
+
   Check if you have NVIDIA drivers for CUDA installed. Also note that
   CUDA does not work from Windows Subsystem for Linux (WSL). In
   general it is a good idea to install Argos on the native platform.
-  
-  
-- Trying to train YOLACT raises this RuntimeError: 
+
+
+- Trying to train YOLACT raises this RuntimeError:
   ```
   RuntimeError: Expected a 'cuda' device type for generator but found 'cpu'.
   ```
-  
+
   This is a known bug in pytorch as of version 1.9.0 (see
   https://github.com/pytorch/pytorch/issues/44714). Try installing the
   LTS version: `conda install pytorch torchvision cuda=10.2 -c pytorch-lts`.
-  
+
   For various other commands to install pytorch see https://pytorch.org
 
 ## Credits
@@ -596,7 +605,7 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
     doi={10.1109/ICIP.2016.7533003}
   }
   ```
-  
+
 - [YOLACT](https://github.com/dbolya/yolact) was developed by Daniel
   Bolya. The related publication is:
   ```
@@ -613,5 +622,5 @@ Some videos demonstrating how to use the Review tool in complex scenarios: https
     Ray, S., & Stopfer, M. A. (2021).  Argos: A toolkit for tracking
     multiple animals in complex visual environments. Methods in Ecology
     and Evolution, 00, 1- 11. https://doi.org/10.1111/2041-210X.13776
-	
+
 - Funding: During the initial development of Argos (v0.1) the author was funded by the National Institutes of Health. Since June 2021 Args does not receive any funding and the author develops it in his free time as a contribution to the community.
