@@ -35,6 +35,7 @@ jobs:
       with:
         name: argos-${{ matrix.os }}-${{ github.sha }}
         path: dist/*.whl
+
   publish:
     runs-on: ubuntu-latest
     needs: build
@@ -42,6 +43,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: argos-*
+          merge-multiple: true
 
       - shell: bash
         env:
