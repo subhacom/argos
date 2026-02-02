@@ -28,7 +28,76 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
+    - name: Upload packages
+      if: github.ref == 'refs/heads/master'
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "wheelhouse/argos*.whl"
+  build-mac:
+    runs-on: macos-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Add conda to system path
       run: |
-        conda install pytest
-        pytest
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        conda env update --file environment.yml --name base
+    - name: Lint with flake8
+      run: |
+        conda install flake8
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Upload packages
+      if: github.ref == 'refs/heads/master'
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "wheelhouse/argos*.whl"
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    - name: Add conda to system path
+      run: |
+          micromamba shell hook -s powershell | Out-String | Invoke-Expression
+          micromamba activate moose
+          python -m cibuildwheel --output-dir wheelhouse
+          dir wheelhouse
+    - name: Install dependencies
+      run: |
+        conda env update --file environment.yml --name base
+    - name: Lint with flake8
+      run: |
+        conda install flake8
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Upload packages
+      if: github.ref == 'refs/heads/master'
+      uses: xresloader/upload-to-github-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        file: "wheelhouse/argos*.whl"
