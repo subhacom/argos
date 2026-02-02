@@ -48,7 +48,12 @@ jobs:
           path: dist
           pattern: argos-*
           merge-multiple: true
-
+      - name: Repair wheel (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          pip install auditwheel patchelf
+          auditwheel repair dist/*.whl --wheel-dir dist/
+          rm dist/*-linux_x86_64.whl
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
