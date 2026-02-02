@@ -1,0 +1,26 @@
+name: track
+channels:
+    - conda-forge
+    - pytorch
+dependencies:
+    - python >= 3.6
+    - anaconda
+    - pip
+    - sortedcontainers
+    - cython
+    - pyqt
+    - opencv-contrib-python-headless
+    - pycocotools
+    - numpy
+    - scipy
+    - scikit-learn
+    - pyyaml
+    - matplotlib
+    - pytables
+    - pandas
+    - ffmpeg
+    - hdf5
+    - h5py
+    - pytorch
+    - torchvision
+    - cpuonly

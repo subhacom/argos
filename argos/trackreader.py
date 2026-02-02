@@ -79,7 +79,7 @@ class TrackReader(qc.QObject):
             .sort_values()
         )
         self.track_data.assign(dx=0, dy=0, ds=0)
-        
+
         for trackid in self.track_data.trackid.unique():
             track = self.track_data[self.track_data.trackid == trackid].copy()
             dx = track['x'].diff().values
@@ -196,7 +196,7 @@ class TrackReader(qc.QObject):
         for idx, trackid in jumped.trackid.items():
             print(self.track_data[(self.track_data.frame >= frame - 5) & (self.track_data.frame < frame + 5) & (self.track_data.trackid == trackid)])
         return frame, sorted(jumped.trackid.values)
-    
+
     def getTracks(self, frame_no):
         if frame_no > self.last_frame:
             logging.debug(
@@ -286,10 +286,10 @@ class TrackReader(qc.QObject):
             intersects = np.ones(tracks.shape[0], dtype=bool)
 
         sel = np.flatnonzero(
-            (wh[:, 0] >= self.wmin)
-            & (wh[:, 0] <= self.wmax)
-            & (wh[:, 1] >= self.hmin)
-            & (wh[:, 1] <= self.hmax)
+            (wh[:, 0] >= int(self.wmin))
+            & (wh[:, 0] <= int(self.wmax))
+            & (wh[:, 1] >= int(self.hmin))
+            & (wh[:, 1] <= int(self.hmax))
             & intersects
         )
         return tracks.iloc[sel]
