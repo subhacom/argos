@@ -67,9 +67,10 @@ class TrackReader(qc.QObject):
                     names = names[:col_count]
                     self.track_data = pd.read_csv(self.data_path, names=names)
 
-        self.track_data = self.track_data.astype(
+        tmp =  self.track_data.astype(
             {'frame': int, 'trackid': int}
-        ).sort_values('frame')
+        )
+        self.track_data = tmp.iloc[tmp['frame'].argsort()]
         # Here I keep the entry frames for each track to seatch next
         # new track efficiently
         self.entry_frames = (
