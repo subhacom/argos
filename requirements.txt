@@ -1,6 +1,6 @@
 Cython
 PyQt5
-opencv-contrib-python-headless
+opencv-python-headless
 torch
 numpy
 scipy

@@ -18,7 +18,7 @@ suggestions, or bugs to report.
 
 There are many other excellent tools for tracking animal behavior, but Argos:
 
-1. Does not require constant background.
+1. Does not require a fixed background.
 2. Can use classical segmentation methods like thresholding, contour
    detection, and watershed when objects have good contrast with
    background.
@@ -33,6 +33,12 @@ There are many other excellent tools for tracking animal behavior, but Argos:
    3. Track animals in videos (as described above) using either a GUI
       or in batch mode.
    4. Review and correct detected tracks using a GUI.
+
+While most of the above advantages are now (as of 2026) available in
+modern tools like SAM, no automated tracking tool can identify and
+track the objects all the time. This results in ID swaps, which must
+be manually inspected and corrected. This is wheer we believe the
+Argos Review tool can still be useful.
 
 The user documentation for Argos is available on
 [readthedocs](https://argos.readthedocs.io/en/latest/).
@@ -77,7 +83,7 @@ pretrained network weights.
 4. Install OpenCV with contributed modules (required for some recent tracking
    algorithms, but not part of the main OpenCV distribution available in conda):
    ```commandline
-    pip install opencv-contrib-python-headless
+    pip install opencv-python-headless
    ```
 
    *Note: original requirement was `opencv-contrib-python`, but this installs a plugin that conflicts with PyQt5, resulting in an error like:*
