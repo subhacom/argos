@@ -91,8 +91,15 @@ class Yolov11Worker(qc.QObject):
 
     @qc.pyqtSlot(str)
     def setWeights(self, filename: str) -> None:
+        """Load model from an absolute path to an existing .pt file."""
         if not filename:
             self.sigError.emit(Yolov11Exception('Empty weights filename'))
+            return
+        if not os.path.isfile(filename):
+            self.sigError.emit(Yolov11Exception(
+                f'Weights file not found: {filename}\n'
+                'Use "Locate model" or "Download model" in the YOLOv11 panel.'
+            ))
             return
         try:
             from ultralytics import YOLO
@@ -160,6 +167,10 @@ class Yolov11Widget(qw.QWidget):
       - sigQuit()                       shut down the worker thread
       - process(image, pos)             slot — call to process a frame
       - initialized                     bool property
+
+    Model paths are always stored as absolute paths in QSettings under
+    ``yolov11/weightsfile``.  The widget never downloads a model to the
+    current working directory.
     """
 
     sigProcessed = qc.pyqtSignal(np.ndarray, int)
@@ -176,32 +187,35 @@ class Yolov11Widget(qw.QWidget):
         self.initialized = False
         self.indicator = None
 
-        # --- Standard model variant selector ---
+        # --- Model variant selector (informational: shows sizes) ---
         self.model_combo = qw.QComboBox()
         for label, _ in _MODEL_VARIANTS:
             self.model_combo.addItem(label)
         saved_idx = settings.value('yolov11/model_variant', 0, type=int)
         self.model_combo.setCurrentIndex(saved_idx)
         self.model_combo.setToolTip(
-            'Standard pretrained model. Larger = more accurate but slower.\n'
-            'Downloaded automatically from Ultralytics on first use.'
+            'Choose a standard model size to locate or download.\n'
+            'Larger models are more accurate but slower.'
         )
-        self.model_combo_label = qw.QLabel('Standard model')
+        self.model_combo_label = qw.QLabel('Model size')
 
-        self.use_standard_action = qw.QAction('Use standard model', self)
-        self.use_standard_action.setToolTip(
-            'Download (if needed) and load the selected standard model'
+        # --- Locate existing .pt file ---
+        self.locate_action = qw.QAction('Locate model', self)
+        self.locate_action.setToolTip(
+            'Browse for an existing .pt file on disk'
         )
-        self.use_standard_action.triggered.connect(self.loadStandardModel)
+        self.locate_action.triggered.connect(self.locateModel)
 
-        # --- Custom weights loader ---
-        self.load_weights_action = qw.QAction('Load custom weights', self)
-        self.load_weights_action.setToolTip(
-            'Load a .pt file trained on your own data with Ultralytics'
+        # --- Download to a chosen folder ---
+        self.download_action = qw.QAction('Download model', self)
+        self.download_action.setToolTip(
+            'Download the selected standard model to a folder of your choice'
         )
-        self.load_weights_action.triggered.connect(self.loadWeights)
+        self.download_action.triggered.connect(self.downloadModel)
+
+        # Current weights label
         self.weights_label = qw.QLabel('(no model loaded)')
-        self.weights_label.setToolTip('Active weights file')
+        self.weights_label.setToolTip('Active weights file path')
 
         # --- CUDA toggle ---
         self.cuda_action = qw.QAction('Use CUDA', self)
@@ -275,13 +289,18 @@ class Yolov11Widget(qw.QWidget):
         self.setLayout(layout)
 
         layout.addRow(self.model_combo_label, self.model_combo)
-        btn = qw.QToolButton()
-        btn.setDefaultAction(self.use_standard_action)
-        layout.addRow(btn)
 
-        btn = qw.QToolButton()
-        btn.setDefaultAction(self.load_weights_action)
-        layout.addRow(btn, self.weights_label)
+        btn_locate = qw.QToolButton()
+        btn_locate.setDefaultAction(self.locate_action)
+        btn_download = qw.QToolButton()
+        btn_download.setDefaultAction(self.download_action)
+        btn_row = qw.QHBoxLayout()
+        btn_row.addWidget(btn_locate)
+        btn_row.addWidget(btn_download)
+        btn_row.addStretch()
+        layout.addRow(btn_row)
+
+        layout.addRow(qw.QLabel('Active model:'), self.weights_label)
 
         btn = qw.QToolButton()
         btn.setDefaultAction(self.cuda_action)
@@ -308,6 +327,15 @@ class Yolov11Widget(qw.QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
+        # --- Restore saved model path ---
+        saved_path = settings.value('yolov11/weightsfile', '', type=str)
+        if saved_path and os.path.isfile(saved_path):
+            self._applyWeightsPath(saved_path)
+
+    # ------------------------------------------------------------------
+    # Slots
+    # ------------------------------------------------------------------
+
     @qc.pyqtSlot(Yolov11Exception)
     def showError(self, err: Yolov11Exception) -> None:
         qw.QMessageBox.critical(self, 'YOLOv11 error', str(err))
@@ -328,31 +356,79 @@ class Yolov11Widget(qw.QWidget):
         self.sigOverlapThresh.emit(value)
 
     @qc.pyqtSlot()
-    def loadStandardModel(self) -> None:
-        idx = self.model_combo.currentIndex()
-        settings.setValue('yolov11/model_variant', idx)
-        _, model_name = _MODEL_VARIANTS[idx]
-        self.weights_label.setText(model_name)
-        self._startLoading(model_name)
-
-    @qc.pyqtSlot()
-    def loadWeights(self) -> None:
-        directory = settings.value('yolov11/weightsdir', '.')
+    def locateModel(self) -> None:
+        """Open a file dialog to locate an existing .pt file."""
+        start_dir = settings.value('yolov11/weightsdir', os.path.expanduser('~'))
         filename, ok = qw.QFileDialog.getOpenFileName(
             self,
-            'Open YOLOv11 weights file',
-            directory=directory,
+            'Locate YOLOv11 weights file',
+            directory=start_dir,
             filter='Weights file (*.pt)',
         )
         if not filename or not ok:
             return
-        settings.setValue('yolov11/weightsdir', os.path.dirname(filename))
-        settings.setValue('yolov11/weightsfile', filename)
-        self.weights_label.setText(os.path.basename(filename))
-        self.weights_label.setToolTip(filename)
-        self._startLoading(filename)
+        self._applyWeightsPath(os.path.abspath(filename))
 
-    def _startLoading(self, weights: str) -> None:
+    @qc.pyqtSlot()
+    def downloadModel(self) -> None:
+        """Download the selected standard model to a user-chosen folder."""
+        idx = self.model_combo.currentIndex()
+        settings.setValue('yolov11/model_variant', idx)
+        _, model_name = _MODEL_VARIANTS[idx]
+
+        start_dir = settings.value('yolov11/weightsdir', os.path.expanduser('~'))
+        folder = qw.QFileDialog.getExistingDirectory(
+            self,
+            f'Choose folder to save {model_name}',
+            start_dir,
+        )
+        if not folder:
+            return
+
+        dest = os.path.join(folder, model_name)
+        if os.path.isfile(dest):
+            self._applyWeightsPath(dest)
+            return
+
+        # Download using ultralytics internal utility (no CWD side-effect)
+        try:
+            from ultralytics.utils.downloads import attempt_download_asset
+        except ImportError:
+            qw.QMessageBox.critical(
+                self, 'ultralytics error',
+                'ultralytics not installed. Run: pip install ultralytics'
+            )
+            return
+
+        qw.QApplication.setOverrideCursor(qc.Qt.WaitCursor)
+        try:
+            attempt_download_asset(dest)
+        except Exception as exc:
+            qw.QApplication.restoreOverrideCursor()
+            qw.QMessageBox.critical(
+                self, 'Download failed', str(exc)
+            )
+            return
+        qw.QApplication.restoreOverrideCursor()
+
+        if not os.path.isfile(dest):
+            qw.QMessageBox.critical(
+                self, 'Download failed',
+                f'Expected file not found after download:\n{dest}'
+            )
+            return
+
+        self._applyWeightsPath(dest)
+
+    def _applyWeightsPath(self, path: str) -> None:
+        """Save path to settings, update label, and start loading."""
+        settings.setValue('yolov11/weightsfile', path)
+        settings.setValue('yolov11/weightsdir', os.path.dirname(path))
+        self.weights_label.setText(os.path.basename(path))
+        self.weights_label.setToolTip(path)
+        self._startLoading(path)
+
+    def _startLoading(self, path: str) -> None:
         self.initialized = False
         if self.indicator is None:
             self.indicator = qw.QProgressDialog(
@@ -366,7 +442,7 @@ class Yolov11Widget(qw.QWidget):
         self.worker.sigInitialized.connect(self.indicator.reset)
         self.worker.sigInitialized.connect(self.setInitialized)
         self.indicator.show()
-        self.sigWeightsFile.emit(weights)
+        self.sigWeightsFile.emit(path)
 
     @qc.pyqtSlot()
     def setInitialized(self) -> None:
@@ -374,16 +450,15 @@ class Yolov11Widget(qw.QWidget):
 
     @qc.pyqtSlot(np.ndarray, int)
     def process(self, image: np.ndarray, pos: int) -> None:
-        """Entry point from VideoWidget.sigSetFrame.
-
-        Auto-loads the selected standard model on first call if no weights
-        have been explicitly set.
-        """
+        """Entry point from VideoWidget.sigSetFrame."""
         if self.worker.net is None:
-            try:
-                self.loadStandardModel()
-            except Exception as err:
-                qw.QMessageBox.critical(self, 'Could not load model', str(err))
+            qw.QMessageBox.information(
+                self,
+                'No model loaded',
+                'Please load a YOLOv11 model first.\n\n'
+                'Use "Locate model" to browse for an existing .pt file, or\n'
+                '"Download model" to fetch one from Ultralytics.',
+            )
             return
         if self.initialized:
             self.sigProcess.emit(image, pos)
