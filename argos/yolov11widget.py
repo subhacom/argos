@@ -371,16 +371,31 @@ class Yolov11Widget(qw.QWidget):
 
     @qc.pyqtSlot()
     def downloadModel(self) -> None:
-        """Download the selected standard model to a user-chosen folder."""
+        """Load the selected standard model, downloading only if not already on disk."""
         idx = self.model_combo.currentIndex()
         settings.setValue('yolov11/model_variant', idx)
         _, model_name = _MODEL_VARIANTS[idx]
 
-        start_dir = settings.value('yolov11/weightsdir', os.path.expanduser('~'))
+        # 1. Exact saved path in config matches this model — use it directly.
+        saved_path = settings.value('yolov11/weightsfile', '', type=str)
+        if (saved_path
+                and os.path.basename(saved_path) == model_name
+                and os.path.isfile(saved_path)):
+            self._applyWeightsPath(saved_path)
+            return
+
+        # 2. Model file exists in the last-used weights directory.
+        weights_dir = settings.value('yolov11/weightsdir', os.path.expanduser('~'))
+        candidate = os.path.join(weights_dir, model_name)
+        if os.path.isfile(candidate):
+            self._applyWeightsPath(candidate)
+            return
+
+        # 3. Not found anywhere — ask where to download it.
         folder = qw.QFileDialog.getExistingDirectory(
             self,
-            f'Choose folder to save {model_name}',
-            start_dir,
+            f'Choose folder to download {model_name}',
+            weights_dir,
         )
         if not folder:
             return
