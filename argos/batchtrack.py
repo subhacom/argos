@@ -116,7 +116,8 @@ from yolact.data import config as yconfig
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
-from argos_track.sortracker import SORTracker
+from argos.sortracker import SORTracker
+from argos.bytetracker import ByteTracker
 from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
@@ -666,17 +667,34 @@ def batch_track(args):
     """
     segments = pd.read_hdf(args.outfile, 'segmented')
     results = []
-    if args.sort_metric == 'iou':
-        metric = DistanceMetric.iou
+    track_method = getattr(args, 'track_method', 'bytetrack')
+    if track_method == 'bytetrack':
+        tracker = ByteTracker(
+            iou_threshold=args.min_dist,
+            min_hits=args.min_hits,
+            max_age=args.max_age,
+        )
+        logging.info(
+            f'Using ByteTracker: iou_threshold={args.min_dist}, '
+            f'min_hits={args.min_hits}, max_age={args.max_age}'
+        )
     else:
-        metric = DistanceMetric.euclidean
-    tracker = SORTracker(
-        metric=metric,
-        min_dist=args.min_dist,
-        max_age=args.max_age,
-        n_init=args.min_hits,
-        min_hits=args.min_hits,
-    )
+        if args.sort_metric == 'iou':
+            metric = DistanceMetric.iou
+        else:
+            metric = DistanceMetric.euclidean
+        tracker = SORTracker(
+            metric=metric,
+            min_dist=args.min_dist,
+            max_age=args.max_age,
+            n_init=args.min_hits,
+            min_hits=args.min_hits,
+        )
+        logging.info(
+            f'Using SORTracker: metric={args.sort_metric}, '
+            f'min_dist={args.min_dist}, min_hits={args.min_hits}, '
+            f'max_age={args.max_age}'
+        )
     for frame, fgrp in segments.groupby('frame'):
         if len(fgrp) == 0:
             continue
@@ -884,7 +902,15 @@ def make_parser():
         help='Maximum width (shorter side) of bounding box' ' in pixels',
     )
     track_grp = parser.add_argument_group(
-        'Tracker', 'Parameters for SORT tracker'
+        'Tracker', 'Parameters for the tracker'
+    )
+    track_grp.add_argument(
+        '--track_method',
+        type=str,
+        default='bytetrack',
+        choices=['bytetrack', 'sort'],
+        help='Tracking algorithm: bytetrack (default, recommended for '
+             'identical-looking animals) or sort (legacy)',
     )
     track_grp.add_argument(
         '--sort_metric',
