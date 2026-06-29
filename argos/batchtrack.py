@@ -118,6 +118,7 @@ from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
 from argos.sortracker import SORTracker
 from argos.bytetracker import ByteTracker
+from argos.ocsortracker import OCSORTracker
 from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
@@ -678,6 +679,19 @@ def batch_track(args):
             f'Using ByteTracker: iou_threshold={args.min_dist}, '
             f'min_hits={args.min_hits}, max_age={args.max_age}'
         )
+    elif track_method == 'ocsort':
+        tracker = OCSORTracker(
+            iou_threshold=args.min_dist,
+            min_hits=args.min_hits,
+            max_age=args.max_age,
+            inertia=getattr(args, 'ocsort_inertia', 0.2),
+            delta_t=getattr(args, 'ocsort_delta_t', 3),
+        )
+        logging.info(
+            f'Using OCSORTracker: iou_threshold={args.min_dist}, '
+            f'min_hits={args.min_hits}, max_age={args.max_age}, '
+            f'inertia={args.ocsort_inertia}, delta_t={args.ocsort_delta_t}'
+        )
     else:
         if args.sort_metric == 'iou':
             metric = DistanceMetric.iou
@@ -908,9 +922,20 @@ def make_parser():
         '--track_method',
         type=str,
         default='bytetrack',
-        choices=['bytetrack', 'sort'],
-        help='Tracking algorithm: bytetrack (default, recommended for '
-             'identical-looking animals) or sort (legacy)',
+        choices=['bytetrack', 'ocsort', 'sort'],
+        help='Tracking algorithm: bytetrack (default), ocsort, or sort (legacy)',
+    )
+    track_grp.add_argument(
+        '--ocsort_inertia',
+        type=float,
+        default=0.2,
+        help='OC-SORT OCM weight: strength of velocity-direction cost (0=pure IoU)',
+    )
+    track_grp.add_argument(
+        '--ocsort_delta_t',
+        type=int,
+        default=3,
+        help='OC-SORT velocity estimation window in frames',
     )
     track_grp.add_argument(
         '--sort_metric',
