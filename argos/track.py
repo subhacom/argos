@@ -10,6 +10,7 @@ from PyQt5 import QtWidgets as qw, QtCore as qc, QtGui as qg
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
+from argos.yolov11widget import Yolov11Widget
 from argos.sortrackerwidget import SORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
@@ -29,6 +30,7 @@ class ArgosTracker(qw.QMainWindow):
         self._video_widget = VideoWidget()
         self.setCentralWidget(self._video_widget)
         self._outfile_label = qw.QLabel('')
+        self._yolov11_widget = Yolov11Widget()
         self._yolact_widget = YolactWidget()
         self._seg_widget = SegWidget()
         self._seg_widget.fixBboxOutline()
@@ -37,6 +39,13 @@ class ArgosTracker(qw.QMainWindow):
 
         self._sort_widget = SORTWidget()
         self._csrt_widget = CSRTWidget()
+
+        self._yolov11_dock = qw.QDockWidget('YOLOv11 settings')
+        self._yolov11_dock.setAllowedAreas(
+            qc.Qt.LeftDockWidgetArea | qc.Qt.RightDockWidgetArea
+        )
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._yolov11_dock)
+        self._yolov11_dock.setWidget(self._yolov11_widget)
 
         self._yolact_dock = qw.QDockWidget('Yolact settings')
         self._yolact_dock.setAllowedAreas(
@@ -81,15 +90,19 @@ class ArgosTracker(qw.QMainWindow):
         self._csrt_scroll.setWidget(self._csrt_widget)
         self._csrt_dock.setWidget(self._csrt_scroll)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._csrt_dock)
+        self._yolov11_action = qw.QAction('Use YOLOv11 segmentation')
         self._yolact_action = qw.QAction('Use Yolact segmentation')
         self._seg_action = qw.QAction('Use classical segmentation')
         self._seg_grp = qw.QActionGroup(self)
+        self._seg_grp.addAction(self._yolov11_action)
         self._seg_grp.addAction(self._yolact_action)
         self._seg_grp.addAction(self._seg_action)
         self._seg_grp.setExclusive(True)
+        self._yolov11_action.setCheckable(True)
         self._yolact_action.setCheckable(True)
         self._seg_action.setCheckable(True)
-        self._yolact_action.setChecked(True)
+        self._yolov11_action.setChecked(True)
+        self._yolact_dock.hide()
         self._seg_dock.hide()
         self._sort_action = qw.QAction('Use SORT for tracking')
         self._sort_action.setCheckable(True)
@@ -119,6 +132,7 @@ class ArgosTracker(qw.QMainWindow):
         self._file_menu.addAction(self._quit_action)
         self._seg_menu = self._menubar.addMenu('&Segmentation method')
         self._seg_menu.addActions(self._seg_grp.actions())
+        self._seg_menu.setToolTipsVisible(True)
         self._track_menu = self._menubar.addMenu('&Tracking method')
         self._track_menu.addActions(self._track_grp.actions())
         self._view_menu = self._menubar.addMenu('View')
@@ -153,7 +167,7 @@ class ArgosTracker(qw.QMainWindow):
         ##########################
         # Connections
         self._video_widget.sigVideoFile.connect(self.updateTitle)
-        self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+        self._video_widget.sigSetFrame.connect(self._yolov11_widget.process)
         self._video_widget.sigArena.connect(self._lim_widget.setRoi)
         self._video_widget.sigReset.connect(self._lim_widget.resetRoi)
         self._video_widget.sigArena.connect(self._seg_widget.setRoi)
@@ -161,6 +175,10 @@ class ArgosTracker(qw.QMainWindow):
         self._video_widget.resetArenaAction.triggered.connect(
             self._seg_widget.resetRoi
         )
+        # Downstream connections are permanent; only the active segmentation
+        # widget receives frames (via sigSetFrame) so only it emits sigProcessed.
+        self._yolov11_widget.sigProcessed.connect(self._lim_widget.process)
+        self._yolov11_widget.sigProcessed.connect(self._video_widget.sigSetBboxes)
         self._yolact_widget.sigProcessed.connect(self._lim_widget.process)
         self._lim_widget.sigProcessed.connect(self._sort_widget.track)
         self._yolact_widget.sigProcessed.connect(
@@ -190,6 +208,7 @@ class ArgosTracker(qw.QMainWindow):
         self._quit_action.triggered.connect(self.close)
         self._quit_action.triggered.connect(qw.QApplication.instance().quit)
         self.sigQuit.connect(self._video_widget.sigQuit)
+        self.sigQuit.connect(self._yolov11_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._seg_widget.sigQuit)
         self.sigQuit.connect(self._lim_widget.sigQuit)
@@ -233,22 +252,31 @@ class ArgosTracker(qw.QMainWindow):
 
     @qc.pyqtSlot(qw.QAction)
     def switchSegmentation(self, action):
-        """Switch segmentation widget between yolact and classical"""
+        """Switch segmentation widget between YOLOv11, Yolact, and classical."""
         self._video_widget.pauseVideo()
-        if action == self._yolact_action:
-            util.reconnect(
-                self._video_widget.sigSetFrame,
-                newhandler=self._yolact_widget.process,
-                oldhandler=self._seg_widget.sigProcess,
-            )
+        # Disconnect all three handlers first, then reconnect only the active one
+        for handler in (
+            self._yolov11_widget.process,
+            self._yolact_widget.process,
+            self._seg_widget.sigProcess,
+        ):
+            try:
+                self._video_widget.sigSetFrame.disconnect(handler)
+            except TypeError:
+                pass
+        if action == self._yolov11_action:
+            self._video_widget.sigSetFrame.connect(self._yolov11_widget.process)
+            self._yolov11_dock.setVisible(True)
+            self._yolact_dock.setVisible(False)
+            self._seg_dock.setVisible(False)
+        elif action == self._yolact_action:
+            self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+            self._yolov11_dock.setVisible(False)
             self._yolact_dock.setVisible(True)
             self._seg_dock.setVisible(False)
-        else:  # classical segmentation, self._seg_action
-            util.reconnect(
-                self._video_widget.sigSetFrame,
-                newhandler=self._seg_widget.sigProcess,
-                oldhandler=self._yolact_widget.process,
-            )
+        else:  # classical segmentation
+            self._video_widget.sigSetFrame.connect(self._seg_widget.sigProcess)
+            self._yolov11_dock.setVisible(False)
             self._yolact_dock.setVisible(False)
             self._seg_dock.setVisible(True)
 
@@ -273,7 +301,7 @@ class ArgosTracker(qw.QMainWindow):
             self._video_widget.sigSetFrame.connect(self._csrt_widget.setFrame)
             newhandler = self._csrt_widget.setBboxes
             oldhandler = self._sort_widget.sigTrack
-        if self._yolact_action.isChecked():
+        if self._yolov11_action.isChecked() or self._yolact_action.isChecked():
             sig = self._lim_widget.sigProcessed
         else:
             sig = self._seg_widget.sigProcessed
@@ -342,7 +370,20 @@ class ArgosTracker(qw.QMainWindow):
                 config['min_samples'] = settings.value(
                     'segment/dbscan_minsamples', 10, type=int
                 )
-        else:  # yolact
+        elif self._yolov11_dock.isVisible():
+            config['method'] = 'yolov11'
+            config['yolov11_weights'] = settings.value(
+                'yolov11/weightsfile', '', type=str
+            )
+            config['score_thresh'] = settings.value(
+                'yolov11/score_thresh', 0.25, type=float
+            )
+            config['top_k'] = settings.value('yolov11/top_k', 10, type=int)
+            config['overlap_thresh'] = settings.value(
+                'yolov11/overlap_thresh', 0.45, type=float
+            )
+            config['cuda'] = settings.value('yolov11/cuda', True, type=bool)
+        else:  # yolact (legacy)
             config['method'] = 'yolact'
             config['weight'] = settings.value('yolact/weightsfile', type=str)
             config['yconfig'] = settings.value('yolact/configfile', type=str)
