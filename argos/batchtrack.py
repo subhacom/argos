@@ -25,8 +25,16 @@ line option .
 
 Examples
 --------
-Use YOLACT for segmentation and SORT for tracking:
-::
+Use YOLOv11 for segmentation and SORT for tracking (recommended)::
+
+    python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolov11 \\
+    --yolov11_weights yolo11n-seg.pt -s 0.25 -k 10 --overlap_thresh=0.45 \\
+    --cuda \\
+    --pmin=10 --pmax=500 --wmin=5 --wmax=100 --hmin=5 --hmax=100 \\
+    -x 0.3 --min_hits=3 --max_age=20
+
+Use YOLACT for segmentation and SORT for tracking (legacy)::
+
     python -m argos_track.batchtrack -i video.avi -o video.h5 -m yolact \\
     --yconfig=config/yolact.yml -w config/weights.pth -s 0.1 -k 10 \\
     --overlap_thresh=0.3 --cuda \\
@@ -108,7 +116,9 @@ from yolact.data import config as yconfig
 # This is actually yolact.utils
 from yolact.utils.augmentations import FastBaseTransform
 from yolact.layers import output_utils as oututils
-from argos_track.sortracker import SORTracker
+from argos.sortracker import SORTracker
+from argos.bytetracker import ByteTracker
+from argos.ocsortracker import OCSORTracker
 from argos.constants import DistanceMetric, OutlineStyle
 import argos.utility as ut
 from argos.segment import (
@@ -172,9 +182,80 @@ def timed(func):
     return _time_it
 
 
-# Global yolact network weights
+# Global YOLACT network weights (legacy)
 ynet = None
 config = None
+
+# Global YOLOv11 model (loaded once per process)
+_yolov11_net = None
+
+
+def _init_yolov11(weights_file: str, device: str) -> None:
+    """Load YOLOv11 model into the module-level global."""
+    global _yolov11_net
+    try:
+        from ultralytics import YOLO
+    except ImportError:
+        raise ImportError(
+            'ultralytics not installed. Run: pip install ultralytics'
+        )
+    _yolov11_net = YOLO(weights_file)
+    # warm-up so first real frame is not slow
+    _yolov11_net.predict(
+        np.zeros((64, 64, 3), dtype=np.uint8),
+        device=device,
+        verbose=False,
+    )
+
+
+def segment_yolov11(
+    frame: np.ndarray,
+    score_threshold: float,
+    top_k: int,
+    overlap_thresh: float,
+    weights_file: str,
+    device: str = 'cpu',
+) -> np.ndarray:
+    """Detect objects in *frame* using YOLOv11.
+
+    Parameters
+    ----------
+    frame:
+        BGR image array (H x W x 3).
+    score_threshold:
+        Minimum confidence to accept a detection.
+    top_k:
+        Maximum number of detections per frame.
+    overlap_thresh:
+        NMS IOU threshold; detections with IOU above this are merged.
+    weights_file:
+        Path to a .pt weights file, or a standard model name such as
+        ``'yolo11n-seg.pt'`` (downloaded automatically if absent).
+    device:
+        ``'cuda'`` or ``'cpu'``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Shape (N, 4) int array of bounding boxes in (x, y, w, h) format.
+    """
+    global _yolov11_net
+    if _yolov11_net is None:
+        _init_yolov11(weights_file, device)
+    results = _yolov11_net.predict(
+        frame,
+        conf=score_threshold,
+        iou=overlap_thresh,
+        max_det=top_k,
+        device=device,
+        verbose=False,
+    )
+    if not results or results[0].boxes is None or len(results[0].boxes) == 0:
+        return np.empty((0, 4), dtype=np.int64)
+    # xyxy → x, y, w, h
+    boxes = results[0].boxes.xyxy.cpu().numpy().copy()
+    boxes[:, 2:] -= boxes[:, :2]
+    return np.rint(boxes).astype(np.int64)
 
 
 def load_config(filename):
@@ -295,7 +376,7 @@ def segment_yolact(
             return np.empty(0)
 
         boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
-        boxes = np.asanyarray(np.rint(boxes), dtype=np.int_)
+        boxes = np.asanyarray(np.rint(boxes), dtype=np.int64)
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(
                 new_bboxes=boxes,
@@ -314,7 +395,7 @@ def segment_yolact(
                     for ii in range(boxes.shape[0])
                     if ii not in bad_boxes
                 ],
-                dtype=np.int_,
+                dtype=np.int64,
             )
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s', 1e-9 * (toc - tic))
@@ -462,6 +543,47 @@ def batch_segment(args):
         cpu_count = mp.cpu_count()
     max_workers = args.max_proc if args.max_proc > 0 else cpu_count
     print('*** Using cuda:', args.cuda)
+
+    # YOLOv11: GPU handles its own parallelism, so process sequentially
+    if args.seg_method == 'yolov11':
+        device = 'cuda' if args.cuda and torch.cuda.is_available() else 'cpu'
+        logging.info(f'YOLOv11 segmentation on device={device}')
+        _init_yolov11(args.yolov11_weights, device)
+        video = cv2.VideoCapture(args.infile)
+        if not video.isOpened():
+            raise IOError('Could not open video')
+        data = []
+        while video.isOpened():
+            frame_no, frame = read_frame(video)
+            if frame is None:
+                break
+            if frame_no % 100 == 0:
+                logging.info(f'YOLOv11: processing frame {frame_no}')
+            boxes = segment_yolov11(
+                frame,
+                score_threshold=args.score_thresh,
+                top_k=args.top_k,
+                overlap_thresh=args.overlap_thresh,
+                weights_file=args.yolov11_weights,
+                device=device,
+            )
+            for bbox in boxes:
+                data.append({
+                    'frame': frame_no,
+                    'x': int(bbox[0]),
+                    'y': int(bbox[1]),
+                    'w': int(bbox[2]),
+                    'h': int(bbox[3]),
+                })
+        video.release()
+        if not data:
+            raise RuntimeError('Data list empty')
+        df = pd.DataFrame(data)
+        df.sort_values(by='frame', inplace=True)
+        df.to_hdf(args.outfile, 'segmented')
+        logging.info(f'Data saved in {args.outfile} under /segmented')
+        return
+
     if args.seg_method == 'yolact':
         seg_fn = partial(
             segment_yolact,
@@ -546,22 +668,52 @@ def batch_track(args):
     """
     segments = pd.read_hdf(args.outfile, 'segmented')
     results = []
-    if args.sort_metric == 'iou':
-        metric = DistanceMetric.iou
+    track_method = getattr(args, 'track_method', 'bytetrack')
+    if track_method == 'bytetrack':
+        tracker = ByteTracker(
+            iou_threshold=args.min_dist,
+            min_hits=args.min_hits,
+            max_age=args.max_age,
+        )
+        logging.info(
+            f'Using ByteTracker: iou_threshold={args.min_dist}, '
+            f'min_hits={args.min_hits}, max_age={args.max_age}'
+        )
+    elif track_method == 'ocsort':
+        tracker = OCSORTracker(
+            iou_threshold=args.min_dist,
+            min_hits=args.min_hits,
+            max_age=args.max_age,
+            inertia=getattr(args, 'ocsort_inertia', 0.2),
+            delta_t=getattr(args, 'ocsort_delta_t', 3),
+        )
+        logging.info(
+            f'Using OCSORTracker: iou_threshold={args.min_dist}, '
+            f'min_hits={args.min_hits}, max_age={args.max_age}, '
+            f'inertia={args.ocsort_inertia}, delta_t={args.ocsort_delta_t}'
+        )
     else:
-        metric = DistanceMetric.euclidean
-    tracker = SORTracker(
-        metric=metric,
-        min_dist=args.min_dist,
-        max_age=args.max_age,
-        n_init=args.min_hits,
-        min_hits=args.min_hits,
-    )
+        if args.sort_metric == 'iou':
+            metric = DistanceMetric.iou
+        else:
+            metric = DistanceMetric.euclidean
+        tracker = SORTracker(
+            metric=metric,
+            min_dist=args.min_dist,
+            max_age=args.max_age,
+            n_init=args.min_hits,
+            min_hits=args.min_hits,
+        )
+        logging.info(
+            f'Using SORTracker: metric={args.sort_metric}, '
+            f'min_dist={args.min_dist}, min_hits={args.min_hits}, '
+            f'max_age={args.max_age}'
+        )
     for frame, fgrp in segments.groupby('frame'):
         if len(fgrp) == 0:
             continue
         tracked = tracker.update(
-            fgrp[['x', 'y', 'w', 'h']].astype(np.int_).values
+            fgrp[['x', 'y', 'w', 'h']].astype(np.int64).values
         )
         for tid, bbox in tracked.items():
             results.append(
@@ -611,11 +763,21 @@ def make_parser():
         '-m',
         '--seg_method',
         type=str,
-        default='yolact',
-        help='method for segmentation' ' (yolact/threshold/watershed/dbscan)',
+        default='yolov11',
+        help='segmentation method: yolov11 (default), yolact, threshold, watershed, dbscan',
+    )
+    yolov11_grp = parser.add_argument_group(
+        'YOLOv11', 'Parameters for YOLOv11 segmentation (recommended)'
+    )
+    yolov11_grp.add_argument(
+        '--yolov11_weights',
+        type=str,
+        default='yolo11n-seg.pt',
+        help='YOLOv11 weights file (.pt). Standard model names such as '
+             'yolo11n-seg.pt are downloaded automatically.',
     )
     yolact_grp = parser.add_argument_group(
-        'YOLACT', 'Parameters for YOLACT segmentation'
+        'YOLACT', 'Parameters for YOLACT segmentation (legacy)'
     )
     yolact_grp.add_argument(
         '--yconfig', type=str, help='YOLACT configuration file'
@@ -644,7 +806,7 @@ def make_parser():
         help='Bboxes with IoU overlap higher than this are' ' merged',
     )
     yolact_grp.add_argument(
-        '--cuda', action='store_true', help='If specified, use CUDA'
+        '--cuda', action='store_true', help='If specified, use CUDA (yolact and yolov11)'
     )
     thresh_grp = parser.add_argument_group(
         'Threshold', 'Parameters for thresholding'
@@ -754,7 +916,26 @@ def make_parser():
         help='Maximum width (shorter side) of bounding box' ' in pixels',
     )
     track_grp = parser.add_argument_group(
-        'Tracker', 'Parameters for SORT tracker'
+        'Tracker', 'Parameters for the tracker'
+    )
+    track_grp.add_argument(
+        '--track_method',
+        type=str,
+        default='bytetrack',
+        choices=['bytetrack', 'ocsort', 'sort'],
+        help='Tracking algorithm: bytetrack (default), ocsort, or sort (legacy)',
+    )
+    track_grp.add_argument(
+        '--ocsort_inertia',
+        type=float,
+        default=0.2,
+        help='OC-SORT OCM weight: strength of velocity-direction cost (0=pure IoU)',
+    )
+    track_grp.add_argument(
+        '--ocsort_delta_t',
+        type=int,
+        default=3,
+        help='OC-SORT velocity estimation window in frames',
     )
     track_grp.add_argument(
         '--sort_metric',

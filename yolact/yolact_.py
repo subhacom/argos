@@ -658,7 +658,18 @@ class Yolact(nn.Module):
                     and int(key.split('.')[2]) >= cfg.fpn.num_downsample
                 ):
                     del state_dict[key]
-        self.load_state_dict(state_dict)
+        model_state = self.state_dict()
+        mismatched = [k for k, v in state_dict.items()
+                      if k in model_state and v.shape != model_state[k].shape]
+        for k in mismatched:
+            del state_dict[k]
+        if mismatched:
+            logging.warning(
+                'load_weights: skipped %d layer(s) with shape mismatches '
+                '(weights trained with different num_classes?): %s',
+                len(mismatched), mismatched,
+            )
+        self.load_state_dict(state_dict, strict=False)
 
     def init_weights(self, backbone_path):
         """Initialize weights for training."""

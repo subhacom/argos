@@ -59,6 +59,7 @@ class QSORTracker(qc.QObject):
         _ = qc.QMutexLocker(self._mutex)
         settings.setValue('sortracker/min_hits', count)
         self.tracker.n_init = count
+        self.tracker.min_hits = count
 
     @qc.pyqtSlot(dict, int)
     def track(self, bboxes: np.ndarray, pos: int) -> None:
@@ -194,6 +195,20 @@ class SORTWidget(qw.QWidget):
     def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
         ret = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(ret, pos)
+
+    def loadSettings(self, config: dict) -> None:
+        """Apply tracker parameters from a config dict (e.g. loaded from YAML)."""
+        metric_key = config.get('sort_metric', 'iou')
+        metric_text = 'Intersection over Union' if metric_key == 'iou' else 'Euclidean'
+        idx = self._dist_metric_combo.findText(metric_text)
+        if idx >= 0:
+            self._dist_metric_combo.setCurrentIndex(idx)
+        if 'min_dist' in config:
+            self._min_dist_spin.setValue(config['min_dist'])
+        if 'min_hits' in config:
+            self._conf_age_spin.setValue(config['min_hits'])
+        if 'max_age' in config:
+            self._max_age_spin.setValue(config['max_age'])
 
     @qc.pyqtSlot(np.ndarray, int)
     def track(self, bboxes: np.ndarray, pos: int) -> None:

@@ -10,7 +10,10 @@ from PyQt5 import QtWidgets as qw, QtCore as qc, QtGui as qg
 import argos.utility as util
 from argos.vwidget import VideoWidget
 from argos.yolactwidget import YolactWidget
+from argos.yolov11widget import Yolov11Widget
 from argos.sortrackerwidget import SORTWidget
+from argos.bytetrackerwidget import ByteTrackerWidget
+from argos.ocsortwidget import OCSORTWidget
 from argos.segwidget import SegWidget
 from argos.csrtracker import CSRTWidget
 from argos.limitswidget import LimitsWidget
@@ -29,6 +32,7 @@ class ArgosTracker(qw.QMainWindow):
         self._video_widget = VideoWidget()
         self.setCentralWidget(self._video_widget)
         self._outfile_label = qw.QLabel('')
+        self._yolov11_widget = Yolov11Widget()
         self._yolact_widget = YolactWidget()
         self._seg_widget = SegWidget()
         self._seg_widget.fixBboxOutline()
@@ -36,7 +40,16 @@ class ArgosTracker(qw.QMainWindow):
         self._lim_widget = LimitsWidget()
 
         self._sort_widget = SORTWidget()
+        self._bytetrack_widget = ByteTrackerWidget()
+        self._ocsort_widget = OCSORTWidget()
         self._csrt_widget = CSRTWidget()
+
+        self._yolov11_dock = qw.QDockWidget('YOLOv11 settings')
+        self._yolov11_dock.setAllowedAreas(
+            qc.Qt.LeftDockWidgetArea | qc.Qt.RightDockWidgetArea
+        )
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._yolov11_dock)
+        self._yolov11_dock.setWidget(self._yolov11_widget)
 
         self._yolact_dock = qw.QDockWidget('Yolact settings')
         self._yolact_dock.setAllowedAreas(
@@ -72,6 +85,26 @@ class ArgosTracker(qw.QMainWindow):
         self._sort_scroll.setWidget(self._sort_widget)
         self._sort_dock.setWidget(self._sort_scroll)
 
+        self._bytetrack_dock = qw.QDockWidget('ByteTracker settings')
+        self._bytetrack_dock.setAllowedAreas(
+            qc.Qt.LeftDockWidgetArea | qc.Qt.RightDockWidgetArea
+        )
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._bytetrack_dock)
+        self._bytetrack_scroll = qw.QScrollArea()
+        self._bytetrack_scroll.setWidgetResizable(True)
+        self._bytetrack_scroll.setWidget(self._bytetrack_widget)
+        self._bytetrack_dock.setWidget(self._bytetrack_scroll)
+
+        self._ocsort_dock = qw.QDockWidget('OC-SORT settings')
+        self._ocsort_dock.setAllowedAreas(
+            qc.Qt.LeftDockWidgetArea | qc.Qt.RightDockWidgetArea
+        )
+        self.addDockWidget(qc.Qt.RightDockWidgetArea, self._ocsort_dock)
+        self._ocsort_scroll = qw.QScrollArea()
+        self._ocsort_scroll.setWidgetResizable(True)
+        self._ocsort_scroll.setWidget(self._ocsort_widget)
+        self._ocsort_dock.setWidget(self._ocsort_scroll)
+
         self._csrt_dock = qw.QDockWidget('CSRTracker settings')
         self._csrt_dock.setAllowedAreas(
             qc.Qt.LeftDockWidgetArea | qc.Qt.RightDockWidgetArea
@@ -81,24 +114,36 @@ class ArgosTracker(qw.QMainWindow):
         self._csrt_scroll.setWidget(self._csrt_widget)
         self._csrt_dock.setWidget(self._csrt_scroll)
         self.addDockWidget(qc.Qt.RightDockWidgetArea, self._csrt_dock)
+        self._yolov11_action = qw.QAction('Use YOLOv11 segmentation')
         self._yolact_action = qw.QAction('Use Yolact segmentation')
         self._seg_action = qw.QAction('Use classical segmentation')
         self._seg_grp = qw.QActionGroup(self)
+        self._seg_grp.addAction(self._yolov11_action)
         self._seg_grp.addAction(self._yolact_action)
         self._seg_grp.addAction(self._seg_action)
         self._seg_grp.setExclusive(True)
+        self._yolov11_action.setCheckable(True)
         self._yolact_action.setCheckable(True)
         self._seg_action.setCheckable(True)
-        self._yolact_action.setChecked(True)
+        self._yolov11_action.setChecked(True)
+        self._yolact_dock.hide()
         self._seg_dock.hide()
+        self._bytetrack_action = qw.QAction('Use ByteTrack for tracking')
+        self._bytetrack_action.setCheckable(True)
+        self._ocsort_action = qw.QAction('Use OC-SORT for tracking')
+        self._ocsort_action.setCheckable(True)
         self._sort_action = qw.QAction('Use SORT for tracking')
         self._sort_action.setCheckable(True)
         self._csrt_action = qw.QAction('Use CSRT for tracking')
         self._csrt_action.setCheckable(True)
         self._track_grp = qw.QActionGroup(self)
+        self._track_grp.addAction(self._bytetrack_action)
+        self._track_grp.addAction(self._ocsort_action)
         self._track_grp.addAction(self._sort_action)
         self._track_grp.addAction(self._csrt_action)
-        self._sort_action.setChecked(True)
+        self._bytetrack_action.setChecked(True)
+        self._sort_dock.hide()
+        self._ocsort_dock.hide()
         self._debug_action = qw.QAction('Debug')
         self._debug_action.setCheckable(True)
         debug_level = settings.value('track/debug', logging.INFO, type=int)
@@ -112,6 +157,9 @@ class ArgosTracker(qw.QMainWindow):
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
         self._file_menu.addAction(self._video_widget.openCamAction)
+        self.loadConfigAction = qw.QAction('Load configuration from file')
+        self.loadConfigAction.triggered.connect(self.loadConfig)
+        self._file_menu.addAction(self.loadConfigAction)
         self.saveConfigAction = qw.QAction('Save configuration in file')
         self.saveConfigAction.triggered.connect(self.saveConfig)
         self._file_menu.addAction(self.saveConfigAction)
@@ -119,6 +167,7 @@ class ArgosTracker(qw.QMainWindow):
         self._file_menu.addAction(self._quit_action)
         self._seg_menu = self._menubar.addMenu('&Segmentation method')
         self._seg_menu.addActions(self._seg_grp.actions())
+        self._seg_menu.setToolTipsVisible(True)
         self._track_menu = self._menubar.addMenu('&Tracking method')
         self._track_menu.addActions(self._track_grp.actions())
         self._view_menu = self._menubar.addMenu('View')
@@ -153,7 +202,7 @@ class ArgosTracker(qw.QMainWindow):
         ##########################
         # Connections
         self._video_widget.sigVideoFile.connect(self.updateTitle)
-        self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+        self._video_widget.sigSetFrame.connect(self._yolov11_widget.process)
         self._video_widget.sigArena.connect(self._lim_widget.setRoi)
         self._video_widget.sigReset.connect(self._lim_widget.resetRoi)
         self._video_widget.sigArena.connect(self._seg_widget.setRoi)
@@ -161,8 +210,12 @@ class ArgosTracker(qw.QMainWindow):
         self._video_widget.resetArenaAction.triggered.connect(
             self._seg_widget.resetRoi
         )
+        # Downstream connections are permanent; only the active segmentation
+        # widget receives frames (via sigSetFrame) so only it emits sigProcessed.
+        self._yolov11_widget.sigProcessed.connect(self._lim_widget.process)
+        self._yolov11_widget.sigProcessed.connect(self._video_widget.sigSetBboxes)
         self._yolact_widget.sigProcessed.connect(self._lim_widget.process)
-        self._lim_widget.sigProcessed.connect(self._sort_widget.track)
+        self._lim_widget.sigProcessed.connect(self._bytetrack_widget.track)
         self._yolact_widget.sigProcessed.connect(
             self._video_widget.sigSetBboxes
         )
@@ -170,17 +223,27 @@ class ArgosTracker(qw.QMainWindow):
         self._lim_widget.sigWmax.connect(self._seg_widget.setWmax)
         self._lim_widget.sigHmin.connect(self._seg_widget.setHmin)
         self._lim_widget.sigHmax.connect(self._seg_widget.setHmax)
-        self._seg_widget.sigProcessed.connect(self._sort_widget.sigTrack)
+        self._seg_widget.sigProcessed.connect(self._bytetrack_widget.sigTrack)
         self._seg_widget.sigProcessed.connect(self._video_widget.sigSetBboxes)
         # self._seg_widget.sigSegPolygons.connect(self._video_widget.sigSetSegmented)
+        self._bytetrack_widget.sigTracked.connect(self._video_widget.setTracked)
+        self._ocsort_widget.sigTracked.connect(self._video_widget.setTracked)
         self._sort_widget.sigTracked.connect(self._video_widget.setTracked)
         self._csrt_widget.sigTracked.connect(self._video_widget.setTracked)
+        self._video_widget.openAction.triggered.connect(
+            self._bytetrack_widget.sigReset
+        )
+        self._video_widget.openAction.triggered.connect(
+            self._ocsort_widget.sigReset
+        )
         self._video_widget.openAction.triggered.connect(
             self._sort_widget.sigReset
         )
         self._video_widget.openAction.triggered.connect(
             self._csrt_widget.sigReset
         )
+        self._video_widget.sigReset.connect(self._bytetrack_widget.sigReset)
+        self._video_widget.sigReset.connect(self._ocsort_widget.sigReset)
         self._video_widget.sigReset.connect(self._sort_widget.sigReset)
         self._video_widget.sigReset.connect(self._csrt_widget.sigReset)
         self._video_widget.sigStatusMsg.connect(self.statusMsgSlot)
@@ -190,9 +253,12 @@ class ArgosTracker(qw.QMainWindow):
         self._quit_action.triggered.connect(self.close)
         self._quit_action.triggered.connect(qw.QApplication.instance().quit)
         self.sigQuit.connect(self._video_widget.sigQuit)
+        self.sigQuit.connect(self._yolov11_widget.sigQuit)
         self.sigQuit.connect(self._yolact_widget.sigQuit)
         self.sigQuit.connect(self._seg_widget.sigQuit)
         self.sigQuit.connect(self._lim_widget.sigQuit)
+        self.sigQuit.connect(self._bytetrack_widget.sigQuit)
+        self.sigQuit.connect(self._ocsort_widget.sigQuit)
         self.sigQuit.connect(self._sort_widget.sigQuit)
         self.sigQuit.connect(self._csrt_widget.sigQuit)
 
@@ -233,55 +299,76 @@ class ArgosTracker(qw.QMainWindow):
 
     @qc.pyqtSlot(qw.QAction)
     def switchSegmentation(self, action):
-        """Switch segmentation widget between yolact and classical"""
+        """Switch segmentation widget between YOLOv11, Yolact, and classical."""
         self._video_widget.pauseVideo()
-        if action == self._yolact_action:
-            util.reconnect(
-                self._video_widget.sigSetFrame,
-                newhandler=self._yolact_widget.process,
-                oldhandler=self._seg_widget.sigProcess,
-            )
+        # Disconnect all three handlers first, then reconnect only the active one
+        for handler in (
+            self._yolov11_widget.process,
+            self._yolact_widget.process,
+            self._seg_widget.sigProcess,
+        ):
+            try:
+                self._video_widget.sigSetFrame.disconnect(handler)
+            except TypeError:
+                pass
+        if action == self._yolov11_action:
+            self._video_widget.sigSetFrame.connect(self._yolov11_widget.process)
+            self._yolov11_dock.setVisible(True)
+            self._yolact_dock.setVisible(False)
+            self._seg_dock.setVisible(False)
+        elif action == self._yolact_action:
+            self._video_widget.sigSetFrame.connect(self._yolact_widget.process)
+            self._yolov11_dock.setVisible(False)
             self._yolact_dock.setVisible(True)
             self._seg_dock.setVisible(False)
-        else:  # classical segmentation, self._seg_action
-            util.reconnect(
-                self._video_widget.sigSetFrame,
-                newhandler=self._seg_widget.sigProcess,
-                oldhandler=self._yolact_widget.process,
-            )
+        else:  # classical segmentation
+            self._video_widget.sigSetFrame.connect(self._seg_widget.sigProcess)
+            self._yolov11_dock.setVisible(False)
             self._yolact_dock.setVisible(False)
             self._seg_dock.setVisible(True)
 
     @qc.pyqtSlot(qw.QAction)
     def switchTracking(self, action):
-        """Switch tracking between SORT and CSRT"""
+        """Switch tracking between ByteTrack, OC-SORT, SORT, and CSRT."""
         self._video_widget.pauseVideo()
-        if action == self._sort_action:
-            self._sort_dock.show()
-            self._csrt_dock.hide()
-            try:
-                self._video_widget.sigSetFrame.disconnect(
-                    self._csrt_widget.setFrame
-                )
-            except TypeError:
-                pass
-            newhandler = self._sort_widget.sigTrack
-            oldhandler = self._csrt_widget.setBboxes
-        else:  # csrt
-            self._csrt_dock.show()
-            self._sort_dock.hide()
+        # CSRT needs the video frame; always disconnect it first
+        try:
+            self._video_widget.sigSetFrame.disconnect(self._csrt_widget.setFrame)
+        except TypeError:
+            pass
+
+        self._bytetrack_dock.setVisible(action == self._bytetrack_action)
+        self._ocsort_dock.setVisible(action == self._ocsort_action)
+        self._sort_dock.setVisible(action == self._sort_action)
+        self._csrt_dock.setVisible(action == self._csrt_action)
+
+        if action == self._csrt_action:
             self._video_widget.sigSetFrame.connect(self._csrt_widget.setFrame)
+
+        if action == self._bytetrack_action:
+            newhandler = self._bytetrack_widget.sigTrack
+        elif action == self._ocsort_action:
+            newhandler = self._ocsort_widget.sigTrack
+        elif action == self._sort_action:
+            newhandler = self._sort_widget.sigTrack
+        else:
             newhandler = self._csrt_widget.setBboxes
-            oldhandler = self._sort_widget.sigTrack
-        if self._yolact_action.isChecked():
+
+        if self._yolov11_action.isChecked() or self._yolact_action.isChecked():
             sig = self._lim_widget.sigProcessed
         else:
             sig = self._seg_widget.sigProcessed
-        try:
-            sig.disconnect()
-        except TypeError:
-            pass
-        util.reconnect(sig, newhandler, oldhandler)
+
+        # Disconnect all tracker inputs from sig, then reconnect chosen one
+        for old in (self._bytetrack_widget.sigTrack,
+                    self._ocsort_widget.sigTrack,
+                    self._sort_widget.sigTrack,
+                    self._csrt_widget.setBboxes):
+            try:
+                sig.disconnect(old)
+            except TypeError:
+                pass
+        sig.connect(newhandler)
 
     @qc.pyqtSlot(str)
     def updateTitle(self, filename: str) -> None:
@@ -289,20 +376,47 @@ class ArgosTracker(qw.QMainWindow):
 
     @qc.pyqtSlot()
     def saveConfig(self):
+        if self._bytetrack_action.isChecked():
+            track_method = 'bytetrack'
+            min_hits = settings.value('bytetracker/min_hits', 3, type=int)
+            max_age = settings.value('bytetracker/max_age', 30, type=int)
+            min_dist = settings.value(
+                'bytetracker/iou_threshold', 0.3, type=float
+            )
+        elif self._ocsort_action.isChecked():
+            track_method = 'ocsort'
+            min_hits = settings.value('ocsortracker/min_hits', 3, type=int)
+            max_age = settings.value('ocsortracker/max_age', 30, type=int)
+            min_dist = settings.value(
+                'ocsortracker/iou_threshold', 0.3, type=float
+            )
+        else:
+            track_method = 'sort'
+            min_hits = settings.value('sortracker/min_hits', 3, type=int)
+            max_age = settings.value('sortracker/max_age', 10, type=int)
+            min_dist = settings.value('sortracker/min_dist', 0.3, type=float)
         config = {
             'wmin': settings.value('segment/min_width', 10, type=int),
             'wmax': settings.value('segment/max_width', 50, type=int),
             'hmin': settings.value('segment/min_height', 10, type=int),
             'hmax': settings.value('segment/max_height', 100, type=int),
+            'track_method': track_method,
             'sort_metric': settings.value(
                 'sortracker/metric', 'iou', type=str
             ),
-            'min_dist': settings.value('sortracker/min_dist', 0.3, type=float),
-            'min_hits': settings.value('sortracker/min_hits', 3, type=int),
-            'max_age': settings.value('sortracker/max_age', 10, type=int),
+            'min_dist': min_dist,
+            'min_hits': min_hits,
+            'max_age': max_age,
             'pmin': settings.value('segment/min_pixels', 10, type=int),
             'pmax': settings.value('segment/max_pixels', 1000, type=int),
         }
+        if track_method == 'ocsort':
+            config['ocsort_inertia'] = settings.value(
+                'ocsortracker/inertia', 0.2, type=float
+            )
+            config['ocsort_delta_t'] = settings.value(
+                'ocsortracker/delta_t', 3, type=int
+            )
         if self._seg_dock.isVisible():
             config['blur_width'] = settings.value(
                 'segment/blur_width', 21, type=int
@@ -342,7 +456,20 @@ class ArgosTracker(qw.QMainWindow):
                 config['min_samples'] = settings.value(
                     'segment/dbscan_minsamples', 10, type=int
                 )
-        else:  # yolact
+        elif self._yolov11_dock.isVisible():
+            config['method'] = 'yolov11'
+            config['yolov11_weights'] = settings.value(
+                'yolov11/weightsfile', '', type=str
+            )
+            config['score_thresh'] = settings.value(
+                'yolov11/score_thresh', 0.25, type=float
+            )
+            config['top_k'] = settings.value('yolov11/top_k', 10, type=int)
+            config['overlap_thresh'] = settings.value(
+                'yolov11/overlap_thresh', 0.45, type=float
+            )
+            config['cuda'] = settings.value('yolov11/cuda', True, type=bool)
+        else:  # yolact (legacy)
             config['method'] = 'yolact'
             config['weight'] = settings.value('yolact/weightsfile', type=str)
             config['yconfig'] = settings.value('yolact/configfile', type=str)
@@ -368,8 +495,56 @@ class ArgosTracker(qw.QMainWindow):
 
     @qc.pyqtSlot()
     def loadConfig(self):
-        """TODO implement loading config file exported in yaml file"""
-        raise NotImplementedError('This function is yet to be implemented')
+        directory = settings.value('video/directory', '.')
+        fname, _ = qw.QFileDialog.getOpenFileName(
+            self, 'Load configuration', directory,
+            filter='yaml (*.yml *.yaml)'
+        )
+        if not fname:
+            return
+        with open(fname, 'r') as fd:
+            config = yaml.safe_load(fd)
+
+        # Apply size limits (setValue triggers valueChanged → QSettings update)
+        lim = self._lim_widget
+        if 'wmin' in config:
+            lim._wmin_edit.setValue(config['wmin'])
+        if 'wmax' in config:
+            lim._wmax_edit.setValue(config['wmax'])
+        if 'hmin' in config:
+            lim._hmin_edit.setValue(config['hmin'])
+        if 'hmax' in config:
+            lim._hmax_edit.setValue(config['hmax'])
+
+        # Apply tracking settings
+        track_method = config.get('track_method', 'bytetrack')
+        if track_method == 'bytetrack':
+            self._bytetrack_action.trigger()
+            self._bytetrack_widget.loadSettings(config)
+        elif track_method == 'ocsort':
+            self._ocsort_action.trigger()
+            self._ocsort_widget.loadSettings(config)
+        else:
+            self._sort_action.trigger()
+            self._sort_widget.loadSettings(config)
+
+        # Apply segmentation method
+        method = config.get('method', config.get('seg_method', ''))
+        if method == 'yolov11':
+            self._yolov11_action.trigger()
+            if 'yolov11_weights' in config:
+                settings.setValue('yolov11/weightsfile', config['yolov11_weights'])
+            for key, setting in [
+                ('score_thresh', 'yolov11/score_thresh'),
+                ('top_k', 'yolov11/top_k'),
+                ('overlap_thresh', 'yolov11/overlap_thresh'),
+            ]:
+                if key in config:
+                    settings.setValue(setting, config[key])
+        elif method == 'yolact':
+            self._yolact_action.trigger()
+        elif method:
+            self._seg_action.trigger()
 
     @qc.pyqtSlot(str)
     def statusMsgSlot(self, msg):

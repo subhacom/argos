@@ -1,4 +1,5 @@
 Cython
+ultralytics>=8.0
 PyQt5
 opencv-python-headless
 torch
