@@ -249,11 +249,11 @@ def segment_yolov11(
         verbose=False,
     )
     if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-        return np.empty((0, 4), dtype=np.intc)
+        return np.empty((0, 4), dtype=np.int64)
     # xyxy → x, y, w, h
     boxes = results[0].boxes.xyxy.cpu().numpy().copy()
     boxes[:, 2:] -= boxes[:, :2]
-    return np.rint(boxes).astype(np.intc)
+    return np.rint(boxes).astype(np.int64)
 
 
 def load_config(filename):
@@ -374,7 +374,7 @@ def segment_yolact(
             return np.empty(0)
 
         boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
-        boxes = np.asanyarray(np.rint(boxes), dtype=np.intc)
+        boxes = np.asanyarray(np.rint(boxes), dtype=np.int64)
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(
                 new_bboxes=boxes,
@@ -393,7 +393,7 @@ def segment_yolact(
                     for ii in range(boxes.shape[0])
                     if ii not in bad_boxes
                 ],
-                dtype=np.intc,
+                dtype=np.int64,
             )
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s', 1e-9 * (toc - tic))
@@ -681,7 +681,7 @@ def batch_track(args):
         if len(fgrp) == 0:
             continue
         tracked = tracker.update(
-            fgrp[['x', 'y', 'w', 'h']].astype(np.intc).values
+            fgrp[['x', 'y', 'w', 'h']].astype(np.int64).values
         )
         for tid, bbox in tracked.items():
             results.append(

@@ -223,7 +223,7 @@ class YolactWorker(qc.QObject):
                 self.sigProcessed.emit(boxes, pos)
                 return
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
-            boxes = np.asanyarray(boxes, dtype=np.intc)
+            boxes = np.asanyarray(boxes, dtype=np.int64)
             if self.overlap_thresh < 1:
                 dist_matrix = pairwise_distance(
                     new_bboxes=boxes,
