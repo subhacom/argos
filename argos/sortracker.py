@@ -125,7 +125,7 @@ class KalmanTracker(object):
             self.filter.measurementNoiseCov = np.eye(self.NDIM)
             self.filter.measurementNoiseCov[2:, 2:] *= 10.0
             # ~~~~ Till here is according to SORT
-        self.filter.statePost = np.r_[au.tlwh2xyrh(bbox), np.zeros(self.NDIM)]
+        self.filter.statePost = np.r_[au.tlwh2xyrh(np.asarray(bbox, dtype=np.intc)), np.zeros(self.NDIM)]
 
     @property
     def pos(self):
@@ -159,7 +159,7 @@ class KalmanTracker(object):
                            self._std_weight_pos * self.filter.statePost[3]]
             self.filter.measurementNoiseCov = np.diag(np.square(measure_cov))
             # ~~ till here follows deepSORT
-        pos = self.filter.correct(au.tlwh2xyrh(detection))
+        pos = self.filter.correct(au.tlwh2xyrh(np.asarray(detection, dtype=np.intc)))
         self.time_since_update = 0
         self.hits += 1
         self.pos[:] = pos[:self.NDIM]

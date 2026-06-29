@@ -147,12 +147,12 @@ class Yolov11Worker(qc.QObject):
             self.sigError.emit(Yolov11Exception(str(exc)))
             return
         if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-            self.sigProcessed.emit(np.empty((0, 4), dtype=np.int_), pos)
+            self.sigProcessed.emit(np.empty((0, 4), dtype=np.intc), pos)
             return
         # Convert xyxy → x, y, w, h (same format as YolactWorker output)
         boxes = results[0].boxes.xyxy.cpu().numpy().copy()
         boxes[:, 2:] -= boxes[:, :2]
-        boxes = np.rint(boxes).astype(np.int_)
+        boxes = np.rint(boxes).astype(np.intc)
         toc = time.perf_counter_ns()
         logging.debug('YOLOv11 frame %d processed in %.3f s', pos, 1e-9 * (toc - tic))
         self.sigProcessed.emit(boxes, pos)
