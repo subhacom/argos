@@ -2038,16 +2038,38 @@ class ReviewWidget(qw.QWidget):
         self.setupReading(vid_filename, track_filename)
 
     def setupReading(self, video_path, data_path):
+        if not os.path.exists(video_path):
+            qw.QMessageBox.critical(
+                self,
+                'Error opening video',
+                f'No such file: {video_path}\n')
+            return False
+
+        if not os.path.exists(data_path):
+            qw.QMessageBox.critical(
+                self,
+                'Error opening data',
+                f'No such file: {data_path}\n')
+            return False
+        
         try:
             self.video_reader = VideoReader(video_path, self._wait_cond)
         except IOError as e:
             qw.QMessageBox.critical(
                 self,
                 'Error opening video',
-                f'Could not open video: {video_path}\n' f'{e}',
+                f'Could not open video: {video_path}\n{e}'
             )
             return False
-        self.trackReader = TrackReader(data_path)
+        try:
+            self.trackReader = TrackReader(data_path)
+        except KeyError as e:
+            qw.QMessageBox.critical(
+                self,
+                'Error opening data',
+                f'Could not open data file: {data_path}\n{e}'
+            )
+            return False
         self.video_filename = video_path
         self.track_filename = data_path
         settings.setValue(

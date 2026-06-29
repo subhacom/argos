@@ -116,9 +116,10 @@ setup(
         'tables',
         'sortedcontainers',
         'pyqt5',
-        'opencv-contrib-python',
+        'opencv-python-headless',
         'pyyaml',
         'matplotlib',
-        'qdarkstyle'
+        'qdarkstyle',
+        'pycocotools',
     ],
 )
