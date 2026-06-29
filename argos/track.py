@@ -157,6 +157,9 @@ class ArgosTracker(qw.QMainWindow):
         self._file_menu = self._menubar.addMenu('&File')
         self._file_menu.addAction(self._video_widget.openAction)
         self._file_menu.addAction(self._video_widget.openCamAction)
+        self.loadConfigAction = qw.QAction('Load configuration from file')
+        self.loadConfigAction.triggered.connect(self.loadConfig)
+        self._file_menu.addAction(self.loadConfigAction)
         self.saveConfigAction = qw.QAction('Save configuration in file')
         self.saveConfigAction.triggered.connect(self.saveConfig)
         self._file_menu.addAction(self.saveConfigAction)
@@ -380,6 +383,13 @@ class ArgosTracker(qw.QMainWindow):
             min_dist = settings.value(
                 'bytetracker/iou_threshold', 0.3, type=float
             )
+        elif self._ocsort_action.isChecked():
+            track_method = 'ocsort'
+            min_hits = settings.value('ocsortracker/min_hits', 3, type=int)
+            max_age = settings.value('ocsortracker/max_age', 30, type=int)
+            min_dist = settings.value(
+                'ocsortracker/iou_threshold', 0.3, type=float
+            )
         else:
             track_method = 'sort'
             min_hits = settings.value('sortracker/min_hits', 3, type=int)
@@ -400,6 +410,13 @@ class ArgosTracker(qw.QMainWindow):
             'pmin': settings.value('segment/min_pixels', 10, type=int),
             'pmax': settings.value('segment/max_pixels', 1000, type=int),
         }
+        if track_method == 'ocsort':
+            config['ocsort_inertia'] = settings.value(
+                'ocsortracker/inertia', 0.2, type=float
+            )
+            config['ocsort_delta_t'] = settings.value(
+                'ocsortracker/delta_t', 3, type=int
+            )
         if self._seg_dock.isVisible():
             config['blur_width'] = settings.value(
                 'segment/blur_width', 21, type=int
@@ -478,8 +495,56 @@ class ArgosTracker(qw.QMainWindow):
 
     @qc.pyqtSlot()
     def loadConfig(self):
-        """TODO implement loading config file exported in yaml file"""
-        raise NotImplementedError('This function is yet to be implemented')
+        directory = settings.value('video/directory', '.')
+        fname, _ = qw.QFileDialog.getOpenFileName(
+            self, 'Load configuration', directory,
+            filter='yaml (*.yml *.yaml)'
+        )
+        if not fname:
+            return
+        with open(fname, 'r') as fd:
+            config = yaml.safe_load(fd)
+
+        # Apply size limits (setValue triggers valueChanged → QSettings update)
+        lim = self._lim_widget
+        if 'wmin' in config:
+            lim._wmin_edit.setValue(config['wmin'])
+        if 'wmax' in config:
+            lim._wmax_edit.setValue(config['wmax'])
+        if 'hmin' in config:
+            lim._hmin_edit.setValue(config['hmin'])
+        if 'hmax' in config:
+            lim._hmax_edit.setValue(config['hmax'])
+
+        # Apply tracking settings
+        track_method = config.get('track_method', 'bytetrack')
+        if track_method == 'bytetrack':
+            self._bytetrack_action.trigger()
+            self._bytetrack_widget.loadSettings(config)
+        elif track_method == 'ocsort':
+            self._ocsort_action.trigger()
+            self._ocsort_widget.loadSettings(config)
+        else:
+            self._sort_action.trigger()
+            self._sort_widget.loadSettings(config)
+
+        # Apply segmentation method
+        method = config.get('method', config.get('seg_method', ''))
+        if method == 'yolov11':
+            self._yolov11_action.trigger()
+            if 'yolov11_weights' in config:
+                settings.setValue('yolov11/weightsfile', config['yolov11_weights'])
+            for key, setting in [
+                ('score_thresh', 'yolov11/score_thresh'),
+                ('top_k', 'yolov11/top_k'),
+                ('overlap_thresh', 'yolov11/overlap_thresh'),
+            ]:
+                if key in config:
+                    settings.setValue(setting, config[key])
+        elif method == 'yolact':
+            self._yolact_action.trigger()
+        elif method:
+            self._seg_action.trigger()
 
     @qc.pyqtSlot(str)
     def statusMsgSlot(self, msg):

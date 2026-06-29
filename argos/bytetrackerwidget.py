@@ -151,6 +151,15 @@ class ByteTrackerWidget(qw.QWidget):
         result = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(result, pos)
 
+    def loadSettings(self, config: dict) -> None:
+        """Apply tracker parameters from a config dict (e.g. loaded from YAML)."""
+        if 'min_dist' in config:
+            self._iou_spin.setValue(config['min_dist'])
+        if 'min_hits' in config:
+            self._min_hits_spin.setValue(config['min_hits'])
+        if 'max_age' in config:
+            self._max_age_spin.setValue(config['max_age'])
+
     @qc.pyqtSlot(np.ndarray, int)
     def track(self, bboxes: np.ndarray, pos: int) -> None:
         """Forward detections into the tracker thread."""
