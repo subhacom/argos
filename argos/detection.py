@@ -26,7 +26,7 @@ def obb_from_contour(contour: np.ndarray | None,
                      bbox: np.ndarray) -> np.ndarray:
     """Return (cx, cy, obb_w, obb_h, angle) from contour, or from bbox."""
     x, y, w, h = bbox[:4]
-    if contour is None or len(contour) < 5:
+    if contour is None or len(contour) < 3:
         return np.array([x + w / 2.0, y + h / 2.0, float(w), float(h), 0.0],
                         dtype=np.float64)
     cnt = contour.reshape(-1, 1, 2).astype(np.float32)
@@ -128,9 +128,41 @@ def contour_iou_cost(bboxes: np.ndarray,
         d_cnt = det_contours[i] if i < len(det_contours) else None
         if d_cnt is None:
             continue
+        # Detection OBB at the detected position
+        d_obb = obb_from_contour(d_cnt, bboxes[i])   # (cx,cy,w,h,angle)
+        d_rrect = ((float(d_obb[0]), float(d_obb[1])),
+                   (float(d_obb[2]), float(d_obb[3])),
+                   float(d_obb[4]))
+        d_area = d_obb[2] * d_obb[3]
+
         for j, tid in enumerate(track_ids):
             t_cnt = track_contours.get(tid)
             if t_cnt is None:
                 continue
-            cost[i, j] = 1.0 - mask_iou(d_cnt, t_cnt)
+            # Track OBB: take the shape (w, h, angle) from the stored contour
+            # but place its centre at the Kalman-predicted position.  This
+            # gives position-normalised shape matching: the same animal body
+            # at the predicted location scores high even when it rotated or
+            # moved faster than the Kalman model expected, while a different
+            # animal at the same location scores low because its silhouette
+            # dimensions differ.
+            t_obb = obb_from_contour(t_cnt, pred_bboxes[j])
+            p_cx = float(pred_bboxes[j, 0]) + float(pred_bboxes[j, 2]) / 2.0
+            p_cy = float(pred_bboxes[j, 1]) + float(pred_bboxes[j, 3]) / 2.0
+            t_rrect = ((p_cx, p_cy),
+                       (float(t_obb[2]), float(t_obb[3])),
+                       float(t_obb[4]))
+
+            retval, inter_pts = cv2.rotatedRectangleIntersection(d_rrect, t_rrect)
+            if (retval != cv2.INTERSECT_NONE
+                    and inter_pts is not None
+                    and len(inter_pts) >= 3):
+                inter_area = float(cv2.contourArea(
+                    inter_pts.reshape(-1, 1, 2).astype(np.float32)))
+                t_area = t_obb[2] * t_obb[3]
+                union_area = d_area + t_area - inter_area
+                if union_area > 0:
+                    obb_cost = 1.0 - inter_area / union_area
+                    if obb_cost < cost[i, j]:
+                        cost[i, j] = obb_cost
     return cost

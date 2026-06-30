@@ -24,6 +24,7 @@ import numpy as np
 import threading
 import yaml
 import cv2
+import warnings
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -125,13 +126,14 @@ class YolactWorker(qc.QObject):
         self.weights_file = filename
         tic = time.perf_counter_ns()
         with torch.no_grad():
-            if self.cuda:
-                cudnn.fastest = True
-                torch.set_default_dtype(torch.float32)
-                torch.set_default_device('cuda')
-            else:
-                torch.set_default_dtype(torch.float32)
-                torch.set_default_device('cpu')
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore', message='torch.set_default_tensor_type')
+                if self.cuda:
+                    cudnn.fastest = True
+                    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+                else:
+                    torch.set_default_tensor_type('torch.FloatTensor')
             self.net = Yolact()
             self.net.load_weights(self.weights_file, self.cuda)
             self.net.eval()
