@@ -17,6 +17,10 @@ settings = init()
 segmented_key = 'segmented'
 tracked_key = 'tracked'
 
+TRACKED_COLUMNS = ['frame', 'trackid', 'x', 'y', 'w', 'h',
+                   'cx', 'cy', 'obb_w', 'obb_h', 'angle',
+                   'area', 'major_axis', 'minor_axis', 'solidity']
+
 
 def makepath(dirname, fname):
     fname = os.path.basename(fname)
@@ -87,9 +91,7 @@ class HDFWriter(DataHandler):
             logging.info('No tracking data.')
             return
         data = np.concatenate(data)
-        data = pd.DataFrame(
-            data=data, columns=['frame', 'trackid', 'x', 'y', 'w', 'h']
-        )
+        data = pd.DataFrame(data=data, columns=TRACKED_COLUMNS)
         self.data_store.put(tracked_key, data, format='table', append=False)
 
     @qc.pyqtSlot()
@@ -127,7 +129,7 @@ class CSVWriter(DataHandler):
         self.seg_writer.writerow('frame,x,y,w,h'.split(','))
         self.track_file = open(self.track_filename, 'w', newline='')
         self.track_writer = csv.writer(self.track_file)
-        self.track_writer.writerow('frame,trackid,x,y,w,h'.split(','))
+        self.track_writer.writerow(TRACKED_COLUMNS)
 
     @qc.pyqtSlot(np.ndarray, int)
     def appendBboxes(self, bboxes: np.ndarray, frame_no: int):
@@ -157,7 +159,7 @@ class CSVWriter(DataHandler):
         self.seg_writer.writerow('frame,x,y,w,h'.split(','))
         self.track_file = open(self.track_filename, 'w', newline='')
         self.track_writer = csv.writer(self.track_file)
-        self.track_writer.writerow('frame,trackid,x,y,w,h'.split(','))
+        self.track_writer.writerow(TRACKED_COLUMNS)
 
     def __del__(self):
         self.close()

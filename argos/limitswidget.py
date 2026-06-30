@@ -12,7 +12,7 @@ settings = ut.init()
 
 
 class LimitsWidget(qw.QWidget):
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     sigQuit = qc.pyqtSignal()
     sigWmin = qc.pyqtSignal(int)
     sigWmax = qc.pyqtSignal(int)
@@ -81,11 +81,11 @@ class LimitsWidget(qw.QWidget):
     def resetRoi(self):
         self.roi = None
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def process(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def process(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         logging.debug(f'Received bboxes: {bboxes.shape}, pos: {pos}')
         if len(bboxes) == 0:
-            self.sigProcessed.emit(bboxes.copy(), pos)
+            self.sigProcessed.emit(bboxes.copy(), [], pos)
             return
         wh = np.sort(bboxes[:, 2:], axis=1)
         min_wide = wh[:, 0] >= self._wmin_edit.value()
@@ -94,9 +94,13 @@ class LimitsWidget(qw.QWidget):
         max_high = wh[:, 1] <= self._hmax_edit.value()
         fit = min_wide & max_wide & min_high & max_high
         valid = bboxes[fit]
+        if contours:
+            valid_contours = [contours[i] for i in range(len(contours)) if fit[i]]
+        else:
+            valid_contours = []
         logging.debug(f'Sending bboxes: {len(valid)}')
         if self.roi is None:
-            self.sigProcessed.emit(valid.copy(), pos)
+            self.sigProcessed.emit(valid.copy(), valid_contours, pos)
             return
         vidx = []
         for ii in range(valid.shape[0]):
@@ -107,4 +111,5 @@ class LimitsWidget(qw.QWidget):
             ]
             if np.any(contained):
                 vidx.append(ii)
-        self.sigProcessed.emit(valid[vidx].copy(), pos)
+        valid_contours = [valid_contours[i] for i in vidx]
+        self.sigProcessed.emit(valid[vidx].copy(), valid_contours, pos)

@@ -23,6 +23,7 @@ import logging
 import numpy as np
 import threading
 import yaml
+import cv2
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -52,7 +53,7 @@ class YolactWorker(qc.QObject):
     # bboxes are in (top-left, w, h) format
     # The even is passed for synchronizing display of image in videowidget
     # with the bounding boxes
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     sigInitialized = qc.pyqtSignal()
     sigError = qc.pyqtSignal(YolactException)
 
@@ -190,13 +191,12 @@ class YolactWorker(qc.QObject):
                     ]
                 )
                 print('All Classes', set(classes.cpu().numpy()))
-                classes, scores, boxes = [
-                    x[idx] for x in (classes, scores, boxes)
+                classes, scores, boxes, masks = [
+                    x[idx] for x in (classes, scores, boxes, masks)
                 ]
                 print('Kept', set(classes.cpu().numpy()))
             idx = scores.argsort(0, descending=True)[: self.top_k]
-            # if self.config.eval_mask_branch:
-            #     masks = masks[idx]
+            masks = masks[idx]
             classes, scores, boxes = [
                 x[idx].cpu().numpy() for x in (classes, scores, boxes)
             ]
@@ -220,7 +220,7 @@ class YolactWorker(qc.QObject):
             # Convert from top-left bottom-right format to
             # top-left, width, height format
             if len(boxes) == 0:
-                self.sigProcessed.emit(boxes, pos)
+                self.sigProcessed.emit(boxes, [], pos)
                 return
             boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
             boxes = np.asanyarray(boxes, dtype=np.int64)
@@ -239,12 +239,27 @@ class YolactWorker(qc.QObject):
                 ]
                 good_idx = list(set(range(boxes.shape[0])) - set(bad_idx))
                 boxes = boxes[good_idx].copy()
+                masks = masks[good_idx]
+
+            # Extract contours from masks (N x H x W tensor)
+            masks_np = masks[:num_dets_to_consider].cpu().numpy()
+            contours = []
+            for mask in masks_np:
+                mask_uint8 = (mask > 0.5).astype(np.uint8) * 255
+                cnts, _ = cv2.findContours(
+                    mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                if cnts:
+                    largest = max(cnts, key=cv2.contourArea)
+                    contours.append(largest.reshape(-1, 2))
+                else:
+                    contours.append(None)
 
             toc = time.perf_counter_ns()
             logging.debug(
                 f'Time to process single _image: {1e-9 * (toc - tic)} s.'
             )
-            self.sigProcessed.emit(boxes, pos)
+            self.sigProcessed.emit(boxes, contours, pos)
             logging.debug(f'Emitted bboxes for frame {pos}:\n{boxes}')
         _dt = time.perf_counter() - _ts
         logging.debug(
@@ -254,7 +269,7 @@ class YolactWorker(qc.QObject):
 
 class YolactWidget(qw.QWidget):
     # pass on the signal from YolactWorker
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     # pass on the image to YolactWorker for processing
     sigProcess = qc.pyqtSignal(np.ndarray, int)
 

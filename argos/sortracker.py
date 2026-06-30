@@ -34,6 +34,7 @@ from PyQt5 import (
 import argos.constants
 from argos import utility as au
 from argos.utility import match_bboxes
+from argos.detection import extend_bbox, contour_iou_cost
 
 settings = au.init()
 
@@ -190,12 +191,14 @@ class SORTracker(object):
         self.trackers = {}
         self._next_id = 1
         self.frame_count = 0
+        self._contours: dict = {}
 
     def reset(self):
         logging.debug('Resetting trackers.')
         self.trackers = {}
         self._next_id = 1
         self.frame_count = 0
+        self._contours.clear()
 
     def setDistMetric(self, metric: argos.constants.DistanceMetric) -> None:
         if self.metric != metric:
@@ -209,18 +212,21 @@ class SORTracker(object):
         else:
             self.min_dist = dist
 
-    def update(self, bboxes):
+    def update(self, bboxes: np.ndarray, contours: list = None) -> dict:
         """Update the trackers with new bboxes.
 
         Parameters
         ----------
         bboxes: np.ndarray
             a 2D array with one row for each bbox in (x, y, w, h) format.
+        contours: list, optional
+            list of contours corresponding to each bbox entry.
 
         Returns
         -------
         dict
-            dict mapping object ids to tracked position
+            dict mapping object ids to tracked position (extended with contour
+            if available)
         """
         predicted_bboxes = {}
         for id_, tracker in self.trackers.items():
@@ -242,16 +248,20 @@ class SORTracker(object):
             max_dist=self.min_dist)
         for track_id, bbox_id in matched.items():
             self.trackers[track_id].update(bboxes[bbox_id])
+            cnt = contours[bbox_id] if contours and bbox_id < len(contours) else None
+            self._contours[track_id] = cnt
         for ii in new_unmatched:
             self._add_tracker(bboxes[ii, :KalmanTracker.NDIM])
+            self._contours[self._next_id - 1] = contours[ii] if contours and ii < len(contours) else None
         ret = {}
         for id_ in list(self.trackers.keys()):
             tracker = self.trackers[id_]
             if (tracker.time_since_update < 1) and \
                     (tracker.hits >= self.min_hits or
                      self.frame_count <= self.min_hits):
-                ret[id_] = tracker.pos
+                ret[id_] = extend_bbox(tracker.pos, self._contours.get(tracker.tid))
             if tracker.time_since_update > self.max_age:
+                self._contours.pop(tracker.tid, None)
                 self.trackers.pop(id_)
         return ret
 

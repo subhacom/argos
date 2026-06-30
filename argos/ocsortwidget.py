@@ -54,11 +54,11 @@ class QOCSORTracker(qc.QObject):
         settings.setValue('ocsortracker/delta_t', value)
         self.tracker.delta_t = value
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         _ts = time.perf_counter()
         _ = qc.QMutexLocker(self._mutex)
-        result = {} if len(bboxes) == 0 else self.tracker.update(bboxes)
+        result = {} if len(bboxes) == 0 else self.tracker.update(bboxes, contours)
         logging.debug(f'OCSORTracker: frame {pos}, tracks: {result}')
         self.sigTracked.emit(result, pos)
         logging.debug(
@@ -74,7 +74,7 @@ class OCSORTWidget(qw.QWidget):
     :class:`~argos.bytetrackerwidget.ByteTrackerWidget`.
     """
 
-    sigTrack = qc.pyqtSignal(np.ndarray, int)
+    sigTrack = qc.pyqtSignal(np.ndarray, list, int)
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
@@ -186,9 +186,10 @@ class OCSORTWidget(qw.QWidget):
         else:
             self.sigTrack.connect(self.qtracker.track)
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def _send_dummy(self, bboxes: np.ndarray, pos: int) -> None:
-        result = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def _send_dummy(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
+        from argos.detection import extend_bbox
+        result = {ii + 1: extend_bbox(bboxes[ii], None) for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(result, pos)
 
     def loadSettings(self, config: dict) -> None:
@@ -204,7 +205,7 @@ class OCSORTWidget(qw.QWidget):
         if 'ocsort_delta_t' in config:
             self._delta_t_spin.setValue(config['ocsort_delta_t'])
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         logging.debug(f'OCSORTWidget.track: frame {pos}')
-        self.sigTrack.emit(bboxes, pos)
+        self.sigTrack.emit(bboxes, contours, pos)

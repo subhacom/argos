@@ -8,6 +8,7 @@ from PyQt5 import QtCore as qc, QtWidgets as qw
 
 import argos.constants
 from argos.bytetracker import ByteTracker, settings
+from argos.detection import extend_bbox
 
 
 class QByteTracker(qc.QObject):
@@ -43,11 +44,11 @@ class QByteTracker(qc.QObject):
         settings.setValue('bytetracker/min_hits', value)
         self.tracker.min_hits = value
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         _ts = time.perf_counter()
         _ = qc.QMutexLocker(self._mutex)
-        result = {} if len(bboxes) == 0 else self.tracker.update(bboxes)
+        result = {} if len(bboxes) == 0 else self.tracker.update(bboxes, contours)
         logging.debug(f'ByteTracker: frame {pos}, tracks: {result}')
         self.sigTracked.emit(result, pos)
         logging.debug(
@@ -62,7 +63,7 @@ class ByteTrackerWidget(qw.QWidget):
     so the two are interchangeable in :mod:`argos.track`.
     """
 
-    sigTrack = qc.pyqtSignal(np.ndarray, int)
+    sigTrack = qc.pyqtSignal(np.ndarray, list, int)
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
@@ -146,9 +147,9 @@ class ByteTrackerWidget(qw.QWidget):
         else:
             self.sigTrack.connect(self.qtracker.track)
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def _send_dummy(self, bboxes: np.ndarray, pos: int) -> None:
-        result = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def _send_dummy(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
+        result = {ii + 1: extend_bbox(bboxes[ii], None) for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(result, pos)
 
     def loadSettings(self, config: dict) -> None:
@@ -160,8 +161,8 @@ class ByteTrackerWidget(qw.QWidget):
         if 'max_age' in config:
             self._max_age_spin.setValue(config['max_age'])
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         """Forward detections into the tracker thread."""
         logging.debug(f'ByteTrackerWidget.track: frame {pos}')
-        self.sigTrack.emit(bboxes, pos)
+        self.sigTrack.emit(bboxes, contours, pos)

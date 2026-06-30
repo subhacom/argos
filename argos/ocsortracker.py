@@ -34,6 +34,7 @@ import argos.constants
 from argos import utility as au
 from argos.utility import pairwise_distance
 from argos.sortracker import KalmanTracker
+from argos.detection import extend_bbox, mask_iou, contour_iou_cost
 
 settings = au.init()
 
@@ -65,6 +66,7 @@ class _OCSortTrack:
         self.velocity: np.ndarray | None = None        # normalized (dx, dy)
         self._saved_state: np.ndarray | None = None    # statePost snapshot
         self._saved_cov: np.ndarray | None = None      # errorCovPost snapshot
+        self._last_contour: np.ndarray | None = None
 
     # ── KalmanTracker proxy ──────────────────────────────────────────────
     @property
@@ -92,6 +94,9 @@ class _OCSortTrack:
 
     def update(self, detection: np.ndarray) -> np.ndarray:
         return self._kt.update(detection)
+
+    def store_contour(self, contour) -> None:
+        self._last_contour = contour
 
     # ── OC-SORT methods ──────────────────────────────────────────────────
     def obs_center(self) -> np.ndarray:
@@ -214,13 +219,16 @@ class OCSORTracker:
         self._next_id = 1
         self.frame_count = 0
 
-    def update(self, bboxes: np.ndarray) -> dict:
+    def update(self, bboxes: np.ndarray, contours: list = None) -> dict:
         """Update tracker with new detections.
 
         Parameters
         ----------
         bboxes : np.ndarray
             Shape (N, 4) array in (x, y, w, h) format, dtype int64.
+        contours : list, optional
+            List of contours (np.ndarray or None) corresponding to each
+            detection in ``bboxes``.
 
         Returns
         -------
@@ -249,7 +257,7 @@ class OCSORTracker:
 
         # ── Stage 1: IoU + OCM matching for active tracks ─────────────────
         if len(bboxes) > 0 and len(active_ids) > 0:
-            cost = self._ocm_cost(bboxes[:, :KalmanTracker.NDIM], active_ids, predicted)
+            cost = self._ocm_cost(bboxes[:, :KalmanTracker.NDIM], contours if contours else [], active_ids, predicted)
             matched1, unmatched_det_idx, unmatched_active = _hungarian(
                 cost, active_ids, len(bboxes), max_dist
             )
@@ -264,6 +272,7 @@ class OCSORTracker:
             if track.time_since_update > 1:
                 track.apply_oru(bboxes[det_i], self.frame_count)
             track.update(bboxes[det_i])
+            track.store_contour(contours[det_i] if contours and det_i < len(contours) else None)
             track.record_obs(bboxes[det_i], self.frame_count)
             if (self._states[tid] == _TENTATIVE and
                     track.hits >= self.min_hits):
@@ -282,10 +291,21 @@ class OCSORTracker:
         rem_list = sorted(unmatched_det_idx)
         if len(rem_list) > 0 and len(lost_ids) > 0:
             rem_bboxes = bboxes[rem_list, :KalmanTracker.NDIM]
+            rem_contours = [contours[i] if contours and i < len(contours) else None
+                            for i in rem_list]
             # Use actual last-observation positions (not drifted Kalman)
             last_obs_pred = {tid: self._tracks[tid].last_obs_int()
                              for tid in lost_ids}
-            ocr_cost = _iou_cost(rem_bboxes, lost_ids, last_obs_pred, self.boxtype)
+            track_contours = {tid: self._tracks[tid]._last_contour
+                              for tid in lost_ids if tid in self._tracks}
+            last_obs_arr = np.array(
+                [last_obs_pred[tid] for tid in lost_ids], dtype=np.int64
+            )
+            ocr_cost = contour_iou_cost(
+                rem_bboxes.astype(np.int64), rem_contours,
+                lost_ids, last_obs_arr, track_contours,
+                self.boxtype, argos.constants.DistanceMetric.iou,
+            )
             matched2, unmatched_det2, unmatched_lost = _hungarian(
                 ocr_cost, lost_ids, len(rem_bboxes), max_dist
             )
@@ -294,6 +314,7 @@ class OCSORTracker:
                 track = self._tracks[tid]
                 track.apply_oru(bboxes[orig_i], self.frame_count)
                 track.update(bboxes[orig_i])
+                track.store_contour(contours[orig_i] if contours and orig_i < len(contours) else None)
                 track.record_obs(bboxes[orig_i], self.frame_count)
                 self._states[tid] = _CONFIRMED
             for tid in unmatched_lost:
@@ -323,7 +344,7 @@ class OCSORTracker:
                     and track.time_since_update == 0
                     and (track.hits >= self.min_hits
                          or self.frame_count <= self.min_hits)):
-                result[tid] = track.pos
+                result[tid] = extend_bbox(track.pos, track._last_contour)
         return result
 
     # ── Internal helpers ─────────────────────────────────────────────────
@@ -331,22 +352,25 @@ class OCSORTracker:
     def _ocm_cost(
         self,
         bboxes: np.ndarray,
+        contours: list,
         track_ids: list,
         pred_dict: dict,
     ) -> np.ndarray:
-        """IoU cost + ``inertia`` × velocity-direction cost (OCM)."""
+        """IoU cost (with contour IoU where available) + ``inertia`` × velocity-direction cost (OCM)."""
         labels = track_ids
         pred_arr = np.array(
             [pred_dict[tid] for tid in labels], dtype=np.int64
         )
-        iou = pairwise_distance(
-            bboxes.astype(np.int64), pred_arr,
-            boxtype=self.boxtype,
-            metric=argos.constants.DistanceMetric.iou,
+        track_contours = {tid: self._tracks[tid]._last_contour
+                          for tid in labels if tid in self._tracks}
+        iou_cost = contour_iou_cost(
+            bboxes.astype(np.int64), contours if contours else [],
+            labels, pred_arr, track_contours,
+            self.boxtype, argos.constants.DistanceMetric.iou,
         )
         if self.inertia <= 0:
-            return iou
-        return iou + self.inertia * self._vel_dir_cost(bboxes, labels)
+            return iou_cost
+        return iou_cost + self.inertia * self._vel_dir_cost(bboxes, labels)
 
     def _vel_dir_cost(
         self, bboxes: np.ndarray, track_ids: list

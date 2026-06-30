@@ -37,6 +37,7 @@ class FrameScene(qw.QGraphicsScene):
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
+        self.obbDict = {}
         self._frame = None
         self.geom = DrawingGeom.arena
         self.grayscale = False  # frame will be converted to grayscale
@@ -94,12 +95,15 @@ class FrameScene(qw.QGraphicsScene):
             self.removeItem(item)
         for label in self.labelDict.values():
             self.removeItem(label)
+        for obb_item in self.obbDict.values():
+            self.removeItem(obb_item)
         if self.arenaPolygon is not None:
             self.removeItem(self.arenaPolygon)
             self.arenaPolygon = None
         self.polygons = {}
         self.itemDict = {}
         self.labelDict = {}
+        self.obbDict = {}
         self._clearIncomplete()
         # self.clear()
 
@@ -557,8 +561,19 @@ class FrameScene(qw.QGraphicsScene):
                 )
             else:
                 color = self.color
-            item = self.addRect(*rect, qg.QPen(color, self.linewidth))
+            item = self.addRect(*rect[:4], qg.QPen(color, self.linewidth))
             self.itemDict[id_] = item
+            if len(rect) >= 9:
+                cx, cy = float(rect[4]), float(rect[5])
+                obb_w, obb_h = float(rect[6]), float(rect[7])
+                angle = float(rect[8])
+                pts = cv2.boxPoints(((cx, cy), (obb_w, obb_h), angle))
+                obb_pen = qg.QPen(color, max(1, self.linewidth - 1), qc.Qt.DashLine)
+                polygon = qg.QPolygonF(
+                    [qc.QPointF(float(pts[i, 0]), float(pts[i, 1])) for i in range(4)]
+                )
+                obb_item = self.addPolygon(polygon, obb_pen)
+                self.obbDict[id_] = obb_item
             text = self.addText(str(id_), self.boldFont)
             text.setFlag(
                 qw.QGraphicsItem.ItemIgnoresTransformations,

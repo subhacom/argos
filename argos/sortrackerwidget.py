@@ -61,22 +61,22 @@ class QSORTracker(qc.QObject):
         self.tracker.n_init = count
         self.tracker.min_hits = count
 
-    @qc.pyqtSlot(dict, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         _ts = time.perf_counter()
         logging.debug(f'Received from {self.sender()} bboxes: {bboxes}')
         _ = qc.QMutexLocker(self._mutex)
         if len(bboxes) == 0:
             ret = {}
         else:
-            ret = self.tracker.update(bboxes)
+            ret = self.tracker.update(bboxes, contours)
         logging.debug(f'SORTracker: frame {pos}, Rectangles: \n{ret}')
         self.sigTracked.emit(ret, pos)
         _dt = time.perf_counter() - _ts
         logging.debug(f'{__name__}.{self.__class__.__name__}.track: Runtime: {_dt}s')
 
 class SORTWidget(qw.QWidget):
-    sigTrack = qc.pyqtSignal(np.ndarray, int)
+    sigTrack = qc.pyqtSignal(np.ndarray, list, int)
     sigTracked = qc.pyqtSignal(dict, int)
     sigQuit = qc.pyqtSignal()
     sigReset = qc.pyqtSignal()
@@ -191,9 +191,10 @@ class SORTWidget(qw.QWidget):
         else:
             self.sigTrack.connect(self.qtracker.track)
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def sendDummySigTracked(self, bboxes: np.ndarray, pos: int) -> None:
-        ret = {ii + 1: bboxes[ii] for ii in range(bboxes.shape[0])}
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def sendDummySigTracked(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
+        from argos.detection import extend_bbox
+        ret = {ii + 1: extend_bbox(bboxes[ii], None) for ii in range(bboxes.shape[0])}
         self.sigTracked.emit(ret, pos)
 
     def loadSettings(self, config: dict) -> None:
@@ -210,12 +211,12 @@ class SORTWidget(qw.QWidget):
         if 'max_age' in config:
             self._max_age_spin.setValue(config['max_age'])
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def track(self, bboxes: np.ndarray, pos: int) -> None:
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def track(self, bboxes: np.ndarray, contours: list, pos: int) -> None:
         """Just to intercept signal source for debugging"""
         logging.debug(
             f'Received frame {pos} from {self.sender()} bboxes: {bboxes}')
-        self.sigTrack.emit(bboxes, pos)
+        self.sigTrack.emit(bboxes, contours, pos)
 
 
 def test():

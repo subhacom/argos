@@ -51,7 +51,7 @@ class Yolov11Worker(qc.QObject):
     (x, y, w, h) format — identical to what YolactWorker emits.
     """
 
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     sigInitialized = qc.pyqtSignal()
     sigError = qc.pyqtSignal(Yolov11Exception)
 
@@ -147,15 +147,21 @@ class Yolov11Worker(qc.QObject):
             self.sigError.emit(Yolov11Exception(str(exc)))
             return
         if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-            self.sigProcessed.emit(np.empty((0, 4), dtype=np.int64), pos)
+            self.sigProcessed.emit(np.empty((0, 4), dtype=np.int64), [], pos)
             return
         # Convert xyxy → x, y, w, h (same format as YolactWorker output)
         boxes = results[0].boxes.xyxy.cpu().numpy().copy()
         boxes[:, 2:] -= boxes[:, :2]
         boxes = np.rint(boxes).astype(np.int64)
+        # Extract contours from segmentation masks if available
+        if results[0].masks is not None and hasattr(results[0].masks, 'xy'):
+            contours = [np.array(results[0].masks.xy[i], dtype=np.float32)
+                        for i in range(len(results[0].masks.xy))]
+        else:
+            contours = [None] * len(boxes)
         toc = time.perf_counter_ns()
         logging.debug('YOLOv11 frame %d processed in %.3f s', pos, 1e-9 * (toc - tic))
-        self.sigProcessed.emit(boxes, pos)
+        self.sigProcessed.emit(boxes, contours, pos)
 
 
 class Yolov11Widget(qw.QWidget):
@@ -173,7 +179,7 @@ class Yolov11Widget(qw.QWidget):
     current working directory.
     """
 
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     sigProcess = qc.pyqtSignal(np.ndarray, int)
     sigTopK = qc.pyqtSignal(int)
     sigScoreThresh = qc.pyqtSignal(float)

@@ -120,7 +120,7 @@ class SegWorker(qc.QObject):
     """
 
     # bboxes of segmented objects and frame no.
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     # outlines of segmented objects and frame no.
     sigSegPolygons = qc.pyqtSignal(dict, int)
     # intermediate processed image and frame no.
@@ -398,8 +398,12 @@ class SegWorker(qc.QObject):
                 )
             self.sigIntermediate.emit(filtered, pos)
         bboxes = [cv2.boundingRect(points) for points in seg]
+        contours = [points.reshape(-1, 2).astype(np.float32) for points in seg]
         if self.outline_style == ut.OutlineStyle.bbox:
-            self.sigProcessed.emit(np.array(bboxes), pos)
+            if len(bboxes) == 0:
+                self.sigProcessed.emit(np.empty((0, 4), dtype=np.int64), [], pos)
+            else:
+                self.sigProcessed.emit(np.array(bboxes, dtype=np.int64), contours, pos)
             # logging.debug(f'Emitted bboxes for frame {pos}: {bboxes}')
         elif self.outline_style == ut.OutlineStyle.contour:
             if self.seg_method == consts.SegmentationMethod.threshold:
@@ -432,7 +436,7 @@ class SegWidget(qw.QWidget):
     """
 
     # pass on the signal from worker
-    sigProcessed = qc.pyqtSignal(np.ndarray, int)
+    sigProcessed = qc.pyqtSignal(np.ndarray, list, int)
     # pass on the signal from worker
     sigSegPolygons = qc.pyqtSignal(dict, int)
     # pass on the image to worker

@@ -215,7 +215,7 @@ def segment_yolov11(
     overlap_thresh: float,
     weights_file: str,
     device: str = 'cpu',
-) -> np.ndarray:
+) -> tuple:
     """Detect objects in *frame* using YOLOv11.
 
     Parameters
@@ -236,8 +236,11 @@ def segment_yolov11(
 
     Returns
     -------
-    numpy.ndarray
-        Shape (N, 4) int array of bounding boxes in (x, y, w, h) format.
+    tuple
+        (bboxes, contours) where bboxes is a shape (N, 4) int array of
+        bounding boxes in (x, y, w, h) format, and contours is a list of
+        N np.ndarray contour point arrays (float32, shape (M, 2)) or None
+        entries when mask data is unavailable.
     """
     global _yolov11_net
     if _yolov11_net is None:
@@ -251,11 +254,20 @@ def segment_yolov11(
         verbose=False,
     )
     if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-        return np.empty((0, 4), dtype=np.int64)
+        return np.empty((0, 4), dtype=np.int64), []
     # xyxy → x, y, w, h
     boxes = results[0].boxes.xyxy.cpu().numpy().copy()
     boxes[:, 2:] -= boxes[:, :2]
-    return np.rint(boxes).astype(np.int64)
+    boxes = np.rint(boxes).astype(np.int64)
+    # Extract per-detection contours from instance segmentation masks
+    if results[0].masks is not None and hasattr(results[0].masks, 'xy'):
+        contours = [
+            np.array(results[0].masks.xy[i], dtype=np.float32)
+            for i in range(len(results[0].masks.xy))
+        ]
+    else:
+        contours = [None] * len(boxes)
+    return boxes, contours
 
 
 def load_config(filename):
@@ -328,9 +340,11 @@ def segment_yolact(
         Whether to use CUDA.
     Returns
     -------
-    numpy.ndarray
-        An array of bounding boxes of detected objects in
-        (xleft, ytop, width, height) format.
+    tuple
+        (bboxes, contours) where bboxes is an array of bounding boxes of
+        detected objects in (xleft, ytop, width, height) format, and
+        contours is a list of np.ndarray contour point arrays (shape (M, 2))
+        extracted via cv2.findContours on each instance mask.
     """
     global ynet
     global config
@@ -341,12 +355,12 @@ def segment_yolact(
     tic = time.perf_counter_ns()
     with torch.no_grad():
         if cuda:
-            frame = torch.from_numpy(frame).cuda().float()
+            frame_t = torch.from_numpy(frame).cuda().float()
         else:
-            frame = torch.from_numpy(frame).float()
-        batch = FastBaseTransform()(frame.unsqueeze(0))
+            frame_t = torch.from_numpy(frame).float()
+        batch = FastBaseTransform()(frame_t.unsqueeze(0))
         preds = ynet(batch)
-        h, w, _ = frame.shape
+        h, w = frame.shape[:2]
         config.rescore_bbox = True
         classes, scores, boxes, masks = oututils.postprocess(
             preds,
@@ -357,26 +371,34 @@ def segment_yolact(
             score_threshold=score_threshold,
         )
         idx = scores.argsort(0, descending=True)[:top_k]
-        # if self.config.eval_mask_branch:
-        #     masks = masks[idx]
+        masks_sel = masks[idx]
         classes, scores, boxes = [
             x[idx].cpu().numpy() for x in (classes, scores, boxes)
         ]
-        # This is probably not required, `postprocess` uses
-        # `score_thresh` already
-        # num_dets_to_consider = min(self.top_k, classes.shape[0])
-        # for j in range(num_dets_to_consider):
-        #     if scores[j] < self.score_threshold:
-        #         num_dets_to_consider = j
-        #         break
         # logging.debug('Bounding boxes: %r', boxes)
         # Convert from top-left bottom-right format to
         # top-left, width, height format
         if len(boxes) == 0:
-            return np.empty(0)
+            return np.empty((0, 4), dtype=np.int64), []
 
         boxes[:, 2:] = boxes[:, 2:] - boxes[:, :2]
         boxes = np.asanyarray(np.rint(boxes), dtype=np.int64)
+
+        # Extract contours from binary instance masks
+        masks_np = masks_sel.cpu().numpy()  # shape (N, H, W), float in [0,1]
+        raw_contours = []
+        for mask in masks_np:
+            binary = (mask > 0.5).astype(np.uint8)
+            cnts, _ = cv2.findContours(
+                binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+            if cnts:
+                # Take the largest contour as the object outline
+                cnt = max(cnts, key=cv2.contourArea)
+                raw_contours.append(cnt.squeeze().reshape(-1, 2).astype(np.float32))
+            else:
+                raw_contours.append(None)
+
         if overlap_thresh < 1:
             dist_matrix = ut.pairwise_distance(
                 new_bboxes=boxes,
@@ -384,22 +406,18 @@ def segment_yolact(
                 boxtype=OutlineStyle.bbox,
                 metric=DistanceMetric.iou,
             )
-            bad_boxes = []
+            bad_boxes = set()
             for ii in range(dist_matrix.shape[0] - 1):
                 for jj in range(ii + 1, dist_matrix.shape[1]):
                     if dist_matrix[ii, jj] < 1 - overlap_thresh:
-                        bad_boxes.append(jj)
-            boxes = np.array(
-                [
-                    boxes[ii]
-                    for ii in range(boxes.shape[0])
-                    if ii not in bad_boxes
-                ],
-                dtype=np.int64,
-            )
+                        bad_boxes.add(jj)
+            keep = [ii for ii in range(boxes.shape[0]) if ii not in bad_boxes]
+            boxes = np.array([boxes[ii] for ii in keep], dtype=np.int64)
+            raw_contours = [raw_contours[ii] for ii in keep]
+
         toc = time.perf_counter_ns()
         logging.debug('Time to process single image: %f s', 1e-9 * (toc - tic))
-        return boxes
+        return boxes, raw_contours
 
 
 def read_frame(video):
@@ -453,9 +471,32 @@ def threshold(frame: np.ndarray, params: ThreshParam):
 
 
 def bbox_func(points_list):
-    """Calculate list of bounding boxes of point arrays"""
-    ret = np.array([cv2.boundingRect(points) for points in points_list])
-    return ret
+    """Calculate bounding boxes and preserve contours from point arrays.
+
+    Parameters
+    ----------
+    points_list : list of np.ndarray
+        Each array holds the contour points (shape (M, 2)) of one object,
+        as returned by ``extract_valid``.
+
+    Returns
+    -------
+    tuple
+        (bboxes, contours) where bboxes is an (N, 4) int64 array in
+        (x, y, w, h) format and contours is the original points_list
+        (each entry is already a contour suitable for cv2/detection functions).
+    """
+    if not points_list:
+        return np.empty((0, 4), dtype=np.int64), []
+    bboxes = np.array(
+        [cv2.boundingRect(points) for points in points_list], dtype=np.int64
+    )
+    # points_list entries from segment_by_contour_bbox are already (M, 2)
+    # contour arrays; pass them through directly.
+    contours = [
+        p.reshape(-1, 2).astype(np.float32) for p in points_list
+    ]
+    return bboxes, contours
 
 
 def create_seg_func_list(args):
@@ -559,7 +600,8 @@ def batch_segment(args):
                 break
             if frame_no % 100 == 0:
                 logging.info(f'YOLOv11: processing frame {frame_no}')
-            boxes = segment_yolov11(
+            # segment_yolov11 now returns (bboxes, contours); only bboxes saved
+            boxes, _contours = segment_yolov11(
                 frame,
                 score_threshold=args.score_thresh,
                 top_k=args.top_k,
@@ -640,8 +682,14 @@ def batch_segment(args):
                 done, _ = cf.wait(futures, return_when=cf.FIRST_COMPLETED)
                 for fut in done:
                     frame_no = futures.pop(fut)
+                    # All seg functions now return (bboxes, contours); only
+                    # bboxes are needed for the segmented HDF table.
                     result = fut.result()
-                    for ii, bbox in enumerate(result):
+                    if isinstance(result, tuple):
+                        bboxes, _contours = result
+                    else:
+                        bboxes = result
+                    for bbox in bboxes:
                         if len(bbox) > 0:
                             data.append(
                                 {
@@ -662,12 +710,24 @@ def batch_segment(args):
 
 @timed
 def batch_track(args):
-    """outfile should have a `/segmented` table containing the segmentation data.
+    """Read the input video, run segmentation, and track objects frame by frame.
 
-    saves the result in same file under `/tracked`
+    Segmentation is called directly (not via signals) so that contour data is
+    available for the tracker.  Results are saved in *args.outfile* under the
+    ``/tracked`` key using :data:`~argos.writer.TRACKED_COLUMNS`.
+
+    Parameters
+    ----------
+    args:
+        Parsed argument namespace.  Must contain at least ``infile``,
+        ``outfile``, ``seg_method``, and all segmentation / tracking
+        parameters.
     """
-    segments = pd.read_hdf(args.outfile, 'segmented')
-    results = []
+    from argos.writer import TRACKED_COLUMNS
+
+    # ------------------------------------------------------------------
+    # Build tracker
+    # ------------------------------------------------------------------
     track_method = getattr(args, 'track_method', 'bytetrack')
     if track_method == 'bytetrack':
         tracker = ByteTracker(
@@ -690,10 +750,11 @@ def batch_track(args):
         logging.info(
             f'Using OCSORTracker: iou_threshold={args.min_dist}, '
             f'min_hits={args.min_hits}, max_age={args.max_age}, '
-            f'inertia={args.ocsort_inertia}, delta_t={args.ocsort_delta_t}'
+            f'inertia={getattr(args, "ocsort_inertia", 0.2)}, '
+            f'delta_t={getattr(args, "ocsort_delta_t", 3)}'
         )
     else:
-        if args.sort_metric == 'iou':
+        if getattr(args, 'sort_metric', 'iou') == 'iou':
             metric = DistanceMetric.iou
         else:
             metric = DistanceMetric.euclidean
@@ -705,33 +766,144 @@ def batch_track(args):
             min_hits=args.min_hits,
         )
         logging.info(
-            f'Using SORTracker: metric={args.sort_metric}, '
+            f'Using SORTracker: metric={getattr(args, "sort_metric", "iou")}, '
             f'min_dist={args.min_dist}, min_hits={args.min_hits}, '
             f'max_age={args.max_age}'
         )
-    for frame, fgrp in segments.groupby('frame'):
-        if len(fgrp) == 0:
-            continue
-        tracked = tracker.update(
-            fgrp[['x', 'y', 'w', 'h']].astype(np.int64).values
-        )
-        for tid, bbox in tracked.items():
-            results.append(
-                {
-                    'frame': frame,
-                    'trackid': tid,
-                    'x': bbox[0],
-                    'y': bbox[1],
-                    'w': bbox[2],
-                    'h': bbox[3],
-                }
+
+    # ------------------------------------------------------------------
+    # Prepare segmentation callable
+    # ------------------------------------------------------------------
+    seg_method = args.seg_method
+    device = 'cuda' if getattr(args, 'cuda', False) and torch.cuda.is_available() else 'cpu'
+
+    if seg_method == 'yolov11':
+        _init_yolov11(args.yolov11_weights, device)
+        logging.info(f'YOLOv11 segmentation on device={device}')
+
+        def _segment(frame):
+            return segment_yolov11(
+                frame,
+                score_threshold=args.score_thresh,
+                top_k=args.top_k,
+                overlap_thresh=args.overlap_thresh,
+                weights_file=args.yolov11_weights,
+                device=device,
             )
 
-        if frame % 100 == 0:
-            logging.info(f'Processed till {frame}')
-    results = pd.DataFrame(results)
-    results.sort_values(by='frame', inplace=True)
-    results.to_hdf(args.outfile, 'tracked')
+    elif seg_method == 'yolact':
+        init_yolact(args.yconfig, args.weight, args.cuda)
+
+        def _segment(frame):
+            return segment_yolact(
+                frame,
+                score_threshold=args.score_thresh,
+                top_k=args.top_k,
+                overlap_thresh=args.overlap_thresh,
+                cfgfile=args.yconfig,
+                netfile=args.weight,
+                cuda=args.cuda,
+            )
+
+    else:
+        # Classical (threshold / watershed / dbscan) pipeline
+        thresh_params = ThreshParam(
+            blur_width=args.blur_width,
+            blur_sd=args.blur_sd,
+            invert=args.thresh_invert,
+            method=args.thresh_method,
+            max_intensity=args.thresh_max,
+            baseline=args.thresh_baseline,
+            blocksize=args.thresh_blocksize,
+        )
+        thresh_fn = partial(threshold, params=thresh_params)
+        if seg_method == 'threshold':
+            seg_fn = segment_by_contour_bbox
+        elif seg_method == 'watershed':
+            seg_fn = partial(segment_by_watershed, dist_thresh=args.dist_thresh)
+        elif seg_method == 'dbscan':
+            seg_fn = partial(
+                segment_by_dbscan, eps=args.eps, min_samples=args.min_samples
+            )
+        else:
+            raise ValueError(f'Unknown segmentation method: {seg_method}')
+        limit_fn = partial(
+            extract_valid,
+            pmin=args.pmin,
+            pmax=args.pmax,
+            wmin=args.wmin,
+            wmax=args.wmax,
+            hmin=args.hmin,
+            hmax=args.hmax,
+        )
+
+        def _segment(frame):
+            binary = thresh_fn(frame)
+            if seg_method == 'watershed':
+                points_list = seg_fn(binary, frame)
+            else:
+                points_list = seg_fn(binary)
+            points_list = limit_fn(points_list)
+            return bbox_func(points_list)
+
+    # ------------------------------------------------------------------
+    # Process video frame by frame
+    # ------------------------------------------------------------------
+    video = cv2.VideoCapture(args.infile)
+    if not video.isOpened():
+        raise IOError(f'Could not open video: {args.infile}')
+
+    results = []
+    while video.isOpened():
+        frame_no, frame = read_frame(video)
+        if frame is None:
+            break
+
+        bboxes, contours = _segment(frame)
+
+        if len(bboxes) == 0:
+            if frame_no % 100 == 0:
+                logging.info(f'Processed till {frame_no} (no detections)')
+            continue
+
+        tracked = tracker.update(bboxes.astype(np.int64), contours)
+
+        # tracked maps track_id → 13-element array:
+        #   [x, y, w, h, cx, cy, obb_w, obb_h, angle, area, major, minor, solidity]
+        for tid, arr in tracked.items():
+            results.append(
+                [
+                    int(frame_no),   # frame
+                    int(tid),        # trackid
+                    float(arr[0]),   # x
+                    float(arr[1]),   # y
+                    float(arr[2]),   # w
+                    float(arr[3]),   # h
+                    float(arr[4]),   # cx
+                    float(arr[5]),   # cy
+                    float(arr[6]),   # obb_w
+                    float(arr[7]),   # obb_h
+                    float(arr[8]),   # angle
+                    float(arr[9]),   # area
+                    float(arr[10]),  # major_axis
+                    float(arr[11]),  # minor_axis
+                    float(arr[12]),  # solidity
+                ]
+            )
+
+        if frame_no % 100 == 0:
+            logging.info(f'Processed till {frame_no}')
+
+    video.release()
+
+    if not results:
+        logging.warning('No tracking results produced.')
+        results_df = pd.DataFrame(columns=TRACKED_COLUMNS)
+    else:
+        results_df = pd.DataFrame(results, columns=TRACKED_COLUMNS)
+        results_df.sort_values(by='frame', inplace=True)
+
+    results_df.to_hdf(args.outfile, 'tracked')
     logging.info(f'Tracking data saved in {args.outfile} under /tracked.')
 
 
