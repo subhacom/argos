@@ -127,9 +127,11 @@ class YolactWorker(qc.QObject):
         with torch.no_grad():
             if self.cuda:
                 cudnn.fastest = True
-                torch.set_default_tensor_type('torch.cuda.FloatTensor')
+                torch.set_default_dtype(torch.float32)
+                torch.set_default_device('cuda')
             else:
-                torch.set_default_tensor_type('torch.FloatTensor')
+                torch.set_default_dtype(torch.float32)
+                torch.set_default_device('cpu')
             self.net = Yolact()
             self.net.load_weights(self.weights_file, self.cuda)
             self.net.eval()

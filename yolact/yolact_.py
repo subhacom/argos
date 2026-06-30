@@ -393,9 +393,6 @@ class FPN(ScriptModuleWrapper):
         'num_downsample',
         'use_conv_downsample',
         'relu_pred_layers',
-        'lat_layers',
-        'pred_layers',
-        'downsample_layers',
         'relu_downsample_layers',
     ]
 
