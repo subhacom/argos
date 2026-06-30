@@ -50,7 +50,7 @@ class VidInfo(qw.QMainWindow):
 class VideoWidget(qw.QWidget):
     sigSetFrame = qc.pyqtSignal(np.ndarray, int)
     sigSetTracked = qc.pyqtSignal(dict, int)
-    sigSetBboxes = qc.pyqtSignal(np.ndarray, int)
+    sigSetBboxes = qc.pyqtSignal(np.ndarray, list, int)
     sigSetSegmented = qc.pyqtSignal(dict, int)
     sigFrameSet = qc.pyqtSignal()
     sigGotoFrame = qc.pyqtSignal(int)

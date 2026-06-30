@@ -41,8 +41,8 @@ class DataHandler(qc.QObject):
         self._segmented = OrderedDict()
         self._tracked = OrderedDict()
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def appendBboxes(self, bboxes: np.ndarray, frame_no: int):
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def appendBboxes(self, bboxes: np.ndarray, contours: list, frame_no: int):
         self._segmented[frame_no] = bboxes
 
     @qc.pyqtSlot(dict, int)
@@ -131,8 +131,8 @@ class CSVWriter(DataHandler):
         self.track_writer = csv.writer(self.track_file)
         self.track_writer.writerow(TRACKED_COLUMNS)
 
-    @qc.pyqtSlot(np.ndarray, int)
-    def appendBboxes(self, bboxes: np.ndarray, frame_no: int):
+    @qc.pyqtSlot(np.ndarray, list, int)
+    def appendBboxes(self, bboxes: np.ndarray, contours: list, frame_no: int):
         for bbox in bboxes:
             data = [frame_no] + list(bbox)
             self.seg_writer.writerow(data)
